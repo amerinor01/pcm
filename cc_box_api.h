@@ -68,7 +68,7 @@ typedef struct cc_algo {
      * @param evt   Event type (ACK, NACK, ECN, TIMEOUT)
      * @param val   Event-specific value (e.g., ECN fraction)
      */
-    void (*on_event)(cc_state_t *st, enum cc_event_t evt, uint32_t val);
+    void (*on_event)(cc_state_t *st, enum cc_event_t evt);
 
     /**
      * @brief Query current send rate or congestion window
@@ -81,10 +81,9 @@ typedef struct cc_algo {
      * @brief Optional parameter setter for dynamic tuning
      * @param st   Algorithm state
      * @param name Name of parameter
-     * @param val  New parameter value
      * @return 0 on success, negative on error
      */
-    int (*set_param)(cc_state_t *st, const char *name, uint32_t val);
+    int (*set_param)(cc_state_t *st, const char *name);
 } cc_algo_t;
 
 /**
@@ -114,9 +113,8 @@ void cc_box_destroy(cc_box_t *box);
  * @brief Feed an event into the congestion control box
  * @param box Box instance
  * @param evt Event type
- * @param val Event-specific value
  */
-void cc_box_event(cc_box_t *box, enum cc_event_t evt, uint32_t val);
+void cc_box_event(cc_box_t *box, enum cc_event_t evt);
 
 /**
  * @brief Query the current send rate or cwnd

@@ -31,9 +31,7 @@ main(int argc, char *argv[])
 		algo = &dcqcn_algo;
         if (argc > 2) {
             dcqcn_params_t p;
-            p.k_min    = atoi(argv[2]);
-            p.k_max    = (argc>3 ? atoi(argv[3]) : 100*1024U);
-            p.rate_max = (argc>4 ? atoi(argv[4]) : 50000000U);
+            p.rate_max = (argc>4 ? atoi(argv[2]) : 50000000U);
             param = &p;
         } else {
             /* no params => NULL to init => defaults in dcqcn_init */
@@ -53,23 +51,29 @@ main(int argc, char *argv[])
 	       argv[1], cc_box_get_rate(box));
 
 	for (i = 0; i < 5; i++) {
-		cc_box_event(box, CC_EVT_ACK, 0U);
+		cc_box_event(box, CC_EVT_ACK);
 		printf("[%s] after ACK %d: rate/cwnd = %u\n",
 		       argv[1], i + 1, cc_box_get_rate(box));
 	}
 
-	cc_box_event(box, CC_EVT_ECN, 100000U);  /* e.g. 0.1 * 1e6 */
+	cc_box_event(box, CC_EVT_ECN);  /* e.g. 0.1 * 1e6 */
 	printf("[%s] after ECN: rate/cwnd = %u\n",
 	       argv[1], cc_box_get_rate(box));
 
-	cc_box_event(box, CC_EVT_NACK, 0U);
+	cc_box_event(box, CC_EVT_NACK);
 	printf("[%s] after loss: rate/cwnd = %u\n",
 	       argv[1], cc_box_get_rate(box));
 
-	cc_box_event(box, CC_EVT_TIMEOUT, 0U);
+	cc_box_event(box, CC_EVT_TIMEOUT);
 	printf("[%s] after RTO: rate/cwnd = %u\n",
 	       argv[1], cc_box_get_rate(box));
 
-	cc_box_destroy(box);
+    for (i = 0; i < 20; i++) {
+        cc_box_event(box, CC_EVT_ACK);
+        printf("[%s] after ACK %d: rate/cwnd = %u\n",
+               argv[1], i + 1, cc_box_get_rate(box));
+    }
+
+    cc_box_destroy(box);
 	return EXIT_SUCCESS;
 }

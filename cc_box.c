@@ -33,12 +33,12 @@ cc_box_destroy(cc_box_t *box)
 }
 
 void
-cc_box_event(cc_box_t *box, enum cc_event_t evt, uint32_t val)
+cc_box_event(cc_box_t *box, enum cc_event_t evt)
 {
 	if (!box)
 		return;
 
-	box->algo->on_event(box->state, evt, val);
+	box->algo->on_event(box->state, evt);
 }
 
 uint32_t
