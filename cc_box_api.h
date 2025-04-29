@@ -12,6 +12,16 @@
 #include <stdlib.h>
 #include <stdint.h>
 
+#define max(a,b) \
+({ __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+  _a > _b ? _a : _b; })
+
+#define min(a, b) \
+({ __typeof__ (a) _a = (a); \
+    __typeof__ (b) _b = (b); \
+  _a < _b ? _a : _b; })
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -28,12 +38,17 @@ extern "C" {
  * Explicit congestion notification mark received
  * @var CC_EVT_TIMEOUT
  * Retransmission timeout occurred
+ * @var CC_EVT_TIMER
+ * Timer-based trigger
  */
 enum cc_event_t {
     CC_EVT_ACK,
     CC_EVT_NACK,
     CC_EVT_ECN,
     CC_EVT_TIMEOUT,
+	CC_EVT_ALPHA_TIMER,
+	CC_EVT_RATE_INCREASE_TIMER,
+	CC_EVT_BYTE_COUNTER,
 };
 
 /**

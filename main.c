@@ -31,10 +31,9 @@ main(int argc, char *argv[])
 		algo = &dcqcn_algo;
         if (argc > 2) {
             dcqcn_params_t p;
-            p.rate_max = (argc>4 ? atoi(argv[2]) : 50000000U);
+            p.rate_max = atoi(argv[2]);
             param = &p;
         } else {
-            /* no params => NULL to init => defaults in dcqcn_init */
             param = NULL;
         }
 	} else {
@@ -50,28 +49,70 @@ main(int argc, char *argv[])
 	printf("[%s] init rate/cwnd = %u\n",
 	       argv[1], cc_box_get_rate(box));
 
-	for (i = 0; i < 5; i++) {
-		cc_box_event(box, CC_EVT_ACK);
-		printf("[%s] after ACK %d: rate/cwnd = %u\n",
-		       argv[1], i + 1, cc_box_get_rate(box));
-	}
+    if (!strcmp(argv[1], "reno")) {
+        for (i = 0; i < 5; i++) {
+            cc_box_event(box, CC_EVT_ACK);
+            printf("[%s] after ACK %d: rate/cwnd = %u\n",
+                argv[1], i + 1, cc_box_get_rate(box));
+        }
 
-	cc_box_event(box, CC_EVT_ECN);  /* e.g. 0.1 * 1e6 */
-	printf("[%s] after ECN: rate/cwnd = %u\n",
-	       argv[1], cc_box_get_rate(box));
+        cc_box_event(box, CC_EVT_ECN);
+        printf("[%s] after ECN: rate/cwnd = %u\n",
+            argv[1], cc_box_get_rate(box));
 
-	cc_box_event(box, CC_EVT_NACK);
-	printf("[%s] after loss: rate/cwnd = %u\n",
-	       argv[1], cc_box_get_rate(box));
+        cc_box_event(box, CC_EVT_NACK);
+        printf("[%s] after loss: rate/cwnd = %u\n",
+            argv[1], cc_box_get_rate(box));
 
-	cc_box_event(box, CC_EVT_TIMEOUT);
-	printf("[%s] after RTO: rate/cwnd = %u\n",
-	       argv[1], cc_box_get_rate(box));
+        cc_box_event(box, CC_EVT_TIMEOUT);
+        printf("[%s] after RTO: rate/cwnd = %u\n",
+            argv[1], cc_box_get_rate(box));
 
-    for (i = 0; i < 20; i++) {
-        cc_box_event(box, CC_EVT_ACK);
-        printf("[%s] after ACK %d: rate/cwnd = %u\n",
-               argv[1], i + 1, cc_box_get_rate(box));
+        for (i = 0; i < 20; i++) {
+            cc_box_event(box, CC_EVT_ACK);
+            printf("[%s] after ACK %d: rate/cwnd = %u\n",
+                argv[1], i + 1, cc_box_get_rate(box));
+        }
+    } else if (!strcmp(argv[1], "dcqcn")) {
+        for (i = 0; i < 5; i++) {
+            cc_box_event(box, CC_EVT_ALPHA_TIMER);
+            cc_box_event(box, CC_EVT_RATE_INCREASE_TIMER);
+            printf("[%s] after CC_EVT_RATE_INCREASE_TIMER %d: rate/cwnd = %u\n",
+                argv[1], i + 1, cc_box_get_rate(box));
+        }
+
+        for (i = 0; i < 5; i++) {
+            cc_box_event(box, CC_EVT_ECN);
+            printf("[%s] after CC_EVT_ECN: rate/cwnd = %u\n",
+                argv[1], cc_box_get_rate(box));
+        }
+
+        for (i = 0; i < 20; i++) {
+            cc_box_event(box, CC_EVT_ALPHA_TIMER);
+            cc_box_event(box, CC_EVT_BYTE_COUNTER);
+            printf("[%s] after CC_EVT_BYTE_COUNTER %d: rate/cwnd = %u\n",
+                argv[1], i + 1, cc_box_get_rate(box));
+        }
+
+        for (i = 0; i < 10; i++) {
+            cc_box_event(box, CC_EVT_ECN);
+            printf("[%s] after CC_EVT_ECN: rate/cwnd = %u\n",
+                argv[1], cc_box_get_rate(box));
+        }
+
+        for (i = 0; i < 20; i++) {
+            cc_box_event(box, CC_EVT_ALPHA_TIMER);
+            cc_box_event(box, CC_EVT_RATE_INCREASE_TIMER);
+            printf("[%s] after CC_EVT_RATE_INCREASE_TIMER %d: rate/cwnd = %u\n",
+                argv[1], i + 1, cc_box_get_rate(box));
+        }
+
+        for (i = 0; i < 20; i++) {
+            cc_box_event(box, CC_EVT_ALPHA_TIMER);
+            cc_box_event(box, CC_EVT_BYTE_COUNTER);
+            printf("[%s] after CC_EVT_BYTE_COUNTER %d: rate/cwnd = %u\n",
+                argv[1], i + 1, cc_box_get_rate(box));
+        }
     }
 
     cc_box_destroy(box);

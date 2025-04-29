@@ -3,11 +3,6 @@
 #include <stdlib.h>
 #include <limits.h>
 
-#define max(a,b) \
-({ __typeof__ (a) _a = (a); \
-    __typeof__ (b) _b = (b); \
-  _a > _b ? _a : _b; })
-
 typedef struct {
 	uint32_t cwnd;      /* in MSS units */
 	uint32_t ssthresh;  /* in MSS units */
@@ -47,8 +42,6 @@ reno_on_event(cc_state_t *st, enum cc_event_t evt)
 	reno_state_t *s = (reno_state_t *)st;
 
 	switch (evt) {
-    case CC_EVT_ECN:
-    	/* ECN ignored in classic Reno: fallthrough to ACK */
 
     case CC_EVT_ACK:
 		if (s->cwnd < s->ssthresh) {
