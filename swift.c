@@ -76,8 +76,7 @@ static void
 swift_on_event(cc_state_t *st, enum cc_event_t evt)
 {
     swift_state_t *s = (swift_state_t *)st;
-    uint64_t now = cc_now();      /* in µs or ns */
-    int can_decrease = (now - s->t_last_decrease) >= s->rtt;
+    int can_decrease = (s->now - s->t_last_decrease) >= s->rtt;
     s->cwnd_prev = s->cwnd;
 
     switch (evt) {

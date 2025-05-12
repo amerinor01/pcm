@@ -4,7 +4,7 @@
 #include <limits.h>
 
 typedef struct {
-	uint32_t cwnd;      /* in MSS units */
+	volatile uint32_t cwnd;      /* in MSS units */
 	uint32_t ssthresh;  /* in MSS units */
 	uint32_t acked;     /* ACK counter for linear phase */
 } reno_state_t;
