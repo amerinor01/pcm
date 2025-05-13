@@ -21,15 +21,15 @@
 #define SWIFT_MSS 4096
 
 typedef struct {
-    uint64_t pacer_delay;
-    double cwnd;            /* congestion window (MSS units) */
+    volatile uint64_t now;
+    volatile uint32_t n_pkts_acked;
+    volatile uint64_t rtt; /* roundtrip time from last packet that was measured */
+    volatile uint64_t delay; /* a component of RTT */
+    volatile uint64_t pacer_delay;
+    volatile double cwnd;            /* congestion window (MSS units) */
     double cwnd_prev;       /* window before last decrease */
     uint32_t retransmit_cnt;
-    uint32_t n_pkts_acked;
-    uint64_t now;
     uint64_t t_last_decrease; /* timestamp of last MD (ns or µs) */
-    uint64_t rtt; /* roundtrip time from last packet that was measured */
-    uint64_t delay; /* a component of RTT */
 } swift_state_t;
 
 static cc_state_t *
