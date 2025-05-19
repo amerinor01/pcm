@@ -85,7 +85,7 @@ static int reno_algo_handler(struct pcc_flow_ctx *ctx) {
         /* Only trigger if we have exited slow-start */
         if (cwnd > ssthresh) {
             ssthresh = MAX(cwnd >> 1, 2);
-            cwnd = ssthresh;
+            cwnd = 1;
             tot_acked = 0;
         } else {
             num_rtos = 0;
@@ -103,14 +103,14 @@ static int reno_algo_handler(struct pcc_flow_ctx *ctx) {
      */
     if (num_nacks == 0 && num_rtos == 0 && tot_acked > 0) {
         /* 3) ACK processing in case there is no loss */
-        /* 3.1) Slow start: grow cwnd up to ssthresh */
+        /* 3.1) slow start: +1 MSS per ACK */
         if (cwnd < ssthresh) {
             uint64_t ssremaining = ssthresh - cwnd;
             uint64_t use = tot_acked < ssremaining ? tot_acked : ssremaining;
             cwnd += use;
             tot_acked -= use;
         }
-        /* 3.2) Congestion avoidance: +1 MSS per cwnd ACKs */
+        /* 3.2) congestion avoidance: +1 MSS per cwnd ACKs */
         /*
          * Note 1:
          * The code below is a closed form solution for
