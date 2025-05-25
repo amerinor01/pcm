@@ -129,7 +129,7 @@ swift_on_event(cc_state_t *st, enum cc_event_t evt)
     if (s->cwnd > MAX_CWND) s->cwnd = MAX_CWND;
 
     /* update last‐decrease timestamp if we actually shrank */
-    if (s->cwnd <= s->cwnd_prev) {
+    if (s->cwnd < s->cwnd_prev) {
         s->t_last_decrease = s->now;
     }
 
