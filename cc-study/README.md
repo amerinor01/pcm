@@ -9,7 +9,59 @@
 | **Swift**   | Congestion window<br>TX pacer delay           | new (many) pkt ACK<br>RTO<br>NACK | current time<br>number of ACKed packets<br>RTT sample<br>RTT components (network/endpoint delays)                              |
 | **BBRv3**   | TX pacer rate<br>Congestion window<br>Flow path | ACK reception| current time<br>new cumulatively ACKed bytes<br>new cumulatively ACKed bytes with ECN<br>RTT sample<br>number of new drops<br>number of in-flight packets<br>is_app_limited |
 | **DCQCN**   | TX pacer rate | CNP packet received<br>alpha-decay timer expiry<br>rate-increase timer expiry<br>TX-byte-counter exceeded | None                                 |
-| **NDP/EQDS**   | Per-priority EQIF credit | Pull request | EQIF Pull-queue sizes for all priorities |
+| **NDP/EQDS**   | Per-priority EQIF credit | Pull request | EQIF Pull-queue sizes for all priorities<br>App drain rate (or size + current time?) |
+
+## Table summary
+
+*Unique control knobs:*
+- TX:
+    - Flow congestion window
+    - Flow TX pacer rate
+    - Flow path
+- EQDS-specific:
+    - EQIF credit for a given priority
+
+*Unique triggers:*
+- Reception of specific packet:
+    - cumulative ACK
+    - single-pkt ACK
+    - selective ACK
+    - 3 dup ACKs
+    - NACK
+    - Trimmed packet
+    - CNP
+- Timeout:
+    - RTO
+    - Timer
+- Datapath statistic:
+    - N bytes injected
+    - N bytes ACK'ed
+    - N bytes received
+- EQDS-specific:
+    - New pull request
+
+*Unique inputs:*
+- Current time
+- multi-packet statistics:
+    - new cumulatively ACKed bytes
+    - new cumulatively ACKed bytes with ECN
+    - total cumulatively ACKed bytes
+    - total cumulatively ACKed bytes with ECN
+    - number of newly ACKed packets
+    - number of newly ACKed packets with ECN
+    - number of new drops
+    - number of in-flight packets
+    - is-app-limited (enqueue rate or backlog size?)
+    - RTT average
+- per-(last)-packet statistics
+    - size
+    - is ECN set?
+    - RTT:
+        - sample
+        - components break down: network/endpoint delay
+- EQDS-specific:
+    - Pull-queue sizes of all priorities
+    - Per-priority drain rate
 
 ## NewReno
 
@@ -341,6 +393,7 @@ Progress in recent version of BBR is fully driven by calling `.cong_control(rs)`
 
 **Note:**
 - In EQDS/NDP a 'control' is a process of granting credits at the receiver (basically receiver admits senders by allocating them bandwidth)
+- **What to do with sender?**
 
 **Control:**
 - Receiver maintains a single FIFO-like (?) Pull-queue for all senders 
