@@ -1,8 +1,7 @@
 #include <math.h>
-#include <stdint.h>
-#include <stdio.h>
+#include <printf.h>
 
-#include "pcc.h"
+#include "reno.h"
 
 #define MAX(a, b)                                                              \
     ({                                                                         \
@@ -10,26 +9,6 @@
         __typeof__(b) _b = (b);                                                \
         _a > _b ? _a : _b;                                                     \
     })
-
-#define RENO_NUM_SIGNALS 4
-#define RENO_PCC_SIGNALS                                                       \
-    (PCC_SIG_TYPE_CWND | PCC_SIG_TYPE_ACKS_RECVD | PCC_SIG_TYPE_NACKS_RECVD |  \
-     PCC_SIG_TYPE_RTOS)
-
-enum reno_signal_idxs {
-    RENO_SIGNAL_IDX_NACKS = 0,
-    RENO_SIGNAL_IDX_RTOS = 1,
-    RENO_SIGNAL_IDX_ACKS = 2,
-    RENO_SIGNAL_IDX_CWND = 3,
-};
-
-struct reno_flow_ctx {
-    uint64_t ssthresh; /**< current slow-start threshold */
-    uint64_t acked;    /**< accumulated acks since last cwnd bump */
-};
-
-const struct reno_flow_ctx initial_reno_flow_values = {.acked = 0,
-                                                       .ssthresh = UINT64_MAX};
 
 /**
  * @brief Naive implementation of TCP Reno-like congestion window control.
@@ -40,7 +19,7 @@ const struct reno_flow_ctx initial_reno_flow_values = {.acked = 0,
  * Flow state adjustment is done based on values observed in datapath signals,
  * where each signal accumulates ACK/NACK/RTO events.
  */
-static int reno_algo_handler(struct pcc_flow_ctx *ctx) {
+int algorithm_main() {
     /*
      * Below we read datapath signals and Reno-specific per-flow state.
      * For now pcc_flow_signal_read/write_ wrappers deal with
@@ -63,21 +42,19 @@ static int reno_algo_handler(struct pcc_flow_ctx *ctx) {
      * which is unsafe (unless we have memory protection).
      * Can we ensure safety here through static analysis?
      */
-    uint64_t num_nacks = pcc_flow_signal_read_u64(ctx, RENO_SIGNAL_IDX_NACKS);
-    uint64_t num_rtos = pcc_flow_signal_read_u64(ctx, RENO_SIGNAL_IDX_RTOS);
-    uint64_t num_acks = pcc_flow_signal_read_u64(ctx, RENO_SIGNAL_IDX_ACKS);
-    uint64_t cwnd = pcc_flow_signal_read_u64(ctx, RENO_SIGNAL_IDX_CWND);
-    struct reno_flow_ctx *fs =
-        (struct reno_flow_ctx *)pcc_flow_user_data_ptr_get(ctx);
-    uint64_t ssthresh = fs->ssthresh;
-    uint64_t tot_acked = fs->acked + num_acks;
+    int num_nacks = get_signal(RENO_SIG_IDX_NACK);
+    int num_rtos = get_signal(RENO_SIG_IDX_RTO);
+    int num_acks = get_signal(RENO_SIG_IDX_ACK);
+    int cwnd = get_control(RENO_CTRL_IDX_CWND);
+    int ssthresh = get_local_state(RENO_LOCAL_STATE_IDX_SSTHRESH);
+    int tot_acked = get_local_state(RENO_LOCAL_STATE_IDX_ACKED) + num_acks;
 
     /* 1) Fast retransmit: multiplicative decrease */
     if (num_nacks > 0) {
         ssthresh = MAX(cwnd >> num_nacks, 2);
         cwnd = ssthresh;
         tot_acked = 0;
-        pcc_flow_signal_write_u64(ctx, RENO_SIGNAL_IDX_NACKS, 0);
+        set_signal(RENO_SIG_IDX_NACK, 0);
     }
 
     /* 2) Timeout recovery */
@@ -90,7 +67,7 @@ static int reno_algo_handler(struct pcc_flow_ctx *ctx) {
         } else {
             num_rtos = 0;
         }
-        pcc_flow_signal_write_u64(ctx, RENO_SIGNAL_IDX_RTOS, 0);
+        set_signal(RENO_SIG_IDX_RTO, 0);
     }
 
     /*
@@ -105,8 +82,8 @@ static int reno_algo_handler(struct pcc_flow_ctx *ctx) {
         /* 3) ACK processing in case there is no loss */
         /* 3.1) slow start: +1 MSS per ACK */
         if (cwnd < ssthresh) {
-            uint64_t ssremaining = ssthresh - cwnd;
-            uint64_t use = tot_acked < ssremaining ? tot_acked : ssremaining;
+            int ssremaining = ssthresh - cwnd;
+            int use = tot_acked < ssremaining ? tot_acked : ssremaining;
             cwnd += use;
             tot_acked -= use;
         }
@@ -125,105 +102,19 @@ static int reno_algo_handler(struct pcc_flow_ctx *ctx) {
          * RTT, so here we can use time-based signals instead.
          */
         if (tot_acked >= cwnd && cwnd >= ssthresh) {
-            uint64_t C = cwnd;
-            double b = (double)(2 * C + 1);
-            double disc = sqrt(b * b + 8.0 * (double)tot_acked);
-            uint64_t N = (uint64_t)((disc - b) / 2.0);
+            int C = cwnd;
+            float b = (float)(2 * C + 1);
+            float disc = sqrtf(b * b + 8.0 * (float)tot_acked);
+            int N = (int)((disc - b) / 2.0);
             cwnd += N;
             tot_acked -= N * C + (N * (N + 1) / 2);
         }
     }
 
-    pcc_flow_signal_write_u64(ctx, RENO_SIGNAL_IDX_ACKS, 0);
-    pcc_flow_signal_write_u64(ctx, RENO_SIGNAL_IDX_CWND, cwnd);
-    fs->acked = tot_acked;
-    fs->ssthresh = ssthresh;
+    set_signal(RENO_SIG_IDX_ACK, 0);
+    set_control(RENO_CTRL_IDX_CWND, cwnd);
+    set_local_state(RENO_LOCAL_STATE_IDX_ACKED, tot_acked);
+    set_local_state(RENO_LOCAL_STATE_IDX_SSTHRESH, ssthresh);
 
-    return PCC_SUCCESS;
-}
-
-int reno_algo_init(struct pcc_dev_ctx *dev_ctx,
-                   struct pcc_algorithm_handler_obj **algo_handler) {
-    /* Query the PCC capabilities supported */
-    struct pcc_algorithm_handler_attrs *caps;
-    if (pcc_dev_ctx_caps_query(dev_ctx, &caps)) {
-        fprintf(stderr, "Failed to query device caps\n");
-        return 1;
-    }
-
-    /* Check that capabilities are sufficient to enable Reno */
-    if ((caps->signals_mask & RENO_PCC_SIGNALS) != RENO_PCC_SIGNALS) {
-        fprintf(stderr, "PCC device doesn't support required signals\n");
-        return 1;
-    }
-
-    /*
-     * TODO: validate compatibility of every signal in caps versus Reno
-     * requirements for (size_t sig_idx = 0; sig_idx < caps->num_signals;
-     * sig_idx++) { if (caps->signal_attrs[sig_idx].type ==
-     * PCC_SIG_TYPE_CWND) { } else if (caps->signal_attrs[sig_idx].type ==
-     * PCC_SIG_TYPE_ACKS_RECVD) { } else if
-     * (caps->signal_attrs[sig_idx].type == PCC_SIG_TYPE_NACKS_RECVD) { }
-     * else if (caps->signal_attrs[sig_idx].type == PCC_SIG_TYPE_RTOS) {
-     *   }
-     * }
-     */
-
-    struct pcc_signal_attr signal_attrs[RENO_NUM_SIGNALS] = {
-        [RENO_SIGNAL_IDX_CWND] = {.type = PCC_SIG_TYPE_CWND,
-                                  .coalescing_op = PCC_SIG_COALESCING_OP_LAST,
-                                  .reset_type = PCC_SIG_RESET_TYPE_USR,
-                                  .dev_perms = PCC_SIG_READ,
-                                  .user_perms = PCC_SIG_READ | PCC_SIG_WRITE,
-                                  .dtype = PCC_SIG_DTYPE_UINT64,
-                                  .init_value = 1},
-        [RENO_SIGNAL_IDX_ACKS] = {.type = PCC_SIG_TYPE_ACKS_RECVD,
-                                  .coalescing_op = PCC_SIG_COALESCING_OP_ACCUM,
-                                  .reset_type = PCC_SIG_RESET_TYPE_USR,
-                                  .dev_perms = PCC_SIG_WRITE,
-                                  .user_perms = PCC_SIG_READ | PCC_SIG_WRITE,
-                                  .dtype = PCC_SIG_DTYPE_UINT64,
-                                  .init_value = 0},
-        [RENO_SIGNAL_IDX_NACKS] = {.type = PCC_SIG_TYPE_NACKS_RECVD,
-                                   .coalescing_op = PCC_SIG_COALESCING_OP_ACCUM,
-                                   .reset_type = PCC_SIG_RESET_TYPE_USR,
-                                   .dev_perms = PCC_SIG_WRITE,
-                                   .user_perms = PCC_SIG_READ | PCC_SIG_WRITE,
-                                   .dtype = PCC_SIG_DTYPE_UINT64,
-                                   .init_value = 0},
-        [RENO_SIGNAL_IDX_RTOS] = {.type = PCC_SIG_TYPE_RTOS,
-                                  .coalescing_op = PCC_SIG_COALESCING_OP_ACCUM,
-                                  .reset_type = PCC_SIG_RESET_TYPE_USR,
-                                  .dev_perms = PCC_SIG_WRITE,
-                                  .user_perms = PCC_SIG_READ | PCC_SIG_WRITE,
-                                  .dtype = PCC_SIG_DTYPE_UINT64,
-                                  .init_value = 0}};
-
-    struct pcc_algorithm_handler_attrs attrs = {
-        .signals_mask = RENO_PCC_SIGNALS,
-        .signal_attrs = signal_attrs,
-        .num_signals = RENO_NUM_SIGNALS,
-        .user_data_init = &initial_reno_flow_values,
-        .user_data_size = sizeof(struct reno_flow_ctx),
-        .cc_handler_fn = reno_algo_handler};
-
-    if (pcc_algorithm_handler_install(dev_ctx, &attrs, algo_handler)) {
-        fprintf(stderr, "Failed to install Reno algorithm handler\n");
-        return 1;
-    }
-
-    if (pcc_dev_ctx_caps_free(caps)) {
-        fprintf(stderr, "Failed to cleanup device caps\n");
-        return 1;
-    }
-
-    return 0;
-}
-
-int reno_algo_destroy(struct pcc_algorithm_handler_obj *algo_handler) {
-    if (pcc_algorithm_handler_remove(algo_handler)) {
-        fprintf(stderr, "Failed to remove Reno algo handler\n");
-        return 1;
-    }
-    return 0;
+    return SUCCESS;
 }

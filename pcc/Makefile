@@ -1,19 +1,34 @@
-PWD := $(shell pwd)
-CC := clang
-CFLAGS := -I$(PWD)/include
+CC       := clang
+CFLAGS   := -fPIC -Iinclude -Wall -Wextra -O3
+LDFLAGS  := -shared
 
-SRC := \
-    src/dummy_datapath_impl.c \
-    src/pcc_sw_ctx.c \
-    test/main.c \
-    test/reno.c
+SRCDIR   := src
+INCDIR   := include
+LIBDIR   := lib
 
-TARGET := reno_test
+SRC      := \
+    $(SRCDIR)/driver.c \
+    $(SRCDIR)/pcmc_impl.c \
+    $(SRCDIR)/pcmh_impl.c
+OBJ      := $(SRC:.c=.o)
+TARGET   := $(LIBDIR)/libpcm.so
 
 all: $(TARGET)
 
-$(TARGET): $(SRC)
-	$(CC) $(CFLAGS) -o $@ $(SRC)
+$(TARGET): $(OBJ)
+	mkdir -p $(LIBDIR)
+	$(CC) $(LDFLAGS) -o $@ $(OBJ)
+
+$(SRCDIR)/%.o: $(SRCDIR)/%.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(LIBDIR):
+	mkdir -p $(LIBDIR)
 
 clean:
-	rm -f $(TARGET)
+	rm -f $(OBJ) $(TARGET)
+
+distclean: clean
+	rm -rf $(LIBDIR)
+
+.PHONY: all clean distclean
