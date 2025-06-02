@@ -92,7 +92,7 @@ struct algorithm_config {
 #define TGEN_THREAD_SLEEP_TIME_US 1000
 
 struct flow {
-    uint32_t flow_id;
+    uint32_t id;
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
     atomic_int datapath_state[FLOW_DATAPATH_STATE_SIZE];

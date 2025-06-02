@@ -36,6 +36,10 @@
 - We do not specify format of the `source_code` object in `uet_compile_algorithm` call. What if `source_code` contains bunch of C functions, one calls another. Should we define algorithm entry point, e.g., `__pcm_algorithm_main___ int main_fn()`?
     - Algorithm should be able to return error when it is executed, e.g., we should be able to track it through something like a PCM event queue?
 
+### Implementation notes:
+1. Right now flow generator generates new events, while scheduler asynchronously checks whether thresholds are met and triggers new events. Is this optimal? Can flow generator (aka datapath) detect whether trigger criteria is met and add new flow into a scheduler's queue?
+2. Is there a reliable way to ensure that scheduler wouldn't schedule a flow TWICE for the same trigger? E.g., handler didn't reset the signal...
+
 ## Matching to create CCC and PCMI creation
 - We install a tuple of source-dest addresses {FEP, JobIB, PIDonFEP, RI, TC} such that any CCC matching it will have the PCMI attached.
 
