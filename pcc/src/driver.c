@@ -114,6 +114,7 @@ static void *flow_default_traffic_gen_fn(void *arg);
 static void *scheduler_thread_fn(void *arg);
 void algorithm_config_flow_state_init(const struct algorithm_config *config,
                                       flow_t *flow);
+bool flow_triggers_check(const flow_t *flow);
 
 int scheduler_init(struct scheduler *scheduler) {
     if (pthread_mutex_init(&scheduler->flow_list_lock, NULL))
@@ -163,7 +164,7 @@ int scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
     if (pthread_mutex_unlock(&scheduler->flow_list_lock))
         return ERROR;
 
-    LOG_DBG("Added flow=%p, flow_id=%u to scheduler=%p", flow, flow->flow_id,
+    LOG_DBG("Added flow=%p, id=%u to scheduler=%p", flow, flow->flow_id,
             scheduler);
     return SUCCESS;
 }
@@ -207,7 +208,9 @@ static void *scheduler_thread_fn(void *arg) {
                 scheduler->status = ERROR;
                 break;
             }
-            flow->config->algorithm_fn((void *)flow);
+            if (flow_triggers_check(flow)) {
+                flow->config->algorithm_fn((void *)flow);
+            }
         }
 
         if (pthread_mutex_unlock(&scheduler->flow_list_lock))
@@ -268,7 +271,7 @@ const struct algorithm_config *device_flow_to_config_match(device_t *device,
          * logical OR.
          */
         if (config->active && (config->matching_rule_mask | flow_id)) {
-            LOG_DBG("Matched flow_id=%u to config=%p", flow_id, config);
+            LOG_DBG("Matched id=%u to config=%p", flow_id, config);
             return config;
         }
     }
@@ -284,7 +287,7 @@ int flow_create(device_t *device, flow_t **flow,
     if (!new_flow)
         return ERROR;
     new_flow->flow_id = device->flow_id_counter++;
-    LOG_DBG("Allocated new flow=%p, flow_id=%u", new_flow, new_flow->flow_id);
+    LOG_DBG("Allocated new flow=%p, id=%u", new_flow, new_flow->flow_id);
 
     new_flow->config = device_flow_to_config_match(device, new_flow->flow_id);
     if (!new_flow->config)
@@ -300,8 +303,7 @@ int flow_create(device_t *device, flow_t **flow,
                                       : flow_default_traffic_gen_fn,
                        (void *)new_flow))
         goto pcc_sched_cleanup;
-    LOG_DBG("Started thread for flow=%p, flow_id=%u", new_flow,
-            new_flow->flow_id);
+    LOG_DBG("Started thread for flow=%p, id=%u", new_flow, new_flow->flow_id);
 
     *flow = new_flow;
 
@@ -332,11 +334,24 @@ int flow_destroy(flow_t *flow) {
     return ret;
 }
 
+bool flow_triggers_check(const flow_t *flow) {
+    const struct algorithm_config *config = flow->config;
+    struct slist_entry *item, *prev;
+    slist_foreach(&config->signals_list, item, prev) {
+        struct signal_attr *attr =
+            container_of(item, struct signal_attr, metadata.list_entry);
+        if (attr->is_trigger && attr->trigger_check_fn(attr, flow)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // Flow thread: emulate bandwidth, drops, NACKs, RTOs
 static void *flow_default_traffic_gen_fn(void *arg) {
     flow_t *flow = arg;
     unsigned int rnd = (unsigned int)time(NULL);
-    LOG_PRINT("[flow=%p, flow_id=%d] start", flow, flow->flow_id);
+    LOG_PRINT("[flow=%p, id=%d] start traffic generation", flow, flow->flow_id);
 
     // lookup signal indices
     size_t acks_idx, rto_idx, nacks_idx, cwnd_idx;
@@ -357,7 +372,7 @@ static void *flow_default_traffic_gen_fn(void *arg) {
     rto_idx += FLOW_SIGNALS_OFFSET;
     nacks_idx += FLOW_SIGNALS_OFFSET;
     cwnd_idx += FLOW_CONTROLS_OFFSET;
-    LOG_PRINT("[flow=%p, flow_id=%d] acks_idx=%zu, rto_idx=%zu, nacks_idx=%zu, "
+    LOG_PRINT("[flow=%p, id=%d] acks_idx=%zu, rto_idx=%zu, nacks_idx=%zu, "
               "cwnd_idx=%zu",
               flow, flow->flow_id, acks_idx, rto_idx, nacks_idx, cwnd_idx);
 
@@ -378,15 +393,15 @@ static void *flow_default_traffic_gen_fn(void *arg) {
             atomic_fetch_add(&flow->datapath_state[acks_idx], to_send);
         }
         usleep(TGEN_THREAD_SLEEP_TIME_US); // 1 ms
-        LOG_PRINT("[flow=%p, flow_id=%d] pkts_per_ms=%d, to_send=%d, cwnd=%d",
-                  flow, flow->flow_id, pkts_per_ms, to_send, cwnd);
+        LOG_PRINT("[flow=%p, id=%d] pkts_per_ms=%d, to_send=%d, cwnd=%d", flow,
+                  flow->flow_id, pkts_per_ms, to_send, cwnd);
     }
 
     flow->status = SUCCESS;
 
 thread_termination:
-    LOG_PRINT("[flow=%p, flow_id=%d] termination, status=%d", flow,
-              flow->flow_id, flow->status);
+    LOG_PRINT("[flow=%p, id=%d] termination, status=%d", flow, flow->flow_id,
+              flow->status);
     return NULL;
 }
 
@@ -506,6 +521,20 @@ int algorithm_config_signal_add(struct algorithm_config *config,
     return SUCCESS;
 }
 
+bool signal_trigger_threshold_check(const struct signal_attr *attr,
+                                    const flow_t *flow) {
+
+    int value = atomic_load(
+        &flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index]);
+    int threshold =
+        atomic_load(&flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
+                                          attr->metadata.index]);
+    if (value >= threshold) {
+        return true;
+    }
+    return false;
+}
+
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
                                         size_t user_index, int threshold) {
     struct signal_attr *attr;
@@ -515,6 +544,7 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
         return ERROR;
 
     attr->is_trigger = true;
+    attr->trigger_check_fn = signal_trigger_threshold_check;
     return SUCCESS;
 }
 

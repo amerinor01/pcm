@@ -6,24 +6,24 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "lwlog.h"
 #include "network.h"
 #include "pcm.h"
 #include "slist.h"
-#include "lwlog.h"
 
-#define LOG_DBG(FORMAT, ...) \
-{ \
-    lwlog_debug(FORMAT, ##__VA_ARGS__); \
-}
+#define LOG_DBG(FORMAT, ...)                                                   \
+    {                                                                          \
+        lwlog_debug(FORMAT, ##__VA_ARGS__);                                    \
+    }
 
-#define LOG_CRIT(FORMAT, ...) \
-{ \
-    lwlog_crit(FORMAT, ##__VA_ARGS__); \
-}
+#define LOG_CRIT(FORMAT, ...)                                                  \
+    {                                                                          \
+        lwlog_crit(FORMAT, ##__VA_ARGS__);                                     \
+    }
 
-#define LOG_PRINT(FORMAT, ...)                                                                   \
-    {                                                                                              \
-        lwlog_info(FORMAT, ##__VA_ARGS__);                                                        \
+#define LOG_PRINT(FORMAT, ...)                                                 \
+    {                                                                          \
+        lwlog_info(FORMAT, ##__VA_ARGS__);                                     \
     }
 
 struct generic_metadata {
@@ -32,11 +32,18 @@ struct generic_metadata {
     int value;
 };
 
+// Forward declaration
+struct signal_attr;
+
+typedef bool (*signal_trigger_check_fn)(const struct signal_attr *,
+                                        const flow_t *);
+
 struct signal_attr {
     struct generic_metadata metadata;
     signal_t type;
     signal_accum_t accumulate_op;
     bool is_trigger;
+    signal_trigger_check_fn trigger_check_fn;
 };
 
 struct control_attr {
@@ -95,7 +102,7 @@ struct flow {
     int status;
 };
 
-#define SCHEDULER_SLEEP_US 10000 // 10 ms
+#define SCHEDULER_SLEEP_US 1000 // 10 ms
 
 struct scheduler {
     pthread_mutex_t flow_list_lock;
