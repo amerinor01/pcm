@@ -80,7 +80,7 @@ int device_scheduler_init(struct scheduler *scheduler) {
     slist_init(&scheduler->flow_list);
 
     scheduler->status = SUCCESS;
-    atomic_init(&scheduler->running, true);
+    scheduler->running = true;
     if (pthread_create(&scheduler->thread, NULL, device_scheduler_thread_fn,
                        (void *)scheduler))
         goto err;
@@ -89,7 +89,7 @@ int device_scheduler_init(struct scheduler *scheduler) {
 
 err:
     scheduler->status = ERROR;
-    atomic_init(&scheduler->running, false);
+    scheduler->running = false;
     pthread_mutex_destroy(&scheduler->flow_list_lock);
     return ERROR;
 }
@@ -97,10 +97,10 @@ err:
 int device_scheduler_destroy(struct scheduler *scheduler) {
     int ret = SUCCESS;
 
-    if (!atomic_load(&scheduler->running))
+    if (!scheduler->running)
         return ERROR;
 
-    atomic_store(&scheduler->running, false);
+    scheduler->running = false;
     if (pthread_join(scheduler->thread, NULL))
         ret = ERROR;
 
@@ -163,7 +163,7 @@ static void *device_scheduler_thread_fn(void *arg) {
 
     LOG_DBG("[tid=%llu] scheduler started", tid);
 
-    while (atomic_load(&scheduler->running)) {
+    while (scheduler->running) {
         if (pthread_mutex_lock(&scheduler->flow_list_lock)) {
             scheduler->status = ERROR;
             break;
@@ -172,7 +172,7 @@ static void *device_scheduler_thread_fn(void *arg) {
         struct slist_entry *item, *prev;
         slist_foreach(&scheduler->flow_list, item, prev) {
             flow_t *flow = container_of(item, flow_t, flow_list_entry);
-            if (!atomic_load(&flow->running)) {
+            if (!flow->running) {
                 scheduler->status = ERROR;
                 break;
             }

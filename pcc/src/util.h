@@ -24,9 +24,6 @@
         (type *)((char *)__mptr - offsetof(type, member));                     \
     })
 
-#define ATOMIC_STORE(dst, val) (atomic_store(&dst, val))
-#define NOSYNC_STORE(dst, val) (dst = val)
-
 #define ATTR_LIST_ITEM_ALLOC(attr_list, user_index, item_counter, max_items,   \
                              attr_ptr)                                         \
     {                                                                          \
@@ -113,14 +110,14 @@
     }
 
 #define ATTR_LIST_FLOW_STATE_INIT(attr_list, attr_type, state_ptr,             \
-                                  state_offset, store_fn)                      \
+                                  state_offset)                                \
     {                                                                          \
         attr_type *cur_attr = NULL;                                            \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
             cur_attr = container_of(item, attr_type, metadata.list_entry);     \
-            store_fn((state_ptr)[(state_offset) + cur_attr->metadata.index],   \
-                     cur_attr->metadata.value);                                \
+            (state_ptr)[(state_offset) + cur_attr->metadata.index] =           \
+                cur_attr->metadata.value;                                      \
         }                                                                      \
     }
 

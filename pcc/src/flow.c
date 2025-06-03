@@ -38,11 +38,10 @@ void flow_signal_accumulation_op_max(flow_t *flow,
 
 bool flow_handler_trigger_check(const flow_t *flow,
                                 const struct signal_attr *attr) {
-    int value = atomic_load(
-        &flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index]);
-    int threshold =
-        atomic_load(&flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
-                                          attr->metadata.index]);
+    int value =
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index];
+    int threshold = flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
+                                         attr->metadata.index];
     if (value >= threshold)
         return true;
     return false;
@@ -51,13 +50,12 @@ bool flow_handler_trigger_check(const flow_t *flow,
 void flow_state_init(const struct algorithm_config *config, flow_t *flow) {
     ATTR_LIST_FLOW_STATE_INIT(&config->signals_list, struct signal_attr,
                               flow->datapath_state,
-                              FLOW_SIGNALS_THRESHOLDS_OFFSET, ATOMIC_STORE);
+                              FLOW_SIGNALS_THRESHOLDS_OFFSET);
     ATTR_LIST_FLOW_STATE_INIT(&config->controls_list, struct control_attr,
-                              flow->datapath_state, FLOW_CONTROLS_OFFSET,
-                              ATOMIC_STORE);
+                              flow->datapath_state, FLOW_CONTROLS_OFFSET);
     ATTR_LIST_FLOW_STATE_INIT(&config->local_state_list,
                               struct local_state_attr, flow->local_state,
-                              FLOW_LOCAL_STATE_VARS_OFFSET, NOSYNC_STORE);
+                              FLOW_LOCAL_STATE_VARS_OFFSET);
     LOG_DBG("[dev=%p conf=%p] instantiated config on flow=%p id=%d",
             config->device, config, flow, flow->id);
 }
@@ -92,7 +90,7 @@ int flow_create(device_t *device, flow_t **flow,
         goto free_flow;
     }
 
-    atomic_store(&new_flow->running, true);
+    new_flow->running = true;
     if (pthread_create(&new_flow->thread, NULL,
                        traffic_gen_fn ? traffic_gen_fn
                                       : flow_default_traffic_gen_fn,
@@ -125,7 +123,7 @@ int flow_destroy(flow_t *flow) {
         ret = ERROR;
     }
 
-    atomic_store(&flow->running, false);
+    flow->running = false;
     if (pthread_join(flow->thread, NULL)) {
         LOG_CRIT("[flow=%p id=%u] flow thread join failed", flow, flow->id);
         ret = ERROR;
@@ -192,7 +190,7 @@ static void *flow_default_traffic_gen_fn(void *arg) {
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
-    while (atomic_load(&flow->running)) {
+    while (flow->running) {
         int cwnd = __flow_control_get(flow, 0);
         if (cwnd == 0) {
             usleep(TGEN_THREAD_SLEEP_TIME_US);
