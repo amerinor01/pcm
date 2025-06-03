@@ -1,30 +1,14 @@
-#ifndef _DRIVER_H_
-#define _DRIVER_H_
+#ifndef _IMPL_H_
+#define _IMPL_H_
 
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "lwlog.h"
 #include "network.h"
 #include "pcm.h"
 #include "slist.h"
-
-#define LOG_DBG(FORMAT, ...)                                                   \
-    {                                                                          \
-        lwlog_debug(FORMAT, ##__VA_ARGS__);                                    \
-    }
-
-#define LOG_CRIT(FORMAT, ...)                                                  \
-    {                                                                          \
-        lwlog_crit(FORMAT, ##__VA_ARGS__);                                     \
-    }
-
-#define LOG_PRINT(FORMAT, ...)                                                 \
-    {                                                                          \
-        lwlog_info(FORMAT, ##__VA_ARGS__);                                     \
-    }
 
 struct generic_metadata {
     struct slist_entry list_entry;
@@ -140,5 +124,12 @@ int algorithm_config_local_state_set(struct algorithm_config *config,
                                      size_t user_index, int initial_value);
 int algorithm_config_compile(struct algorithm_config *config,
                              const char *compile_path, char **err);
+int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
+int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
+const struct algorithm_config *
+device_flow_id_to_config_match(const device_t *device, uint32_t id);
+bool device_scheduler_handler_trigger_check(const struct signal_attr *attr,
+                                            const flow_t *flow);
+bool flow_triggers_check(const flow_t *flow);
 
-#endif /* _DRIVER_H_ */
+#endif /* _IMPL_H_ */

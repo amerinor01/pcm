@@ -7,7 +7,9 @@ INCDIR   := include
 LIBDIR   := lib
 
 SRC      := \
-    $(SRCDIR)/driver.c \
+    $(SRCDIR)/algo_conf.c \
+    $(SRCDIR)/device.c \
+    $(SRCDIR)/flow.c \
     $(SRCDIR)/pcmc_impl.c \
     $(SRCDIR)/pcmh_impl.c
 OBJ      := $(SRC:.c=.o)
