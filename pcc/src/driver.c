@@ -32,6 +32,8 @@
         }                                                                      \
         (attr_ptr) = calloc(1, sizeof(*(attr_ptr)));                           \
         if (!(attr_ptr)) {                                                     \
+            LOG_CRIT("[attr_list=%p] failed to allocate new attribute",        \
+                     attr_list);                                               \
             return ERROR;                                                      \
         }                                                                      \
         (attr_ptr)->metadata.index = (user_index);                             \
@@ -56,6 +58,8 @@
         slist_foreach(attr_list, item, prev) {                                 \
             if (container_of(item, attr_type, metadata.list_entry)             \
                     ->metadata.index == (user_index)) {                        \
+                LOG_CRIT("[attr_list=%p] found duplicate index=%zu",           \
+                         attr_list, user_index);                               \
                 return ERROR;                                                  \
             }                                                                  \
         }                                                                      \
@@ -80,6 +84,8 @@
                            found_attr_ptr)                                     \
     {                                                                          \
         if (slist_empty(attr_list)) {                                          \
+            LOG_CRIT("[attr_list=%p] item set on an empty list at index=%zu",  \
+                     attr_list, user_index);                                   \
             return ERROR;                                                      \
         }                                                                      \
         (found_attr_ptr) = NULL;                                               \
@@ -93,6 +99,8 @@
             }                                                                  \
         }                                                                      \
         if (!(found_attr_ptr)) {                                               \
+            LOG_CRIT("[attr_list=%p] failed to find attribute with index=%zu", \
+                     attr_list, user_index);                                   \
             return ERROR;                                                      \
         }                                                                      \
         (found_attr_ptr)->metadata.value = val;                                \
@@ -120,6 +128,7 @@ bool flow_triggers_check(const flow_t *flow);
 int scheduler_init(struct scheduler *scheduler) {
     if (pthread_mutex_init(&scheduler->flow_list_lock, NULL))
         return ERROR;
+
     slist_init(&scheduler->flow_list);
 
     scheduler->status = SUCCESS;
@@ -165,8 +174,6 @@ int scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
     if (pthread_mutex_unlock(&scheduler->flow_list_lock))
         return ERROR;
 
-    LOG_DBG("Added flow=%p, id=%u to scheduler=%p", flow, flow->id, scheduler);
-
     return SUCCESS;
 }
 
@@ -187,8 +194,12 @@ int scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
     if (pthread_mutex_unlock(&scheduler->flow_list_lock))
         return ERROR;
 
-    if (!found)
+    if (!found) {
+        LOG_CRIT("[flow=%p id=%u] flow was not found in the scheduler's "
+                 "flow list",
+                 flow, flow->id);
         return ERROR;
+    }
 
     return SUCCESS;
 }
@@ -202,7 +213,7 @@ static void *scheduler_thread_fn(void *arg) {
         goto thread_termination;
     }
 
-    LOG_DBG("[tid=%llu] Scheduler started", tid);
+    LOG_DBG("[tid=%llu] scheduler started", tid);
 
     while (atomic_load(&scheduler->running)) {
         if (pthread_mutex_lock(&scheduler->flow_list_lock)) {
@@ -232,7 +243,7 @@ static void *scheduler_thread_fn(void *arg) {
     }
 
 thread_termination:
-    LOG_DBG("[tid=%llu] Scheduler finished with status=%d", tid,
+    LOG_DBG("[tid=%llu] scheduler finished with status=%d", tid,
             scheduler->status);
 
     return NULL;
@@ -241,14 +252,17 @@ thread_termination:
 int device_init(const char *device_name, device_t **out) {
     (void)device_name;
     device_t *device = calloc(1, sizeof(*device));
-
-    if (!device)
+    if (!device) {
+        LOG_CRIT("failed to allocate new device");
         return ERROR;
+    }
 
     slist_init(&device->configs_list);
 
-    if (scheduler_init(&device->scheduler))
+    if (scheduler_init(&device->scheduler)) {
+        LOG_CRIT("failed to initialize device scheduler");
         goto err;
+    }
 
     *out = device;
 
@@ -264,17 +278,26 @@ int device_destroy(device_t *device) {
     int ret = SUCCESS;
 
     ret = scheduler_destroy(&device->scheduler);
+    if (ret != SUCCESS)
+        LOG_CRIT("[dev=%p] failed to destroy scheduler", device);
 
-    if (!slist_empty(&device->configs_list))
+    if (!slist_empty(&device->configs_list)) {
+        LOG_CRIT("[dev=%p] algorithm config list is not empty", device);
+        while (!slist_empty(&device->configs_list)) { // avoid leak
+            algorithm_config_destroy(
+                container_of(slist_remove_head(&device->configs_list),
+                             struct algorithm_config, list_entry));
+        }
         ret = ERROR;
+    }
 
     free(device);
 
     return ret;
 }
 
-const struct algorithm_config *device_flow_to_config_match(device_t *device,
-                                                           int id) {
+const struct algorithm_config *
+device_flow_to_config_match(const device_t *device, uint32_t id) {
     struct slist_entry *item, *prev;
     slist_foreach(&device->configs_list, item, prev) {
         struct algorithm_config *config =
@@ -284,7 +307,8 @@ const struct algorithm_config *device_flow_to_config_match(device_t *device,
          * logical OR.
          */
         if (config->active && (config->matching_rule_mask | id)) {
-            LOG_DBG("Matched flow id=%u to config=%p", id, config);
+            LOG_DBG("[dev=%p] matched flow id=%u to config=%p", device, id,
+                    config);
             return config;
         }
     }
@@ -297,26 +321,42 @@ int flow_create(device_t *device, flow_t **flow,
         return ERROR;
 
     flow_t *new_flow = calloc(1, sizeof(*new_flow));
-    if (!new_flow)
+    if (!new_flow) {
+        LOG_CRIT("[dev=%p] failed to allocate new flow", device);
         return ERROR;
+    }
+
     new_flow->id = device->flow_id_counter++;
-    LOG_DBG("Allocated new flow=%p, id=%u", new_flow, new_flow->id);
+    LOG_DBG("[dev=%p] allocated new flow=%p, id=%u", device, new_flow,
+            new_flow->id);
 
     new_flow->config = device_flow_to_config_match(device, new_flow->id);
-    if (!new_flow->config)
+    if (!new_flow->config) {
+        LOG_CRIT("[dev=%p] failed to match flow id=%u to algorithm config",
+                 device, new_flow->id);
         goto free_flow;
+    }
+
     algorithm_config_flow_state_init(new_flow->config, new_flow);
 
-    if (scheduler_flow_add(&device->scheduler, new_flow))
+    if (scheduler_flow_add(&device->scheduler, new_flow)) {
+        LOG_DBG("[dev=%p] failed to add flow=%p, id=%u to scheduler", device,
+                new_flow, new_flow->id);
         goto free_flow;
+    }
 
     atomic_store(&new_flow->running, true);
     if (pthread_create(&new_flow->thread, NULL,
                        traffic_gen_fn ? traffic_gen_fn
                                       : flow_default_traffic_gen_fn,
-                       (void *)new_flow))
+                       (void *)new_flow)) {
+        LOG_CRIT("[dev=%p] failed to start thread for flow=%p id=%u", device,
+                 new_flow, new_flow->id);
         goto pcc_sched_cleanup;
-    LOG_DBG("Started thread for flow=%p, id=%u", new_flow, new_flow->id);
+    }
+
+    LOG_DBG("[dev=%p] started thread for flow=%p id=%u", device, new_flow,
+            new_flow->id);
 
     *flow = new_flow;
 
@@ -332,15 +372,23 @@ free_flow:
 int flow_destroy(flow_t *flow) {
     int ret = SUCCESS;
 
-    if (scheduler_flow_remove(&flow->config->device->scheduler, flow))
+    if (scheduler_flow_remove(&flow->config->device->scheduler, flow)) {
+        LOG_CRIT("[flow=%p id=%u] failed to remove flow from scheduler", flow,
+                 flow->id);
         ret = ERROR;
+    }
 
     atomic_store(&flow->running, false);
-    if (pthread_join(flow->thread, NULL))
+    if (pthread_join(flow->thread, NULL)) {
+        LOG_CRIT("[flow=%p id=%u] flow thread join failed", flow, flow->id);
         ret = ERROR;
+    }
 
-    if (flow->status != SUCCESS)
+    if (flow->status != SUCCESS) {
+        LOG_CRIT("[flow=%p id=%u] flow thread completed with error", flow,
+                 flow->id);
         ret = ERROR;
+    }
 
     free(flow);
 
@@ -370,9 +418,6 @@ static void *flow_default_traffic_gen_fn(void *arg) {
         goto thread_termination;
     }
 
-    LOG_PRINT("[tid=%llu flow=%p, id=%d] start traffic generation", tid, flow,
-              flow->id);
-
     // lookup signal indices
     size_t acks_idx, rto_idx, nacks_idx, cwnd_idx;
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
@@ -392,10 +437,10 @@ static void *flow_default_traffic_gen_fn(void *arg) {
     rto_idx += FLOW_SIGNALS_OFFSET;
     nacks_idx += FLOW_SIGNALS_OFFSET;
     cwnd_idx += FLOW_CONTROLS_OFFSET;
-    LOG_PRINT(
-        "[tid=%llu, flow=%p, id=%d] acks_idx=%zu, rto_idx=%zu, nacks_idx=%zu, "
-        "cwnd_idx=%zu",
-        tid, flow, flow->id, acks_idx, rto_idx, nacks_idx, cwnd_idx);
+    LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generation started; "
+              "acks_idx=%zu, rto_idx=%zu, nacks_idx=%zu, "
+              "cwnd_idx=%zu",
+              tid, flow, flow->id, acks_idx, rto_idx, nacks_idx, cwnd_idx);
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
@@ -414,17 +459,18 @@ static void *flow_default_traffic_gen_fn(void *arg) {
         } else {
             atomic_fetch_add(&flow->datapath_state[acks_idx], to_send);
         }
-        usleep(TGEN_THREAD_SLEEP_TIME_US); // 1 ms
-        LOG_PRINT(
-            "[tid=%llu, flow=%p, id=%d] pkts_per_ms=%d, to_send=%d, cwnd=%d",
-            tid, flow, flow->id, pkts_per_ms, to_send, cwnd);
+        usleep(TGEN_THREAD_SLEEP_TIME_US);
+        LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generator stats: "
+                  "pkts_per_ms=%d, to_send=%d, cwnd=%d",
+                  tid, flow, flow->id, pkts_per_ms, to_send, cwnd);
     }
 
     flow->status = SUCCESS;
 
 thread_termination:
-    LOG_PRINT("[tid=%llu flow=%p, id=%d] termination, status=%d", tid, flow,
-              flow->id, flow->status);
+    LOG_PRINT("[tid=%llu flow=%p, id=%u] traffic generation terminated with "
+              "status=%d",
+              tid, flow, flow->id, flow->status);
     return NULL;
 }
 
@@ -433,6 +479,10 @@ int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
         return ERROR;
 
     struct algorithm_config *new_config = calloc(1, sizeof(*new_config));
+    if (!new_config) {
+        LOG_CRIT("[dev=%p] failed to allocate new algorithm config", device);
+        return ERROR;
+    }
 
     new_config->device = device;
     slist_insert_tail(&new_config->list_entry, &device->configs_list);
@@ -441,7 +491,7 @@ int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
     slist_init(&new_config->local_state_list);
     new_config->active = false;
 
-    LOG_DBG("Allocated new algorithm config=%p", new_config);
+    LOG_DBG("[dev=%p] allocated new config=%p", device, new_config);
     *config = new_config;
 
     return SUCCESS;
@@ -459,8 +509,10 @@ int algorithm_config_destroy(struct algorithm_config *config) {
         }
     }
 
-    if (!found)
+    if (!found) {
+        LOG_CRIT("[dev=%p conf=%p] config not found", config->device, config);
         ret = ERROR;
+    }
 
     ATTR_LIST_FREE(&config->signals_list, struct signal_attr,
                    config->num_signals);
@@ -470,11 +522,12 @@ int algorithm_config_destroy(struct algorithm_config *config) {
                    config->num_local_states);
 
     if (dlclose(config->dlopen_handle)) {
-        LOG_CRIT("dlclose() failed: %s", dlerror());
+        LOG_CRIT("[dev=%p conf=%p] dlclose() failed with %s", config->device,
+                 config, dlerror());
         ret = ERROR;
     }
 
-    LOG_DBG("Destroyed algorithm configuration at %p", config);
+    LOG_DBG("[dev=%p] destroyed config=%p", config->device, config);
     free(config);
 
     return ret;
@@ -483,7 +536,8 @@ int algorithm_config_destroy(struct algorithm_config *config) {
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
                                        int matching_rule_mask) {
     config->matching_rule_mask = matching_rule_mask;
-    LOG_DBG("Added matching rule=%d to config=%p", matching_rule_mask, config);
+    LOG_DBG("[dev=%p conf=%p] added matching rule=%d", config->device, config,
+            matching_rule_mask);
     return SUCCESS;
 }
 
@@ -491,6 +545,8 @@ int algorithm_config_compile(struct algorithm_config *config,
                              const char *compile_path, char **err) {
     config->dlopen_handle = dlopen(compile_path, RTLD_NOW | RTLD_LOCAL);
     if (!config->dlopen_handle) {
+        LOG_CRIT("[dev=%p conf=%p] dlopen(%s) failed with %s", config->device,
+                 config, compile_path, dlerror());
         *err = dlerror();
         return ERROR;
     }
@@ -500,11 +556,15 @@ int algorithm_config_compile(struct algorithm_config *config,
     if (!config->algorithm_fn) {
         *err = dlerror();
         dlclose(config->dlopen_handle);
+        LOG_CRIT("[dev=%p conf=%p] %s symbol lookup in %s failed with %s",
+                 config->device, config, __algorithm_entry_point_symbol,
+                 compile_path, dlerror());
         return ERROR;
     }
 
-    LOG_DBG("Added handler function=%p to config=%p from file=%s",
-            config->algorithm_fn, config, compile_path);
+    LOG_DBG("[dev=%p conf=%p] loaded %s symbol=%p from file=%s", config->device,
+            config, __algorithm_entry_point_symbol, config->algorithm_fn,
+            compile_path);
 
     return SUCCESS;
 }
@@ -513,7 +573,7 @@ int algorithm_config_activate(struct algorithm_config *config) {
     if (config->active)
         return ERROR;
     config->active = true;
-    LOG_DBG("Activated config=%p", config);
+    LOG_DBG("[dev=%p conf=%p] activated", config->device, config);
     return SUCCESS;
 }
 
@@ -521,7 +581,7 @@ int algorithm_config_deactivate(struct algorithm_config *config) {
     if (!config->active)
         return ERROR;
     config->active = false;
-    LOG_DBG("Deactivated config=%p", config);
+    LOG_DBG("[dev=%p conf=%p] deactivated", config->device, config);
     return SUCCESS;
 }
 
@@ -536,7 +596,8 @@ void algorithm_config_flow_state_init(const struct algorithm_config *config,
     ATTR_LIST_FLOW_STATE_INIT(&config->local_state_list,
                               struct local_state_attr, flow->local_state,
                               FLOW_LOCAL_STATE_VARS_OFFSET, NOSYNC_STORE);
-    LOG_DBG("Initialized flow=%p id=%d with config=%p", flow, flow->id, config);
+    LOG_DBG("[dev=%p conf=%p] instantiated config on flow=%p id=%d",
+            config->device, config, flow, flow->id);
 }
 
 int algorithm_config_signal_add(struct algorithm_config *config,
@@ -556,15 +617,13 @@ int algorithm_config_signal_add(struct algorithm_config *config,
 
 bool signal_trigger_threshold_check(const struct signal_attr *attr,
                                     const flow_t *flow) {
-
     int value = atomic_load(
         &flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index]);
     int threshold =
         atomic_load(&flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
                                           attr->metadata.index]);
-    if (value >= threshold) {
+    if (value >= threshold)
         return true;
-    }
     return false;
 }
 
