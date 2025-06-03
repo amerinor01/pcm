@@ -62,7 +62,6 @@ int algorithm_config_destroy(struct algorithm_config *config) {
     return ret;
 }
 
-
 int algorithm_config_activate(struct algorithm_config *config) {
     if (config->active)
         return ERROR;
@@ -97,8 +96,30 @@ int algorithm_config_signal_add(struct algorithm_config *config,
                          ALGO_CONF_MAX_NUM_SIGNALS, attr);
 
     attr->type = signal;
-    attr->accumulate_op = accum_type;
 
+    switch (accum_type) {
+    case SIG_ACCUM_SUM:
+        attr->accumulation_op_fn = flow_signal_accumulation_op_sum;
+        break;
+    case SIG_ACCUM_LAST:
+        attr->accumulation_op_fn = flow_signal_accumulation_op_last;
+        break;
+    case SIG_ACCUM_MIN:
+        attr->accumulation_op_fn = flow_signal_accumulation_op_min;
+        break;
+    case SIG_ACCUM_MAX:
+        attr->accumulation_op_fn = flow_signal_accumulation_op_max;
+        break;
+    case SIG_ACCUM_AVG:
+        LOG_CRIT("[dev=%p conf=%p] average signal accumulation type is not "
+                 "supported",
+                 config->device, config);
+        return ERROR;
+    default:
+        LOG_CRIT("[dev=%p conf=%p] unknown signal accumulation type requested",
+                 config->device, config);
+        return ERROR;
+    }
     return SUCCESS;
 }
 
@@ -111,7 +132,7 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
         return ERROR;
 
     attr->is_trigger = true;
-    attr->trigger_check_fn = device_scheduler_handler_trigger_check;
+    attr->trigger_check_fn = flow_handler_trigger_check;
     return SUCCESS;
 }
 

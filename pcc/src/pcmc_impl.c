@@ -27,6 +27,7 @@ err_t deregister_pcmc(handle_t handle) {
 err_t activate_pcmc(handle_t handle) {
     return algorithm_config_activate((struct algorithm_config *)handle);
 }
+
 err_t deactivate_pcmc(handle_t handle) {
     return algorithm_config_deactivate((struct algorithm_config *)handle);
 }

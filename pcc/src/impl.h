@@ -19,13 +19,15 @@ struct generic_metadata {
 // Forward declaration
 struct signal_attr;
 
-typedef bool (*signal_trigger_check_fn)(const struct signal_attr *,
-                                        const flow_t *);
+typedef void (*signal_accumulation_op_fn)(flow_t *, const struct signal_attr *,
+                                          int);
+typedef bool (*signal_trigger_check_fn)(const flow_t *,
+                                        const struct signal_attr *);
 
 struct signal_attr {
     struct generic_metadata metadata;
     signal_t type;
-    signal_accum_t accumulate_op;
+    signal_accumulation_op_fn accumulation_op_fn;
     bool is_trigger;
     signal_trigger_check_fn trigger_check_fn;
 };
@@ -128,8 +130,20 @@ int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
 const struct algorithm_config *
 device_flow_id_to_config_match(const device_t *device, uint32_t id);
-bool device_scheduler_handler_trigger_check(const struct signal_attr *attr,
-                                            const flow_t *flow);
+bool flow_handler_trigger_check(const flow_t *flow,
+                                const struct signal_attr *attr);
 bool flow_triggers_check(const flow_t *flow);
+void flow_signal_accumulation_op_sum(flow_t *flow,
+                                     const struct signal_attr *attr,
+                                     int signal);
+void flow_signal_accumulation_op_last(flow_t *flow,
+                                      const struct signal_attr *attr,
+                                      int signal);
+void flow_signal_accumulation_op_min(flow_t *flow,
+                                     const struct signal_attr *attr,
+                                     int signal);
+void flow_signal_accumulation_op_max(flow_t *flow,
+                                     const struct signal_attr *attr,
+                                     int signal);
 
 #endif /* _IMPL_H_ */

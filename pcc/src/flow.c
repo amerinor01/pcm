@@ -6,6 +6,48 @@
 // Forward declarations
 static void *flow_default_traffic_gen_fn(void *arg);
 
+void flow_signal_accumulation_op_sum(flow_t *flow,
+                                     const struct signal_attr *attr,
+                                     int signal) {
+    flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] += signal;
+}
+
+void flow_signal_accumulation_op_last(flow_t *flow,
+                                      const struct signal_attr *attr,
+                                      int signal) {
+    flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] = signal;
+}
+
+void flow_signal_accumulation_op_min(flow_t *flow,
+                                     const struct signal_attr *attr,
+                                     int signal) {
+    if (signal <
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index])
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] =
+            signal;
+}
+
+void flow_signal_accumulation_op_max(flow_t *flow,
+                                     const struct signal_attr *attr,
+                                     int signal) {
+    if (signal >
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index])
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] =
+            signal;
+}
+
+bool flow_handler_trigger_check(const flow_t *flow,
+                                const struct signal_attr *attr) {
+    int value = atomic_load(
+        &flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index]);
+    int threshold =
+        atomic_load(&flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
+                                          attr->metadata.index]);
+    if (value >= threshold)
+        return true;
+    return false;
+}
+
 void flow_state_init(const struct algorithm_config *config, flow_t *flow) {
     ATTR_LIST_FLOW_STATE_INIT(&config->signals_list, struct signal_attr,
                               flow->datapath_state,
@@ -106,11 +148,22 @@ bool flow_triggers_check(const flow_t *flow) {
     slist_foreach(&config->signals_list, item, prev) {
         struct signal_attr *attr =
             container_of(item, struct signal_attr, metadata.list_entry);
-        if (attr->is_trigger && attr->trigger_check_fn(attr, flow)) {
+        if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
             return true;
         }
     }
     return false;
+}
+
+void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
+    struct slist_entry *item, *prev;
+    slist_foreach(&flow->config->signals_list, item, prev) {
+        struct signal_attr *attr =
+            container_of(item, struct signal_attr, metadata.list_entry);
+        if (attr->type == signal_type) {
+            attr->accumulation_op_fn(flow, attr, value);
+        }
+    }
 }
 
 // Flow thread: emulate bandwidth, drops, NACKs, RTOs
@@ -123,29 +176,19 @@ static void *flow_default_traffic_gen_fn(void *arg) {
         goto thread_termination;
     }
 
-    // lookup signal indices
-    size_t acks_idx, rto_idx, nacks_idx, cwnd_idx;
-    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
-        &flow->config->signals_list, struct signal_attr, SIG_ACK, acks_idx);
-    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
-        &flow->config->signals_list, struct signal_attr, SIG_RTO, rto_idx);
-    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
-        &flow->config->signals_list, struct signal_attr, SIG_NACK, nacks_idx);
+    // lookup congestion window knob index (ugly)
+    size_t cwnd_idx;
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
         &flow->config->controls_list, struct control_attr, CTRL_CWND, cwnd_idx);
-    if (acks_idx == SIZE_MAX || rto_idx == SIZE_MAX || nacks_idx == SIZE_MAX ||
-        cwnd_idx == SIZE_MAX) {
+    if (cwnd_idx == SIZE_MAX) {
         flow->status = ERROR;
         goto thread_termination;
     }
-    acks_idx += FLOW_SIGNALS_OFFSET;
-    rto_idx += FLOW_SIGNALS_OFFSET;
-    nacks_idx += FLOW_SIGNALS_OFFSET;
     cwnd_idx += FLOW_CONTROLS_OFFSET;
+
     LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generation started; "
-              "acks_idx=%zu, rto_idx=%zu, nacks_idx=%zu, "
               "cwnd_idx=%zu",
-              tid, flow, flow->id, acks_idx, rto_idx, nacks_idx, cwnd_idx);
+              tid, flow, flow->id, cwnd_idx);
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
@@ -158,11 +201,11 @@ static void *flow_default_traffic_gen_fn(void *arg) {
         int to_send = cwnd < pkts_per_ms ? cwnd : pkts_per_ms;
         double roll = (double)rand_r(&rnd) / RAND_MAX;
         if (roll < TGEN_DROP_PROB) {
-            atomic_fetch_add(&flow->datapath_state[rto_idx], 1);
+            flow_signals_update(flow, SIG_RTO, 1);
         } else if (roll < TGEN_DROP_PROB + TGEN_NACK_PROB) {
-            atomic_fetch_add(&flow->datapath_state[nacks_idx], 1);
+            flow_signals_update(flow, SIG_NACK, 1);
         } else {
-            atomic_fetch_add(&flow->datapath_state[acks_idx], to_send);
+            flow_signals_update(flow, SIG_ACK, 1);
         }
         usleep(TGEN_THREAD_SLEEP_TIME_US);
         LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generator stats: "

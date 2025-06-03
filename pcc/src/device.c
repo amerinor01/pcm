@@ -152,18 +152,6 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
     return SUCCESS;
 }
 
-bool device_scheduler_handler_trigger_check(const struct signal_attr *attr,
-                                            const flow_t *flow) {
-    int value = atomic_load(
-        &flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index]);
-    int threshold =
-        atomic_load(&flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
-                                          attr->metadata.index]);
-    if (value >= threshold)
-        return true;
-    return false;
-}
-
 static void *device_scheduler_thread_fn(void *arg) {
     struct scheduler *scheduler = arg;
 
