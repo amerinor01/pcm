@@ -55,7 +55,7 @@ int device_destroy(device_t *device) {
 }
 
 const struct algorithm_config *
-device_flow_id_to_config_match(const device_t *device, uint32_t id) {
+device_flow_id_to_config_match(const device_t *device, addr_t addr) {
     struct slist_entry *item, *prev;
     slist_foreach(&device->configs_list, item, prev) {
         struct algorithm_config *config =
@@ -64,8 +64,8 @@ device_flow_id_to_config_match(const device_t *device, uint32_t id) {
          * Rather than doing real matching below, the code below mimics it with
          * logical OR.
          */
-        if (config->active && (config->matching_rule_mask | id)) {
-            LOG_DBG("[dev=%p] matched flow id=%u to config=%p", device, id,
+        if (config->active && (config->matching_rule_mask | addr)) {
+            LOG_DBG("[dev=%p] matched flow addr=%u to config=%p", device, addr,
                     config);
             return config;
         }
@@ -143,9 +143,9 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
         return ERROR;
 
     if (!found) {
-        LOG_CRIT("[flow=%p id=%u] flow was not found in the scheduler's "
+        LOG_CRIT("[flow=%p addr=%u] flow was not found in the scheduler's "
                  "flow list",
-                 flow, flow->id);
+                 flow, flow->addr);
         return ERROR;
     }
 

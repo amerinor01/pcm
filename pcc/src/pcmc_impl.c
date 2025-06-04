@@ -10,9 +10,11 @@ err_t register_pcmc(void *dev, addr_t src_addr, addr_mask_t src_addr_mask,
     if (ret != SUCCESS)
         return ret;
 
+    (void)src_addr;
+    (void)dst_addr;
     (void)src_addr_mask;
     (void)dst_addr_mask;
-    ret = algorithm_config_matching_rule_add(new_config, src_addr + dst_addr);
+    ret = algorithm_config_matching_rule_add(new_config, UINT32_MAX);
     if (ret != SUCCESS)
         algorithm_config_destroy(new_config);
 

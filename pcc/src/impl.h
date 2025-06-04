@@ -51,7 +51,7 @@ struct algorithm_config {
     struct device *device;
     struct slist_entry list_entry;
     bool active;
-    int matching_rule_mask;
+    addr_mask_t matching_rule_mask;
     struct slist signals_list;
     size_t num_signals;
     struct slist controls_list;
@@ -78,7 +78,7 @@ struct algorithm_config {
 #define TGEN_THREAD_SLEEP_TIME_US 1000
 
 struct flow {
-    uint32_t id;
+    addr_t addr;
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
     atomic_int datapath_state[FLOW_DATAPATH_STATE_SIZE];
@@ -99,7 +99,7 @@ struct scheduler {
 };
 
 struct device {
-    uint32_t flow_id_counter;
+    addr_t flow_addr_counter;
     struct slist configs_list;
     struct scheduler scheduler;
 };
@@ -107,7 +107,7 @@ struct device {
 int algorithm_config_alloc(device_t *device, struct algorithm_config **config);
 int algorithm_config_destroy(struct algorithm_config *config);
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
-                                       int matching_rule_mask);
+                                       addr_mask_t matching_rule_mask);
 int algorithm_config_activate(struct algorithm_config *config);
 int algorithm_config_deactivate(struct algorithm_config *config);
 int algorithm_config_signal_add(struct algorithm_config *config,
@@ -129,7 +129,7 @@ int algorithm_config_compile(struct algorithm_config *config,
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
 const struct algorithm_config *
-device_flow_id_to_config_match(const device_t *device, uint32_t id);
+device_flow_id_to_config_match(const device_t *device, addr_t id);
 bool flow_handler_trigger_check(const flow_t *flow,
                                 const struct signal_attr *attr);
 bool flow_triggers_check(const flow_t *flow);

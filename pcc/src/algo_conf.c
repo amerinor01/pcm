@@ -79,9 +79,9 @@ int algorithm_config_deactivate(struct algorithm_config *config) {
 }
 
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
-                                       int matching_rule_mask) {
+                                       addr_mask_t matching_rule_mask) {
     config->matching_rule_mask = matching_rule_mask;
-    LOG_DBG("[dev=%p conf=%p] added matching rule=%d", config->device, config,
+    LOG_DBG("[dev=%p conf=%p] added matching rule=0x%x", config->device, config,
             matching_rule_mask);
     return SUCCESS;
 }

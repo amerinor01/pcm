@@ -1,8 +1,8 @@
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <limits.h>
 
 #include "network.h"
 #include "pcm.h"
@@ -26,8 +26,7 @@ int reno_algo_init(device_t *dev_ctx, const char *reno_handler_path,
                    handle_t *algo_handler) {
 
     handle_t new_handle;
-    EXIT_ON_ERR(register_pcmc((void *)dev_ctx, UINT32_MAX, UINT32_MAX,
-                              UINT32_MAX, UINT32_MAX, &new_handle),
+    EXIT_ON_ERR(register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle),
                 SUCCESS);
 
     EXIT_ON_ERR(register_signal_pcmc(SIG_ACK, SIG_ACCUM_SUM, RENO_SIG_IDX_ACK,
@@ -48,7 +47,6 @@ int reno_algo_init(device_t *dev_ctx, const char *reno_handler_path,
     EXIT_ON_ERR(
         register_signal_invoke_trigger_pcmc(RENO_SIG_IDX_NACK, 1, new_handle),
         SUCCESS);
-
 
     EXIT_ON_ERR(
         register_control_pcmc(CTRL_CWND, RENO_CTRL_IDX_CWND, new_handle),

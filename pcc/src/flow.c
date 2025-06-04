@@ -56,8 +56,8 @@ void flow_state_init(const struct algorithm_config *config, flow_t *flow) {
     ATTR_LIST_FLOW_STATE_INIT(&config->local_state_list,
                               struct local_state_attr, flow->local_state,
                               FLOW_LOCAL_STATE_VARS_OFFSET);
-    LOG_DBG("[dev=%p conf=%p] instantiated config on flow=%p id=%d",
-            config->device, config, flow, flow->id);
+    LOG_DBG("[dev=%p conf=%p] instantiated config on flow=%p addr=%d",
+            config->device, config, flow, flow->addr);
 }
 
 int flow_create(device_t *device, flow_t **flow,
@@ -71,22 +71,22 @@ int flow_create(device_t *device, flow_t **flow,
         return ERROR;
     }
 
-    new_flow->id = device->flow_id_counter++;
-    LOG_DBG("[dev=%p] allocated new flow=%p, id=%u", device, new_flow,
-            new_flow->id);
+    new_flow->addr = device->flow_addr_counter++;
+    LOG_DBG("[dev=%p] allocated new flow=%p, addr=%u", device, new_flow,
+            new_flow->addr);
 
-    new_flow->config = device_flow_id_to_config_match(device, new_flow->id);
+    new_flow->config = device_flow_id_to_config_match(device, new_flow->addr);
     if (!new_flow->config) {
-        LOG_CRIT("[dev=%p] failed to match flow id=%u to algorithm config",
-                 device, new_flow->id);
+        LOG_CRIT("[dev=%p] failed to match flow addr=%u to algorithm config",
+                 device, new_flow->addr);
         goto free_flow;
     }
 
     flow_state_init(new_flow->config, new_flow);
 
     if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
-        LOG_DBG("[dev=%p] failed to add flow=%p, id=%u to scheduler", device,
-                new_flow, new_flow->id);
+        LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler", device,
+                new_flow, new_flow->addr);
         goto free_flow;
     }
 
@@ -95,13 +95,13 @@ int flow_create(device_t *device, flow_t **flow,
                        traffic_gen_fn ? traffic_gen_fn
                                       : flow_default_traffic_gen_fn,
                        (void *)new_flow)) {
-        LOG_CRIT("[dev=%p] failed to start thread for flow=%p id=%u", device,
-                 new_flow, new_flow->id);
+        LOG_CRIT("[dev=%p] failed to start thread for flow=%p addr=%u", device,
+                 new_flow, new_flow->addr);
         goto pcc_sched_cleanup;
     }
 
-    LOG_DBG("[dev=%p] started thread for flow=%p id=%u", device, new_flow,
-            new_flow->id);
+    LOG_DBG("[dev=%p] started thread for flow=%p addr=%u", device, new_flow,
+            new_flow->addr);
 
     *flow = new_flow;
 
@@ -118,20 +118,20 @@ int flow_destroy(flow_t *flow) {
     int ret = SUCCESS;
 
     if (device_scheduler_flow_remove(&flow->config->device->scheduler, flow)) {
-        LOG_CRIT("[flow=%p id=%u] failed to remove flow from scheduler", flow,
-                 flow->id);
+        LOG_CRIT("[flow=%p addr=%u] failed to remove flow from scheduler", flow,
+                 flow->addr);
         ret = ERROR;
     }
 
     flow->running = false;
     if (pthread_join(flow->thread, NULL)) {
-        LOG_CRIT("[flow=%p id=%u] flow thread join failed", flow, flow->id);
+        LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow, flow->addr);
         ret = ERROR;
     }
 
     if (flow->status != SUCCESS) {
-        LOG_CRIT("[flow=%p id=%u] flow thread completed with error", flow,
-                 flow->id);
+        LOG_CRIT("[flow=%p addr=%u] flow thread completed with error", flow,
+                 flow->addr);
         ret = ERROR;
     }
 
@@ -181,8 +181,8 @@ static void *flow_default_traffic_gen_fn(void *arg) {
         goto thread_termination;
     }
 
-    LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generation started; ", tid,
-              flow, flow->id);
+    LOG_PRINT("[tid=%llu, flow=%p, addr=%u] traffic generation started; ", tid,
+              flow, flow->addr);
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
@@ -202,16 +202,16 @@ static void *flow_default_traffic_gen_fn(void *arg) {
             flow_signals_update(flow, SIG_ACK, 1);
         }
         usleep(TGEN_THREAD_SLEEP_TIME_US);
-        LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generator stats: "
+        LOG_PRINT("[tid=%llu, flow=%p, addr=%u] traffic generator stats: "
                   "pkts_per_ms=%d, to_send=%d, cwnd=%d",
-                  tid, flow, flow->id, pkts_per_ms, to_send, cwnd);
+                  tid, flow, flow->addr, pkts_per_ms, to_send, cwnd);
     }
 
     flow->status = SUCCESS;
 
 thread_termination:
-    LOG_PRINT("[tid=%llu flow=%p, id=%u] traffic generation terminated with "
+    LOG_PRINT("[tid=%llu flow=%p, addr=%u] traffic generation terminated with "
               "status=%d",
-              tid, flow, flow->id, flow->status);
+              tid, flow, flow->addr, flow->status);
     return NULL;
 }
