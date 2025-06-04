@@ -13,7 +13,8 @@ enum reno_control_idxs { RENO_CTRL_IDX_CWND = 0 };
 
 enum reno_local_var_idxs {
     RENO_LOCAL_STATE_IDX_SSTHRESH = 0,
-    RENO_LOCAL_STATE_IDX_ACKED = 1
+    RENO_LOCAL_STATE_IDX_ACKED = 1,
+    RENO_LOCAL_STATE_IDX_IN_FAST_RECOV = 2
 };
 
 #ifdef HANDLER_BUILD

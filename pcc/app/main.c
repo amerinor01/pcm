@@ -69,6 +69,13 @@ int reno_algo_init(device_t *dev_ctx, const char *reno_handler_path,
                     RENO_LOCAL_STATE_IDX_ACKED, acked_init, new_handle),
                 SUCCESS);
 
+    EXIT_ON_ERR(
+        register_local_state_pcmc(RENO_LOCAL_STATE_IDX_IN_FAST_RECOV, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    RENO_LOCAL_STATE_IDX_IN_FAST_RECOV, 0, new_handle),
+                SUCCESS);
+
     char *compile_out;
     EXIT_ON_ERR(
         register_algorithm_pcmc(reno_handler_path, &compile_out, new_handle),
