@@ -68,6 +68,19 @@
         }                                                                      \
     }
 
+#define ATTR_LIST_DUPLICATE_TYPE_CHK(attr_list, attr_type, chk_type)           \
+    {                                                                          \
+        struct slist_entry *item, *prev;                                       \
+        slist_foreach(attr_list, item, prev) {                                 \
+            if (container_of(item, attr_type, metadata.list_entry)->type ==    \
+                (chk_type)) {                                                  \
+                LOG_CRIT("[attr_list=%p] found duplicate type=%d", attr_list,  \
+                         chk_type);                                            \
+                return ERROR;                                                  \
+            }                                                                  \
+        }                                                                      \
+    }
+
 #define ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(attr_list, attr_type,          \
                                                 entry_type, found_idx)         \
     {                                                                          \

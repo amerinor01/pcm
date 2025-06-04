@@ -213,11 +213,11 @@ err_t register_algorithm_pcmc(const char *compile_path,
 
 #define __algorithm_entry_point __algorithm_main(void *ctx)
 #define __algorithm_entry_point_symbol "__algorithm_main"
-int __flow_control_get(void *ctx, size_t user_index);
+int __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, int val);
-int __flow_signal_get(void *ctx, size_t user_index);
+int __flow_signal_get(const void *ctx, size_t user_index);
 void __flow_signal_set(void *ctx, size_t user_index, int val);
-int __flow_local_state_get(void *ctx, size_t user_index);
+int __flow_local_state_get(const void *ctx, size_t user_index);
 void __flow_local_state_set(void *ctx, size_t user_index, int val);
 
 /**

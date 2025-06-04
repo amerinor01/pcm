@@ -153,7 +153,7 @@ bool flow_triggers_check(const flow_t *flow) {
     return false;
 }
 
-void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
+static void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
     struct slist_entry *item, *prev;
     slist_foreach(&flow->config->signals_list, item, prev) {
         struct signal_attr *attr =
@@ -162,6 +162,13 @@ void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
             attr->accumulation_op_fn(flow, attr, value);
         }
     }
+}
+
+static int flow_cwnd_get(const flow_t *flow) {
+    size_t cwnd_idx;
+    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
+        &flow->config->controls_list, struct control_attr, CTRL_CWND, cwnd_idx);
+    return __flow_control_get(flow, cwnd_idx);
 }
 
 // Flow thread: emulate bandwidth, drops, NACKs, RTOs
@@ -174,27 +181,16 @@ static void *flow_default_traffic_gen_fn(void *arg) {
         goto thread_termination;
     }
 
-    // lookup congestion window knob index (ugly)
-    size_t cwnd_idx;
-    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
-        &flow->config->controls_list, struct control_attr, CTRL_CWND, cwnd_idx);
-    if (cwnd_idx == SIZE_MAX) {
-        flow->status = ERROR;
-        goto thread_termination;
-    }
-    cwnd_idx += FLOW_CONTROLS_OFFSET;
-
-    LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generation started; "
-              "cwnd_idx=%zu",
-              tid, flow, flow->id, cwnd_idx);
+    LOG_PRINT("[tid=%llu, flow=%p, id=%u] traffic generation started; ", tid,
+              flow, flow->id);
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
     while (flow->running) {
-        int cwnd = __flow_control_get(flow, 0);
+        int cwnd = flow_cwnd_get(flow);
         if (cwnd == 0) {
-            usleep(TGEN_THREAD_SLEEP_TIME_US);
-            continue;
+             usleep(TGEN_THREAD_SLEEP_TIME_US);
+             continue;
         }
         int to_send = cwnd < pkts_per_ms ? cwnd : pkts_per_ms;
         double roll = (double)rand_r(&rnd) / RAND_MAX;

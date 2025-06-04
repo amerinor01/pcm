@@ -140,6 +140,8 @@ int algorithm_config_control_add(struct algorithm_config *config,
                                  control_t control, size_t user_index) {
     ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->controls_list,
                                        struct control_attr, user_index);
+    ATTR_LIST_DUPLICATE_TYPE_CHK(&config->controls_list, struct control_attr,
+                                 control);
     struct control_attr *attr;
     ATTR_LIST_ITEM_ALLOC(&config->controls_list, user_index,
                          config->num_controls, ALGO_CONF_MAX_NUM_CONTROLS,
