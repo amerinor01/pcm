@@ -28,9 +28,13 @@
                              attr_ptr)                                         \
     {                                                                          \
         if ((item_counter) >= (max_items)) {                                   \
+            LOG_CRIT("[attr_list=%p] %s list storage is full", attr_list,      \
+                     #attr_list);                                              \
             return ERROR;                                                      \
         }                                                                      \
         if ((user_index) >= (max_items)) {                                     \
+            LOG_CRIT("[attr_list=%p] user_index exeeds %s list capacity",      \
+                     attr_list, #attr_list);                                   \
             return ERROR;                                                      \
         }                                                                      \
         (attr_ptr) = calloc(1, sizeof(*(attr_ptr)));                           \

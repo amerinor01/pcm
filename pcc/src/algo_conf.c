@@ -63,16 +63,41 @@ int algorithm_config_destroy(struct algorithm_config *config) {
 }
 
 int algorithm_config_activate(struct algorithm_config *config) {
-    if (config->active)
+    if (config->active) {
+        LOG_CRIT("[dev=%p conf=%p] config activation called twice",
+                 config->device, config);
         return ERROR;
+    }
+    if (!config->algorithm_fn) {
+        LOG_CRIT("[dev=%p conf=%p] algorithm handler function must be compiled",
+                 config->device, config);
+        return ERROR;
+    }
+    if (!config->num_signals) {
+        LOG_CRIT("[dev=%p conf=%p] at least one signal must be registered with "
+                 "configuration file",
+                 config->device, config);
+        return ERROR;
+    }
+    if (!config->num_controls) {
+        LOG_CRIT(
+            "[dev=%p conf=%p] at least one control must be registered with "
+            "configuration file",
+            config->device, config);
+        return ERROR;
+    }
     config->active = true;
-    LOG_DBG("[dev=%p conf=%p] activated", config->device, config);
+    LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu",
+            config->device, config, config->num_signals, config->num_controls);
     return SUCCESS;
 }
 
 int algorithm_config_deactivate(struct algorithm_config *config) {
-    if (!config->active)
+    if (!config->active) {
+        LOG_CRIT("[dev=%p conf=%p] config deactivation called twice",
+                 config->device, config);
         return ERROR;
+    }
     config->active = false;
     LOG_DBG("[dev=%p conf=%p] deactivated", config->device, config);
     return SUCCESS;
