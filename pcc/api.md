@@ -1,40 +1,24 @@
 # PCM definitions
 ### Notes
 1. We don't distinguish between sender/receiver sides.
-2. Pick the same PCMI for all inter-DC CCCs and another one for all intra-DC CCCs
-    - TH: I think we need to have one PCMI per CCC in any case - otherwise output controls don't work!
-    - MK: Agree with TH's point, but at that point TBH I don't really see a difference between CCC and PCMI abstractions. In the end controls are unique to the CCC.
-        - PDS<--->CCC<--->PCMI
-
-    **Proposal to discuss:**
-    1. Allocate and configure PCMC
-        1. `uet_alloc_pcmc(pcmc_handle)` - alloc new PCMC
-        2. `uet_register_signal(ctrl, sig_idx, pcmc_handle)` + `uet_register_signal_handler_trigger(threshold, sig_idx, pcmc_handle)` - add signals
-        3. `uet_register_control(ctrl, ctrl_idx, pcmc_handle)` + `uet_register_control_initial_value(value, ctrl_idx, pcmc_handle)` - add controls
-        4. `uet_register_algorithm(algo_source_code, compile_output, pcmc_handle)` - compile algo
-    2. Allocate CCC matching rule
-        1. `uet_alloc_ccc_matching_rule(<matching tuple>, ccc_mr_handle)` - specify how to match PDS to new CCCs
-    3. Activate PCM
-        1. `uet_activate_pcm(pcmc_handle, ccc_mr_handle, new_pcm)` - activate:now PCMI will be instantiated upon new CCC gets matched.
-
-2. **Indexes**
+2. **Datatypes:**
+    - Now implementation supports only int and sometimes casts stuff to uint32_t to achieve compatibility with kernel
+    - TODO: support uint32_t on api level.
+    - TODO: support floats
+3. **Signal update call**
+    - we defined new `update` call on signal to avoid losing events with `set(..)`
+    - it takes int as an update argument: if signal datatype is uint32_t, int will cover only half
+    - somehow having int here is ugly...
+3. **Indexes**
     - Should be the user index to lookup/set signal/control/local_state be known at handler compile time or it could be computed at runtime? To me it looks like most of the cases would work with indexes known at compile time. However, one use case with runtime index could be computing credit grant on receiver side (assuming that we have multiple priorities aka pull queues)
+    - *Now we have it at compile time.*
 
 3. **Signal semantics:** 
     - For the signals, not sure we want to have a generic `uet_set_signal(idx, value)` on the handler side. Looks like we implicitly assume that all signals start from zero (right after PCMI is instantiated) and can eventually increase upon some events are happening (hence they can be used as triggers upon *reaching* the threshold). Thus rather then having a set and allow user to set signal to an arbitrary current value (even above the threshold which makes no sense!), I'd have two calls: `uet_signal_reset(idx)` + `uet_signal_threshold(..)`?
     - Is it possible that signals can have diferent type of thresholding/triggering?
     - It should be possible for some signals (e.g., RTT) to be initialzed with non zero def (to support `uet_signal_reset` in this case, an additional logic would be needed).
-
-3. Do we have races in the API flow (no)?:
-    1. Install CCC/PCMI mathing rule [Instructs NIC to setup steering/matching rule upon the first PDS packet comes]
-    2. Setup signals/controls [at that point CCC/PCMIs can already be allocated, but we somehow dynamically attach signals to them]
-    3. Compile algorithm [... at that point we have triggers that are already setup and active PDSs]
-    4. Register algorithm
-    - Race[?]: What happens if new connection (aka PDS) gets created between 1/2, 1/3, 2/3 or 1,4?
-    - Can we ensure that CCC matching is installed only after algorithm is fully configured (signals/controls are set, and it is registerd).
-    - Looks like this is solved with `uet_activate_pcm`.
-- We do not specify format of the `source_code` object in `uet_compile_algorithm` call. What if `source_code` contains bunch of C functions, one calls another. Should we define algorithm entry point, e.g., `__pcm_algorithm_main___ int main_fn()`?
-    - Algorithm should be able to return error when it is executed, e.g., we should be able to track it through something like a PCM event queue?
+4. **User notification about trigger**
+    - We might want to deliver to the index of signal that triggered handler execution
 
 ### Implementation notes:
 1. Right now flow generator generates new events, while scheduler asynchronously checks whether thresholds are met and triggers new events. Is this optimal? Can flow generator (aka datapath) detect whether trigger criteria is met and add new flow into a scheduler's queue?
