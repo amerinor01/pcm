@@ -1,13 +1,6 @@
 #include <math.h>
 
-#include "reno.h"
-
-#define MAX(a, b)                                                              \
-    ({                                                                         \
-        __typeof__(a) _a = (a);                                                \
-        __typeof__(b) _b = (b);                                                \
-        _a > _b ? _a : _b;                                                     \
-    })
+#include "tcp.h"
 
 /**
  * @brief Naive implementation of TCP Reno-like congestion window control.
@@ -41,19 +34,19 @@ int algorithm_main() {
      * which is unsafe (unless we have memory protection).
      * Can we ensure safety here through static analysis?
      */
-    int num_nacks = get_signal(RENO_SIG_IDX_NACK);
-    int num_rtos = get_signal(RENO_SIG_IDX_RTO);
-    int num_acks = get_signal(RENO_SIG_IDX_ACK);
-    int cwnd = get_control(RENO_CTRL_IDX_CWND);
-    int ssthresh = get_local_state(RENO_LOCAL_STATE_IDX_SSTHRESH);
-    int tot_acked = get_local_state(RENO_LOCAL_STATE_IDX_ACKED) + num_acks;
+    int num_nacks = get_signal(TCP_SIG_IDX_NACK);
+    int num_rtos = get_signal(TCP_SIG_IDX_RTO);
+    int num_acks = get_signal(TCP_SIG_IDX_ACK);
+    int cwnd = get_control(TCP_CTRL_IDX_CWND);
+    int ssthresh = get_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH);
+    int tot_acked = get_local_state(TCP_LOCAL_STATE_IDX_ACKED) + num_acks;
 
     /* 1) Fast retransmit: multiplicative decrease */
     if (num_nacks > 0) {
         ssthresh = MAX(cwnd >> num_nacks, 2);
         cwnd = ssthresh;
         tot_acked = 0;
-        set_signal(RENO_SIG_IDX_NACK, 0);
+        set_signal(TCP_SIG_IDX_NACK, 0);
     }
 
     /* 2) Timeout recovery */
@@ -66,7 +59,7 @@ int algorithm_main() {
         } else {
             num_rtos = 0;
         }
-        set_signal(RENO_SIG_IDX_RTO, 0);
+        set_signal(TCP_SIG_IDX_RTO, 0);
     }
 
     /*
@@ -110,10 +103,10 @@ int algorithm_main() {
         }
     }
 
-    set_signal(RENO_SIG_IDX_ACK, 0);
-    set_control(RENO_CTRL_IDX_CWND, cwnd);
-    set_local_state(RENO_LOCAL_STATE_IDX_ACKED, tot_acked);
-    set_local_state(RENO_LOCAL_STATE_IDX_SSTHRESH, ssthresh);
+    set_signal(TCP_SIG_IDX_ACK, 0);
+    set_control(TCP_CTRL_IDX_CWND, cwnd);
+    set_local_state(TCP_LOCAL_STATE_IDX_ACKED, tot_acked);
+    set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, ssthresh);
 
     return SUCCESS;
 }

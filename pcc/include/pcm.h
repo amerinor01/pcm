@@ -100,7 +100,8 @@ typedef enum signal {
     SIG_ACK = 0,         /**< Number of ACK packets received */
     SIG_RTO = 1,         /**< Number of RTO packets received */
     SIG_NACK = 2,        /**< Number of NACK packets received */
-    SIG_ELAPSED_TIME = 3 /**< Monotonic elapsed time */
+    SIG_ECN = 3,         /**< Number of ECN packets received */
+    SIG_ELAPSED_TIME = 4 /**< Monotonic elapsed time */
 } signal_t;
 
 /**
