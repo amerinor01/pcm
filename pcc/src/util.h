@@ -69,6 +69,7 @@
     {                                                                          \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
+            (void)prev; /* suppress complier warning */                        \
             if (container_of(item, attr_type, metadata.list_entry)             \
                     ->metadata.index == (user_index)) {                        \
                 LOG_CRIT("[attr_list=%p] found duplicate index=%zu",           \
@@ -82,6 +83,7 @@
     {                                                                          \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
+            (void)prev; /* suppress complier warning */                        \
             if (container_of(item, attr_type, metadata.list_entry)->type ==    \
                 (chk_type)) {                                                  \
                 LOG_CRIT("[attr_list=%p] found duplicate type=%d", attr_list,  \
@@ -97,6 +99,7 @@
         struct slist_entry *item, *prev;                                       \
         (found_idx) = SIZE_MAX;                                                \
         slist_foreach(attr_list, item, prev) {                                 \
+            (void)prev; /* suppress complier warning */                        \
             attr_type *attr =                                                  \
                 container_of(item, attr_type, metadata.list_entry);            \
             if (attr->type == (entry_type)) {                                  \
@@ -118,6 +121,7 @@
         attr_type *cur_attr = NULL;                                            \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
+            (void)prev; /* suppress complier warning */                        \
             cur_attr = container_of(item, attr_type, metadata.list_entry);     \
             if (cur_attr->metadata.index == (user_index)) {                    \
                 (found_attr_ptr) = cur_attr;                                   \
@@ -138,6 +142,7 @@
         attr_type *cur_attr = NULL;                                            \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
+            (void)prev; /* suppress complier warning */                        \
             cur_attr = container_of(item, attr_type, metadata.list_entry);     \
             (state_ptr)[(state_offset) + cur_attr->metadata.index] =           \
                 cur_attr->metadata.value;                                      \

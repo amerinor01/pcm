@@ -76,7 +76,7 @@ struct algorithm_config {
 #define TGEN_DROP_PROB 0.01            // 1% packet drop probability
 #define TGEN_NACK_PROB 0.02            // 2% NACK probability (duplicate ACK)
 #define TGEN_ECN_CONG_PROB 0.3
-#define TGEN_PACKET_SIZE 1500          // bytes per packet (MSS)
+#define TGEN_PACKET_SIZE 1500 // bytes per packet (MSS)
 #define TGEN_THREAD_SLEEP_TIME_US 1000
 
 struct flow {
@@ -88,7 +88,6 @@ struct flow {
     pthread_t thread;
     atomic_bool running;
     int status;
-    uint64_t tid;
 };
 
 #define SCHEDULER_SLEEP_US 1000 // 10 ms

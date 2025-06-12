@@ -58,6 +58,7 @@ const struct algorithm_config *
 device_flow_id_to_config_match(const device_t *device, addr_t addr) {
     struct slist_entry *item, *prev;
     slist_foreach(&device->configs_list, item, prev) {
+        (void)prev; /* suppress complier warning */
         struct algorithm_config *config =
             container_of(item, struct algorithm_config, list_entry);
         /*
@@ -132,6 +133,7 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
     struct slist_entry *item, *prev;
     bool found = false;
     slist_foreach(&scheduler->flow_list, item, prev) {
+        (void)prev; /* suppress complier warning */
         if (container_of(item, flow_t, flow_list_entry) == flow) {
             slist_remove(&scheduler->flow_list, item, prev);
             found = true;
@@ -155,13 +157,7 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
 static void *device_scheduler_thread_fn(void *arg) {
     struct scheduler *scheduler = arg;
 
-    uint64_t tid;
-    if (pthread_threadid_np(NULL, &tid)) {
-        scheduler->status = ERROR;
-        goto thread_termination;
-    }
-
-    LOG_DBG("[tid=%llu] scheduler started", tid);
+    LOG_DBG("scheduler started");
 
     while (scheduler->running) {
         if (pthread_mutex_lock(&scheduler->flow_list_lock)) {
@@ -171,6 +167,7 @@ static void *device_scheduler_thread_fn(void *arg) {
 
         struct slist_entry *item, *prev;
         slist_foreach(&scheduler->flow_list, item, prev) {
+            (void)prev; /* suppress complier warning */
             flow_t *flow = container_of(item, flow_t, flow_list_entry);
             if (!flow->running) {
                 scheduler->status = ERROR;
@@ -190,9 +187,7 @@ static void *device_scheduler_thread_fn(void *arg) {
         usleep(SCHEDULER_SLEEP_US);
     }
 
-thread_termination:
-    LOG_DBG("[tid=%llu] scheduler finished with status=%d", tid,
-            scheduler->status);
+    LOG_DBG("scheduler finished with status=%d", scheduler->status);
 
     return NULL;
 }
