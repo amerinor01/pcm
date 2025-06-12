@@ -142,6 +142,9 @@ int algorithm_config_signal_add(struct algorithm_config *config,
         return ERROR;
     }
 
+    if (attr->type == SIG_ELAPSED_TIME)
+        attr->accumulation_op_fn = flow_signal_time_accumulation_op;
+
     return SUCCESS;
 }
 
@@ -152,6 +155,11 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
                        threshold, attr);
     if (threshold <= 0)
         return ERROR;
+
+    if (attr->type == SIG_ELAPSED_TIME) {
+        LOG_CRIT("Elapsed time timers are not supported");
+        return ERROR;
+    }
 
     attr->is_trigger = true;
     attr->trigger_check_fn = flow_handler_trigger_check;

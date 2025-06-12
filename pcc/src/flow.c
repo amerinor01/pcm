@@ -36,6 +36,22 @@ void flow_signal_accumulation_op_max(flow_t *flow,
             signal;
 }
 
+void flow_signal_time_accumulation_op(flow_t *flow,
+                                      const struct signal_attr *attr,
+                                      int signal) {
+    (void)signal;
+    struct timespec now_ts;
+    if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
+        LOG_FATAL("clock_gettime failed");
+    }
+    if (!attr->is_trigger) {
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] =
+            CLOCK_GETTIME_TS_DIFF_GET(flow->start_ts, now_ts);
+    } else {
+        LOG_FATAL("Elapsed time timers are not supported");
+    }
+}
+
 bool flow_handler_trigger_check(const flow_t *flow,
                                 const struct signal_attr *attr) {
     int value =
@@ -84,12 +100,6 @@ int flow_create(device_t *device, flow_t **flow,
 
     flow_state_init(new_flow->config, new_flow);
 
-    if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
-        LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler", device,
-                new_flow, new_flow->addr);
-        goto free_flow;
-    }
-
     new_flow->running = true;
     if (pthread_create(&new_flow->thread, NULL,
                        traffic_gen_fn ? traffic_gen_fn
@@ -102,6 +112,12 @@ int flow_create(device_t *device, flow_t **flow,
 
     LOG_DBG("[dev=%p] started thread for flow=%p addr=%u", device, new_flow,
             new_flow->addr);
+
+    if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
+        LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler", device,
+                new_flow, new_flow->addr);
+        goto free_flow;
+    }
 
     *flow = new_flow;
 
@@ -163,8 +179,7 @@ static void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
         if (attr->type == signal_type) {
             LOG_INFO("[flow=%p, addr=%u] update signal_type=%s, "
                      "accum_type=%s, index=%zu, update_val=%d",
-                     flow, flow->addr,
-                     signal_type_to_string(signal_type),
+                     flow, flow->addr, signal_type_to_string(signal_type),
                      signal_accum_type_to_string(attr->accum_type),
                      attr->metadata.index, value);
             attr->accumulation_op_fn(flow, attr, value);
@@ -179,6 +194,14 @@ static int flow_cwnd_get(const flow_t *flow) {
     return __flow_control_get(flow, cwnd_idx);
 }
 
+static int flow_time_init(flow_t *flow) {
+    // CLOCK_MONOTHONIC is system wide clock so it should be safe to share it
+    // between flow and scheduler threads
+    if (clock_gettime(CLOCK_MONOTONIC, &flow->start_ts))
+        return ERROR;
+    return SUCCESS;
+}
+
 // Flow thread: emulate bandwidth, drops, NACKs, RTOs
 static void *flow_default_traffic_gen_fn(void *arg) {
     flow_t *flow = arg;
@@ -188,7 +211,16 @@ static void *flow_default_traffic_gen_fn(void *arg) {
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
+
+    // Initialize time related signals of flow before traffic generation
+    // starts
+    if (flow_time_init(flow) != SUCCESS) {
+        flow->status = ERROR;
+        goto flow_thread_join;
+    }
+
     while (flow->running) {
+        flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
         int cwnd = flow_cwnd_get(flow);
         if (cwnd == 0) {
             usleep(TGEN_THREAD_SLEEP_TIME_US);
@@ -201,11 +233,13 @@ static void *flow_default_traffic_gen_fn(void *arg) {
         } else if (roll < TGEN_DROP_PROB + TGEN_NACK_PROB) {
             flow_signals_update(flow, SIG_NACK, 1);
         } else {
+            flow_signals_update(flow, SIG_RTT, TGEN_RTT);
             flow_signals_update(flow, SIG_ACK, 1);
             if (roll < TGEN_ECN_CONG_PROB) {
                 flow_signals_update(flow, SIG_ECN, 1);
             }
         }
+        flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
         usleep(TGEN_THREAD_SLEEP_TIME_US);
         LOG_PRINT("[flow=%p, addr=%u] traffic generator stats: "
                   "pkts_per_ms=%d, to_send=%d, cwnd=%d",
@@ -213,7 +247,7 @@ static void *flow_default_traffic_gen_fn(void *arg) {
     }
 
     flow->status = SUCCESS;
-
+flow_thread_join:
     LOG_PRINT("[flow=%p, addr=%u] traffic generation terminated with "
               "status=%d",
               flow, flow->addr, flow->status);

@@ -2,28 +2,10 @@
 #define _RENO_H_
 
 #include "pcm.h"
+#include "algo_utils.h"
 
-#define MAX(a, b)                                                              \
-    ({                                                                         \
-        __typeof__(a) _a = (a);                                                \
-        __typeof__(b) _b = (b);                                                \
-        _a > _b ? _a : _b;                                                     \
-    })
-
-#define MIN(a, b)                                                              \
-    ({                                                                         \
-        __typeof__(a) _a = (a);                                                \
-        __typeof__(b) _b = (b);                                                \
-        _a < _b ? _a : _b;                                                     \
-    })
-
-#define MIN_NOT_ZERO(x, y)                                                     \
-    ({                                                                         \
-        typeof(x) __x = (x);                                                   \
-        typeof(y) __y = (y);                                                   \
-        __x == 0 ? __y : ((__y == 0) ? __x : MIN(__x, __y));                   \
-    })
-
+#define TCP_SSTHRESH_INIT INT_MAX
+#define TCP_CWND_INIT 1
 #define DCTCP_MAX_ALPHA 1024U
 #define DCTCP_SHIFT_G 4 /* g = 1/2^4 EWMA weight */
 

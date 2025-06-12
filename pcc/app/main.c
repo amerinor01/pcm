@@ -2,11 +2,12 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "network.h"
 #include "pcm.h"
+#include "swift.h"
 #include "tcp.h"
 
 #define EXIT_ON_ERR(call, success_errcode)                                     \
@@ -19,17 +20,7 @@
         }                                                                      \
     } while (0)
 
-const int acked_init = 0;
-const int ssthresh_init = INT_MAX;
-const int cwnd_init = 1;
-
-int pcmc_init(const char *algo_name, device_t *dev_ctx,
-              const char *reno_handler_path, handle_t *algo_handler) {
-
-    handle_t new_handle;
-    EXIT_ON_ERR(register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle),
-                SUCCESS);
-
+int tcp_pcmc_config(handle_t new_handle) {
     EXIT_ON_ERR(register_signal_pcmc(SIG_ACK, SIG_ACCUM_SUM, TCP_SIG_IDX_ACK,
                                      new_handle),
                 SUCCESS);
@@ -52,21 +43,21 @@ int pcmc_init(const char *algo_name, device_t *dev_ctx,
     EXIT_ON_ERR(register_control_pcmc(CTRL_CWND, TCP_CTRL_IDX_CWND, new_handle),
                 SUCCESS);
     EXIT_ON_ERR(register_control_initial_value_pcmc(TCP_CTRL_IDX_CWND,
-                                                    cwnd_init, new_handle),
+                                                    TCP_CWND_INIT, new_handle),
                 SUCCESS);
 
     EXIT_ON_ERR(
         register_local_state_pcmc(TCP_LOCAL_STATE_IDX_SSTHRESH, new_handle),
         SUCCESS);
     EXIT_ON_ERR(register_local_state_initial_value_pcmc(
-                    TCP_LOCAL_STATE_IDX_SSTHRESH, ssthresh_init, new_handle),
+                    TCP_LOCAL_STATE_IDX_SSTHRESH, TCP_SSTHRESH_INIT, new_handle),
                 SUCCESS);
 
     EXIT_ON_ERR(
         register_local_state_pcmc(TCP_LOCAL_STATE_IDX_ACKED, new_handle),
         SUCCESS);
     EXIT_ON_ERR(register_local_state_initial_value_pcmc(
-                    TCP_LOCAL_STATE_IDX_ACKED, acked_init, new_handle),
+                    TCP_LOCAL_STATE_IDX_ACKED, 0, new_handle),
                 SUCCESS);
 
     EXIT_ON_ERR(register_local_state_pcmc(TCP_LOCAL_STATE_IDX_IN_FAST_RECOV,
@@ -75,33 +66,107 @@ int pcmc_init(const char *algo_name, device_t *dev_ctx,
     EXIT_ON_ERR(register_local_state_initial_value_pcmc(
                     TCP_LOCAL_STATE_IDX_IN_FAST_RECOV, 0, new_handle),
                 SUCCESS);
+    return SUCCESS;
+}
+
+int dctcp_pcmc_init(handle_t new_handle) {
+    EXIT_ON_ERR(register_signal_pcmc(SIG_ECN, SIG_ACCUM_SUM, TCP_SIG_IDX_ECN,
+                                     new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_local_state_pcmc(TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED,
+                                          new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED, 0, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_local_state_pcmc(
+                    TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED, 0, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_local_state_pcmc(TCP_LOCAL_STATE_IDX_ALPHA, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    TCP_LOCAL_STATE_IDX_ALPHA, DCTCP_MAX_ALPHA, new_handle),
+                SUCCESS);
+    return SUCCESS;
+}
+
+int swift_pcmc_init(handle_t new_handle) {
+    EXIT_ON_ERR(register_signal_pcmc(SIG_ACK, SIG_ACCUM_SUM, SWIFT_SIG_IDX_ACK,
+                                     new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_signal_invoke_trigger_pcmc(SWIFT_SIG_IDX_ACK, 1, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_signal_pcmc(SIG_RTO, SIG_ACCUM_SUM, SWIFT_SIG_IDX_RTO,
+                                     new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_signal_invoke_trigger_pcmc(SWIFT_SIG_IDX_RTO, 1, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_signal_pcmc(SIG_NACK, SIG_ACCUM_SUM,
+                                     SWIFT_SIG_IDX_NACK, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_signal_invoke_trigger_pcmc(SWIFT_SIG_IDX_NACK, 1, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_signal_pcmc(SIG_RTT, SIG_ACCUM_LAST,
+                                     SWIFT_SIG_IDX_RTT, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_signal_pcmc(SIG_ELAPSED_TIME, SIG_ACCUM_SUM,
+                                     SIWFT_SIG_IDX_ELAPSED_TIME, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(
+        register_control_pcmc(CTRL_CWND, SWIFT_CTRL_IDX_CWND, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_control_initial_value_pcmc(SWIFT_CTRL_IDX_CWND,
+                                                    SWIFT_MIN_CWND, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SWIFT_LOCAL_STATE_IDX_ACKED, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    SWIFT_LOCAL_STATE_IDX_ACKED, 0, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_local_state_pcmc(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE,
+                                          new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE, 0, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_local_state_pcmc(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT,
+                                          new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT, 0, new_handle),
+                SUCCESS);
+    return SUCCESS;
+}
+
+int pcmc_init(const char *algo_name, device_t *dev_ctx,
+              const char *reno_handler_path, handle_t *algo_handler) {
+
+    handle_t new_handle;
+    EXIT_ON_ERR(register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle),
+                SUCCESS);
 
     if (!strcmp(algo_name, "newreno")) {
-        // NewReno needs only the stuff requested above, so nothing to do here
         fprintf(stdout, "Algorithm requested: NewReno\n");
+        EXIT_ON_ERR(tcp_pcmc_config(new_handle), SUCCESS);
     } else if (!strcmp(algo_name, "dctcp")) {
         fprintf(stdout, "Algorithm requested: DCTCP\n");
-        EXIT_ON_ERR(register_signal_pcmc(SIG_ECN, SIG_ACCUM_SUM,
-                                         TCP_SIG_IDX_ECN, new_handle),
-                    SUCCESS);
-        EXIT_ON_ERR(register_local_state_pcmc(
-                        TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED, new_handle),
-                    SUCCESS);
-        EXIT_ON_ERR(register_local_state_initial_value_pcmc(
-                        TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED, 0, new_handle),
-                    SUCCESS);
-        EXIT_ON_ERR(register_local_state_pcmc(
-                        TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED, new_handle),
-                    SUCCESS);
-        EXIT_ON_ERR(register_local_state_initial_value_pcmc(
-                        TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED, 0, new_handle),
-                    SUCCESS);
-        EXIT_ON_ERR(
-            register_local_state_pcmc(TCP_LOCAL_STATE_IDX_ALPHA, new_handle),
-            SUCCESS);
-        EXIT_ON_ERR(register_local_state_initial_value_pcmc(
-                        TCP_LOCAL_STATE_IDX_ALPHA, DCTCP_MAX_ALPHA, new_handle),
-                    SUCCESS);
+        EXIT_ON_ERR(tcp_pcmc_config(new_handle), SUCCESS);
+        EXIT_ON_ERR(dctcp_pcmc_init(new_handle), SUCCESS);
+    } else if (!strcmp(algo_name, "swift")) {
+        fprintf(stdout, "Algorithm requested: Swift\n");
+        EXIT_ON_ERR(swift_pcmc_init(new_handle), SUCCESS);
     } else {
         fprintf(stderr, "Unknown algorithm name %s\n", algo_name);
         exit(EXIT_FAILURE);

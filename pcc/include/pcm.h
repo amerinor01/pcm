@@ -101,7 +101,8 @@ typedef enum signal {
     SIG_RTO = 1,         /**< Number of RTO packets received */
     SIG_NACK = 2,        /**< Number of NACK packets received */
     SIG_ECN = 3,         /**< Number of ECN packets received */
-    SIG_ELAPSED_TIME = 4 /**< Monotonic elapsed time */
+    SIG_RTT = 4,         /**< RTT timestamp */
+    SIG_ELAPSED_TIME = 5 /**< Monotonic elapsed time */
 } signal_t;
 
 /**
@@ -109,9 +110,9 @@ typedef enum signal {
  * @brief Accumulation operations for PCM signals.
  */
 typedef enum signal_accum {
-    SIG_ACCUM_SUM = 0,  /**< Sum all samples */
-    SIG_ACCUM_MIN = 1,  /**< Keep minimum sample */
-    SIG_ACCUM_MAX = 2,  /**< Keep maximum sample */
+    SIG_ACCUM_SUM = 0, /**< Sum all samples */
+    SIG_ACCUM_MIN = 1, /**< Keep minimum sample */
+    SIG_ACCUM_MAX = 2, /**< Keep maximum sample */
     SIG_ACCUM_LAST = 3 /**< Keep only the last sample */
 } signal_accum_t;
 

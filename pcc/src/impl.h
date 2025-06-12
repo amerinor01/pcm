@@ -78,6 +78,7 @@ struct algorithm_config {
 #define TGEN_ECN_CONG_PROB 0.3
 #define TGEN_PACKET_SIZE 1500 // bytes per packet (MSS)
 #define TGEN_THREAD_SLEEP_TIME_US 1000
+#define TGEN_RTT 100
 
 struct flow {
     addr_t addr;
@@ -85,7 +86,8 @@ struct flow {
     const struct algorithm_config *config;
     atomic_int datapath_state[FLOW_DATAPATH_STATE_SIZE];
     int local_state[FLOW_LOCAL_STATE_SIZE];
-    pthread_t thread;
+    struct timespec start_ts;
+    pthread_t thread; // CLOCK_MONOTHONIC
     atomic_bool running;
     int status;
 };
@@ -147,5 +149,7 @@ void flow_signal_accumulation_op_min(flow_t *flow,
 void flow_signal_accumulation_op_max(flow_t *flow,
                                      const struct signal_attr *attr,
                                      int signal);
-
+void flow_signal_time_accumulation_op(flow_t *flow,
+                                      const struct signal_attr *attr,
+                                      int signal);
 #endif /* _IMPL_H_ */

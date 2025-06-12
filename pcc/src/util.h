@@ -4,6 +4,11 @@
 #include "impl.h"
 #include "lwlog.h"
 
+#define CLOCK_GETTIME_TS_DIFF_GET(tp_start, tp_end)                            \
+    ((((double)tp_end.tv_sec * 1e9 + (double)tp_end.tv_nsec) -                 \
+      ((double)tp_start.tv_sec * 1e9 + (double)tp_start.tv_nsec)) /            \
+     1e9)
+
 #define LOG_DBG(FORMAT, ...)                                                   \
     {                                                                          \
         lwlog_debug(FORMAT, ##__VA_ARGS__);                                    \
@@ -22,6 +27,12 @@
 #define LOG_PRINT(FORMAT, ...)                                                 \
     {                                                                          \
         lwlog_info(FORMAT, ##__VA_ARGS__);                                     \
+    }
+
+#define LOG_FATAL(FORMAT, ...)                                                 \
+    {                                                                          \
+        lwlog_crit(FORMAT, ##__VA_ARGS__);                                     \
+        exit(EXIT_FAILURE);                                                    \
     }
 
 #define container_of(ptr, type, member)                                        \
@@ -159,6 +170,8 @@ static inline const char *signal_type_to_string(signal_t type) {
         return "SIG_NACK";
     case SIG_ECN:
         return "SIG_ECN";
+    case SIG_RTT:
+        return "SIG_RTT";
     case SIG_ELAPSED_TIME:
         return "SIG_ELAPSED_TIME";
     default:
