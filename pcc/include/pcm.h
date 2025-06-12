@@ -112,8 +112,7 @@ typedef enum signal_accum {
     SIG_ACCUM_SUM = 0,  /**< Sum all samples */
     SIG_ACCUM_MIN = 1,  /**< Keep minimum sample */
     SIG_ACCUM_MAX = 2,  /**< Keep maximum sample */
-    SIG_ACCUM_LAST = 3, /**< Keep only the last sample */
-    SIG_ACCUM_AVG = 4   /**< Compute running average across all samples */
+    SIG_ACCUM_LAST = 3 /**< Keep only the last sample */
 } signal_accum_t;
 
 /**

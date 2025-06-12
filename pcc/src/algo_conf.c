@@ -121,8 +121,8 @@ int algorithm_config_signal_add(struct algorithm_config *config,
                          ALGO_CONF_MAX_NUM_SIGNALS, attr);
 
     attr->type = signal;
-
-    switch (accum_type) {
+    attr->accum_type = accum_type;
+    switch (attr->accum_type) {
     case SIG_ACCUM_SUM:
         attr->accumulation_op_fn = flow_signal_accumulation_op_sum;
         break;
@@ -135,16 +135,13 @@ int algorithm_config_signal_add(struct algorithm_config *config,
     case SIG_ACCUM_MAX:
         attr->accumulation_op_fn = flow_signal_accumulation_op_max;
         break;
-    case SIG_ACCUM_AVG:
-        LOG_CRIT("[dev=%p conf=%p] average signal accumulation type is not "
-                 "supported",
-                 config->device, config);
-        return ERROR;
     default:
-        LOG_CRIT("[dev=%p conf=%p] unknown signal accumulation type requested",
+        LOG_CRIT("[dev=%p conf=%p] unknown or unsupported signal accumulation "
+                 "type requested",
                  config->device, config);
         return ERROR;
     }
+
     return SUCCESS;
 }
 

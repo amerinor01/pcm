@@ -159,6 +159,12 @@ static void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
         struct signal_attr *attr =
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->type == signal_type) {
+            LOG_INFO("[tid=%llu, flow=%p, addr=%u] update signal_type=%s, "
+                     "accum_type=%s, index=%zu, update_val=%d",
+                     flow->tid, flow, flow->addr,
+                     signal_type_to_string(signal_type),
+                     signal_accum_type_to_string(attr->accum_type),
+                     attr->metadata.index, value);
             attr->accumulation_op_fn(flow, attr, value);
         }
     }
@@ -175,22 +181,21 @@ static int flow_cwnd_get(const flow_t *flow) {
 static void *flow_default_traffic_gen_fn(void *arg) {
     flow_t *flow = arg;
 
-    uint64_t tid;
-    if (pthread_threadid_np(NULL, &tid)) {
+    if (pthread_threadid_np(NULL, &flow->tid)) {
         flow->status = ERROR;
         goto thread_termination;
     }
 
-    LOG_PRINT("[tid=%llu, flow=%p, addr=%u] traffic generation started; ", tid,
-              flow, flow->addr);
+    LOG_PRINT("[tid=%llu, flow=%p, addr=%u] traffic generation started",
+              flow->tid, flow, flow->addr);
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
     while (flow->running) {
         int cwnd = flow_cwnd_get(flow);
         if (cwnd == 0) {
-             usleep(TGEN_THREAD_SLEEP_TIME_US);
-             continue;
+            usleep(TGEN_THREAD_SLEEP_TIME_US);
+            continue;
         }
         int to_send = cwnd < pkts_per_ms ? cwnd : pkts_per_ms;
         double roll = (double)rand_r(&rnd) / RAND_MAX;
@@ -200,11 +205,14 @@ static void *flow_default_traffic_gen_fn(void *arg) {
             flow_signals_update(flow, SIG_NACK, 1);
         } else {
             flow_signals_update(flow, SIG_ACK, 1);
+            if (roll < TGEN_ECN_CONG_PROB) {
+                flow_signals_update(flow, SIG_ECN, 1);
+            }
         }
         usleep(TGEN_THREAD_SLEEP_TIME_US);
         LOG_PRINT("[tid=%llu, flow=%p, addr=%u] traffic generator stats: "
                   "pkts_per_ms=%d, to_send=%d, cwnd=%d",
-                  tid, flow, flow->addr, pkts_per_ms, to_send, cwnd);
+                  flow->tid, flow, flow->addr, pkts_per_ms, to_send, cwnd);
     }
 
     flow->status = SUCCESS;
@@ -212,6 +220,6 @@ static void *flow_default_traffic_gen_fn(void *arg) {
 thread_termination:
     LOG_PRINT("[tid=%llu flow=%p, addr=%u] traffic generation terminated with "
               "status=%d",
-              tid, flow, flow->addr, flow->status);
+              flow->tid, flow, flow->addr, flow->status);
     return NULL;
 }

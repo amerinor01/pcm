@@ -27,6 +27,7 @@ typedef bool (*signal_trigger_check_fn)(const flow_t *,
 struct signal_attr {
     struct generic_metadata metadata;
     signal_t type;
+    signal_accum_t accum_type;
     signal_accumulation_op_fn accumulation_op_fn;
     bool is_trigger;
     signal_trigger_check_fn trigger_check_fn;
@@ -74,6 +75,7 @@ struct algorithm_config {
 #define TGEN_BANDWIDTH_BPS 100000000UL // 100 Mbps
 #define TGEN_DROP_PROB 0.01            // 1% packet drop probability
 #define TGEN_NACK_PROB 0.02            // 2% NACK probability (duplicate ACK)
+#define TGEN_ECN_CONG_PROB 0.3
 #define TGEN_PACKET_SIZE 1500          // bytes per packet (MSS)
 #define TGEN_THREAD_SLEEP_TIME_US 1000
 
@@ -86,6 +88,7 @@ struct flow {
     pthread_t thread;
     atomic_bool running;
     int status;
+    uint64_t tid;
 };
 
 #define SCHEDULER_SLEEP_US 1000 // 10 ms

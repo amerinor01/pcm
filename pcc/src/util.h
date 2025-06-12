@@ -1,11 +1,17 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
+#include "impl.h"
 #include "lwlog.h"
 
 #define LOG_DBG(FORMAT, ...)                                                   \
     {                                                                          \
         lwlog_debug(FORMAT, ##__VA_ARGS__);                                    \
+    }
+
+#define LOG_INFO(FORMAT, ...)                                                  \
+    {                                                                          \
+        lwlog_info(FORMAT, ##__VA_ARGS__);                                     \
     }
 
 #define LOG_CRIT(FORMAT, ...)                                                  \
@@ -137,5 +143,39 @@
                 cur_attr->metadata.value;                                      \
         }                                                                      \
     }
+
+static inline const char *signal_type_to_string(signal_t type) {
+    switch (type) {
+    case SIG_ACK:
+        return "SIG_ACK";
+    case SIG_RTO:
+        return "SIG_RTO";
+    case SIG_NACK:
+        return "SIG_NACK";
+    case SIG_ECN:
+        return "SIG_ECN";
+    case SIG_ELAPSED_TIME:
+        return "SIG_ELAPSED_TIME";
+    default:
+        return "SIG_UNKNOWN";
+    }
+    return "SIG_ACCUM_UNKNOWN";
+}
+
+static inline const char *signal_accum_type_to_string(signal_accum_t type) {
+    switch (type) {
+    case SIG_ACCUM_SUM:
+        return "SIG_ACCUM_SUM";
+    case SIG_ACCUM_MIN:
+        return "SIG_ACCUM_MIN";
+    case SIG_ACCUM_MAX:
+        return "SIG_ACCUM_MAX";
+    case SIG_ACCUM_LAST:
+        return "SIG_ACCUM_LAST";
+    default:
+        return "SIG_ACCUM_UNKNOWN";
+    }
+    return "SIG_ACCUM_UNKNOWN";
+}
 
 #endif /* _UTIL_H_ */
