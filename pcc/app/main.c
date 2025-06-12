@@ -151,6 +151,7 @@ int main(int argc, char **argv) {
 
     for (int i = 0; i < num_flows; i++)
         EXIT_ON_ERR(flow_destroy(flows[i]), SUCCESS);
+    free(flows);
 
     EXIT_ON_ERR(pcmc_destroy(pcmc), 0);
 
