@@ -9,25 +9,26 @@ Check PCC definitions
     - Now implementation supports only int and sometimes casts stuff to uint32_t to achieve compatibility with kernel
     - TODO: support uint32_t on api level.
     - TODO: support floats
-3. **Signal update call**
-    - we defined new `update` call on signal to avoid losing events with `set(..)`
-    - *possible bug* it takes int as an update argument: if signal datatype is uint32_t, int will cover only half
-4. **Last seq no call**
+2. **Last seq no call**
     - Do PDCs have seq nos (they must!!!)?
     - Signal - cwnd (oldest unacked packet)
     - seq no can be used to make decisions
-5. **Indexes**
+3. **Indexes**
     - Should be the user index to lookup/set signal/control/local_state be known at handler compile time or it could be computed at runtime? To me it looks like most of the cases would work with indexes known at compile time. However, one use case with runtime index could be computing credit grant on receiver side (assuming that we have multiple priorities aka pull queues)
     - *Now we have it at compile time.*
-6. **Constants**
+4. **Constants**
     - Host-side might want to set constants (algo params) into read only on the PCMI side
-7. **Signal semantics:** 
+5. **Signal semantics:** 
     - For the signals, not sure we want to have a generic `uet_set_signal(idx, value)` on the handler side. Looks like we implicitly assume that all signals start from zero (right after PCMI is instantiated) and can eventually increase upon some events are happening (hence they can be used as triggers upon *reaching* the threshold). Thus rather then having a set and allow user to set signal to an arbitrary current value (even above the threshold which makes no sense!), I'd have two calls: `uet_signal_reset(idx)` + `uet_signal_threshold(..)`?
     - Is it possible that signals can have diferent type of thresholding/triggering?
     - It should be possible for some signals (e.g., RTT) to be initialzed with non zero def (to support `uet_signal_reset` in this case, an additional logic would be needed).
-8. **User notification about trigger**
+    a. **Signal update call**
+        - we defined new `update` call on signal to avoid losing events with `set(..)`
+        - *possible bug* it takes int as an update argument: if signal datatype is uint32_t, int will cover only half
+    - `signal_initial_value` is missing
+6. **User notification about trigger**
     - We might want to deliver to the index of signal that triggered handler execution
-9. **Notes on implementing CCs**
+7. **Notes on implementing CCs**
     - Currently we're 
     - Swift: we don't support pacer delay output and don't have FP cwnd defined
     - DCTCP: no load balancing
