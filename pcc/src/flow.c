@@ -6,6 +6,9 @@
 // Forward declarations
 static void *flow_default_traffic_gen_fn(void *arg);
 
+signal_trigger_rearm_fn flow_signal_trigger_rearm_no_op = NULL;
+signal_accumulation_op_fn flow_signal_accumulation_no_op = NULL;
+
 void flow_signal_accumulation_op_sum(flow_t *flow,
                                      const struct signal_attr *attr,
                                      int signal) {
@@ -36,24 +39,20 @@ void flow_signal_accumulation_op_max(flow_t *flow,
             signal;
 }
 
-void flow_signal_time_accumulation_op(flow_t *flow,
-                                      const struct signal_attr *attr,
-                                      int signal) {
+void flow_signal_elapsed_time_accumulation_op(flow_t *flow,
+                                              const struct signal_attr *attr,
+                                              int signal) {
     (void)signal;
     struct timespec now_ts;
     if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
         LOG_FATAL("clock_gettime failed");
     }
-    if (!attr->is_trigger) {
-        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] =
-            CLOCK_GETTIME_TS_DIFF_GET(flow->start_ts, now_ts);
-    } else {
-        LOG_FATAL("Elapsed time timers are not supported");
-    }
+    flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] =
+        CLOCK_GETTIME_TS_DIFF_GET(flow->start_ts, now_ts);
 }
 
-bool flow_handler_trigger_check(const flow_t *flow,
-                                const struct signal_attr *attr) {
+bool flow_signal_trigger_overflow_check(const flow_t *flow,
+                                        const struct signal_attr *attr) {
     int value =
         flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index];
     int threshold = flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
@@ -61,6 +60,39 @@ bool flow_handler_trigger_check(const flow_t *flow,
     if (value >= threshold)
         return true;
     return false;
+}
+
+bool flow_signal_trigger_timer_check(const flow_t *flow,
+                                     const struct signal_attr *attr) {
+    int timer =
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index];
+    int threshold = flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
+                                         attr->metadata.index];
+    if (timer) {
+        struct timespec now_ts;
+        if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
+            LOG_FATAL("clock_gettime failed");
+        }
+        if (CLOCK_GETTIME_TS_DIFF_GET(flow->start_ts, now_ts) - timer >=
+            threshold) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void flow_signal_trigger_timer_reset(flow_t *flow,
+                                     const struct signal_attr *attr) {
+    int timer =
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index];
+    if (timer) {
+        struct timespec now_ts;
+        if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
+            LOG_FATAL("clock_gettime failed");
+        }
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] =
+            CLOCK_GETTIME_TS_DIFF_GET(flow->start_ts, now_ts);
+    }
 }
 
 void flow_state_init(const struct algorithm_config *config, flow_t *flow) {
@@ -100,7 +132,7 @@ int flow_create(device_t *device, flow_t **flow,
 
     flow_state_init(new_flow->config, new_flow);
 
-    new_flow->running = true;
+    new_flow->thread_state = FLOW_THREAD_INIT;
     if (pthread_create(&new_flow->thread, NULL,
                        traffic_gen_fn ? traffic_gen_fn
                                       : flow_default_traffic_gen_fn,
@@ -112,6 +144,11 @@ int flow_create(device_t *device, flow_t **flow,
 
     LOG_DBG("[dev=%p] started thread for flow=%p addr=%u", device, new_flow,
             new_flow->addr);
+
+    while (new_flow->thread_state != FLOW_THREAD_RUNNING) {
+        ;
+        /* wait for the new flow to initialize (arm triggers) */
+    }
 
     if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
         LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler", device,
@@ -139,7 +176,7 @@ int flow_destroy(flow_t *flow) {
         ret = ERROR;
     }
 
-    flow->running = false;
+    flow->thread_state = FLOW_THREAD_STOP;
     if (pthread_join(flow->thread, NULL)) {
         LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow, flow->addr);
         ret = ERROR;
@@ -156,7 +193,21 @@ int flow_destroy(flow_t *flow) {
     return ret;
 }
 
-bool flow_triggers_check(const flow_t *flow) {
+void flow_signal_triggers_rearm(flow_t *flow) {
+    const struct algorithm_config *config = flow->config;
+    struct slist_entry *item, *prev;
+    slist_foreach(&config->signals_list, item, prev) {
+        (void)prev; /* suppress compiler warnings */
+        struct signal_attr *attr =
+            container_of(item, struct signal_attr, metadata.list_entry);
+        if (attr->is_trigger &&
+            attr->trigger_rearm_fn != flow_signal_trigger_rearm_no_op) {
+            attr->trigger_rearm_fn(flow, attr);
+        }
+    }
+}
+
+bool flow_signal_triggers_check(const flow_t *flow) {
     const struct algorithm_config *config = flow->config;
     struct slist_entry *item, *prev;
     slist_foreach(&config->signals_list, item, prev) {
@@ -170,13 +221,14 @@ bool flow_triggers_check(const flow_t *flow) {
     return false;
 }
 
-static void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
+void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
     struct slist_entry *item, *prev;
     slist_foreach(&flow->config->signals_list, item, prev) {
         (void)prev; /* suppress compiler warnings */
         struct signal_attr *attr =
             container_of(item, struct signal_attr, metadata.list_entry);
-        if (attr->type == signal_type) {
+        if (attr->type == signal_type &&
+            attr->accumulation_op_fn != flow_signal_accumulation_no_op) {
             LOG_INFO("[flow=%p, addr=%u] update signal_type=%s, "
                      "accum_type=%s, index=%zu, update_val=%d",
                      flow, flow->addr, signal_type_to_string(signal_type),
@@ -195,8 +247,8 @@ static int flow_cwnd_get(const flow_t *flow) {
 }
 
 static int flow_time_init(flow_t *flow) {
-    // CLOCK_MONOTHONIC is system wide clock so it should be safe to share it
-    // between flow and scheduler threads
+    // CLOCK_MONOTHONIC is system wide clock so it should be safe to share
+    // it between flow and scheduler threads
     if (clock_gettime(CLOCK_MONOTONIC, &flow->start_ts))
         return ERROR;
     return SUCCESS;
@@ -216,11 +268,18 @@ static void *flow_default_traffic_gen_fn(void *arg) {
     // starts
     if (flow_time_init(flow) != SUCCESS) {
         flow->status = ERROR;
+        flow->thread_state = FLOW_THREAD_STOP;
         goto flow_thread_join;
     }
 
-    while (flow->running) {
-        flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
+    // At that point flow is not yet added to the scheduler, so
+    // all flow triggers need to be manually armed
+    flow_signal_triggers_rearm(flow);
+
+    // Signal that flow is ready to be added to the scheduler
+    flow->thread_state = FLOW_THREAD_RUNNING;
+
+    while (flow->thread_state == FLOW_THREAD_RUNNING) {
         int cwnd = flow_cwnd_get(flow);
         if (cwnd == 0) {
             usleep(TGEN_THREAD_SLEEP_TIME_US);
@@ -239,7 +298,6 @@ static void *flow_default_traffic_gen_fn(void *arg) {
                 flow_signals_update(flow, SIG_ECN, 1);
             }
         }
-        flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
         usleep(TGEN_THREAD_SLEEP_TIME_US);
         LOG_PRINT("[flow=%p, addr=%u] traffic generator stats: "
                   "pkts_per_ms=%d, to_send=%d, cwnd=%d",

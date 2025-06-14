@@ -23,6 +23,10 @@ typedef void (*signal_accumulation_op_fn)(flow_t *, const struct signal_attr *,
                                           int);
 typedef bool (*signal_trigger_check_fn)(const flow_t *,
                                         const struct signal_attr *);
+typedef void (*signal_trigger_rearm_fn)(flow_t *, const struct signal_attr *);
+
+extern signal_trigger_rearm_fn flow_signal_trigger_rearm_no_op;
+extern signal_accumulation_op_fn flow_signal_accumulation_no_op;
 
 struct signal_attr {
     struct generic_metadata metadata;
@@ -31,6 +35,7 @@ struct signal_attr {
     signal_accumulation_op_fn accumulation_op_fn;
     bool is_trigger;
     signal_trigger_check_fn trigger_check_fn;
+    signal_trigger_rearm_fn trigger_rearm_fn;
 };
 
 struct control_attr {
@@ -80,6 +85,12 @@ struct algorithm_config {
 #define TGEN_THREAD_SLEEP_TIME_US 1000
 #define TGEN_RTT 100
 
+enum flow_thread_state {
+    FLOW_THREAD_STOP = 0,
+    FLOW_THREAD_INIT = 1,
+    FLOW_THREAD_RUNNING = 2
+};
+
 struct flow {
     addr_t addr;
     struct slist_entry flow_list_entry;
@@ -88,7 +99,7 @@ struct flow {
     int local_state[FLOW_LOCAL_STATE_SIZE];
     struct timespec start_ts;
     pthread_t thread; // CLOCK_MONOTHONIC
-    atomic_bool running;
+    atomic_int thread_state;
     int status;
 };
 
@@ -134,9 +145,15 @@ int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
 const struct algorithm_config *
 device_flow_id_to_config_match(const device_t *device, addr_t id);
-bool flow_handler_trigger_check(const flow_t *flow,
-                                const struct signal_attr *attr);
-bool flow_triggers_check(const flow_t *flow);
+void flow_signals_update(flow_t *flow, signal_t signal_type, int value);
+bool flow_signal_trigger_overflow_check(const flow_t *flow,
+                                        const struct signal_attr *attr);
+bool flow_signal_trigger_timer_check(const flow_t *flow,
+                                     const struct signal_attr *attr);
+bool flow_signal_triggers_check(const flow_t *flow);
+void flow_signal_trigger_timer_reset(flow_t *flow,
+                                     const struct signal_attr *attr);
+void flow_signal_triggers_rearm(flow_t *flow);
 void flow_signal_accumulation_op_sum(flow_t *flow,
                                      const struct signal_attr *attr,
                                      int signal);
@@ -149,7 +166,7 @@ void flow_signal_accumulation_op_min(flow_t *flow,
 void flow_signal_accumulation_op_max(flow_t *flow,
                                      const struct signal_attr *attr,
                                      int signal);
-void flow_signal_time_accumulation_op(flow_t *flow,
-                                      const struct signal_attr *attr,
-                                      int signal);
+void flow_signal_elapsed_time_accumulation_op(flow_t *flow,
+                                              const struct signal_attr *attr,
+                                              int signal);
 #endif /* _IMPL_H_ */
