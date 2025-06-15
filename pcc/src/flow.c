@@ -100,6 +100,9 @@ bool flow_signal_trigger_timer_check(const flow_t *flow,
         }
         if (CLOCK_GETTIME_TS_DIFF_GET(flow->start_ts, now_ts) - timer >=
             threshold) {
+            LOG_INFO("TIMER EXPIRED: now=%d timer=%d threshold=%d",
+                     (int)CLOCK_GETTIME_TS_DIFF_GET(flow->start_ts, now_ts),
+                     timer, threshold);
             return true;
         }
     }
@@ -227,6 +230,11 @@ void flow_signal_triggers_rearm(flow_t *flow) {
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger &&
             attr->trigger_rearm_fn != flow_signal_trigger_rearm_no_op) {
+            LOG_INFO("[flow=%p, addr=%u] rearm signal_type=%s, "
+                     "accum_type=%s, index=%zu",
+                     flow, flow->addr, signal_type_to_string(attr->type),
+                     signal_accum_type_to_string(attr->accum_type),
+                     attr->metadata.index);
             attr->trigger_rearm_fn(flow, attr);
         }
     }
@@ -241,6 +249,11 @@ bool flow_signal_triggers_check(flow_t *flow) {
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
             flow->trigger_user_index = attr->metadata.index;
+            LOG_INFO("[flow=%p, addr=%u] trigger signal_type=%s, "
+                     "accum_type=%s, index=%zu",
+                     flow, flow->addr, signal_type_to_string(attr->type),
+                     signal_accum_type_to_string(attr->accum_type),
+                     attr->metadata.index);
             return true;
         }
     }
@@ -312,6 +325,7 @@ static void *flow_default_traffic_gen_fn(void *arg) {
             continue;
         }
         int to_send = cwnd < pkts_per_ms ? cwnd : pkts_per_ms;
+        flow_signals_update(flow, SIG_DATA_TX, to_send * TGEN_MSS);
         double roll = (double)rand_r(&rnd) / RAND_MAX;
         if (roll < TGEN_DROP_PROB) {
             flow_signals_update(flow, SIG_RTO, 1);

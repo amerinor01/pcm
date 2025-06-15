@@ -102,7 +102,8 @@ typedef enum signal {
     SIG_NACK = 2,        /**< Number of NACK packets received */
     SIG_ECN = 3,         /**< Number of ECN packets received */
     SIG_RTT = 4,         /**< RTT timestamp */
-    SIG_ELAPSED_TIME = 5 /**< Monotonic elapsed time */
+    SIG_DATA_TX = 5,     /**< Number of sent bytes */
+    SIG_ELAPSED_TIME = 6 /**< Monotonic elapsed time */
 } signal_t;
 
 /**
@@ -167,6 +168,7 @@ err_t register_control_pcmc(control_t control, size_t user_index,
  * @brief Set the initial value for an algorithm output control knob.
  *
  * This sets the starting value before activation.
+ * Similar to the register_control_initial_value_int_pcmc.
  *
  * @param[in] user_index   User-defined control index.
  * @param[in] initial_value Initial control value.
@@ -187,6 +189,7 @@ err_t register_local_state_pcmc(size_t user_index, handle_t handle);
 
 /**
  * @brief Set the initial persistent state value for a flow.
+ * Similar to register_local_state_initial_value_int_pcmc
  *
  * @param[in] user_index   User-defined state index.
  * @param[in] initial_value Initial state value.
@@ -197,6 +200,29 @@ err_t register_local_state_initial_value_pcmc(size_t user_index,
                                               int initial_value,
                                               handle_t handle);
 
+/**
+ * @brief Set the initial persistent int state value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] initial_value Initial state value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_local_state_initial_value_int_pcmc(size_t user_index,
+                                                  int initial_value,
+                                                  handle_t handle);
+
+/**
+ * @brief Set the initial persistent float state value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] initial_value Initial state value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_local_state_initial_value_float_pcmc(size_t user_index,
+                                                    float initial_value,
+                                                    handle_t handle);
 /**
  * @brief Compile and register an algorithm with PCMC.
  *
@@ -219,25 +245,67 @@ void __flow_control_set(void *ctx, size_t user_index, int val);
 int __flow_signal_get(const void *ctx, size_t user_index);
 void __flow_signal_set(void *ctx, size_t user_index, int val);
 size_t __flow_signal_trigger_user_index_get(void *ctx);
-int __flow_local_state_get(const void *ctx, size_t user_index);
-void __flow_local_state_set(void *ctx, size_t user_index, int val);
+int __flow_local_state_int_get(const void *ctx, size_t user_index);
+void __flow_local_state_int_set(void *ctx, size_t user_index, int val);
+float __flow_local_state_float_get(const void *ctx, size_t user_index);
+void __flow_local_state_float_set(void *ctx, size_t user_index, float val);
 
 /**
  * @brief Get the current persistent state within a handler.
  *
+ * Similar to get_local_state_int.
+ *
  * @param[in] user_index   User-defined state index.
  * @return Current state value.
  */
-#define get_local_state(user_index) __flow_local_state_get(ctx, user_index)
+#define get_local_state(user_index) __flow_local_state_int_get(ctx, user_index)
 
 /**
  * @brief Update the persistent state within a handler.
+ *
+ * Similar to set_local_state_int.
  *
  * @param[in] user_index   User-defined state index.
  * @param[in] val          New state value.
  */
 #define set_local_state(user_index, val)                                       \
-    __flow_local_state_set(ctx, user_index, val);
+    __flow_local_state_int_set(ctx, user_index, val);
+
+/**
+ * @brief Get the integer current persistent state within a handler.
+ *
+ * @param[in] user_index User-defined state index.
+ * @return Current state integer value.
+ */
+#define get_local_state_int(user_index)                                        \
+    __flow_local_state_int_get(ctx, user_index)
+
+/**
+ * @brief Update the integer persistent state within a handler.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] val          New integer state value.
+ */
+#define set_local_state_int(user_index, val)                                   \
+    __flow_local_state_int_set(ctx, user_index, val);
+
+/**
+ * @brief Get the float current persistent state within a handler.
+ *
+ * @param[in] user_index User-defined state index.
+ * @return Current state float value.
+ */
+#define get_local_state_float(user_index)                                      \
+    __flow_local_state_float_get(ctx, user_index)
+
+/**
+ * @brief Update the float persistent state within a handler.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] val          New float state value.
+ */
+#define set_local_state_float(user_index, val)                                 \
+    __flow_local_state_float_set(ctx, user_index, val);
 
 /**
  * @brief Read the latest signal value within a handler.
@@ -260,7 +328,8 @@ void __flow_local_state_set(void *ctx, size_t user_index, int val);
  *
  * @return[in] user_index   User-defined signal index.
  */
-#define get_signal_invoke_trigger_user_index() __flow_signal_trigger_user_index_get(ctx)
+#define get_signal_invoke_trigger_user_index()                                 \
+    __flow_signal_trigger_user_index_get(ctx)
 
 /**
  * @brief Read the current control knob value within a handler.

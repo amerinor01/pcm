@@ -25,13 +25,19 @@ Check PCC definitions
     a. **Signal update call**
         - we defined new `update` call on signal to avoid losing events with `set(..)`
         - *possible bug* it takes int as an update argument: if signal datatype is uint32_t, int will cover only half
-    - `signal_initial_value` is missing
+    - *TODO:* `signal_set_initial_value()` is missing
+    - For timer/burst triggers we support the following semantics:
+        - Handler can enable/disable trigger by setting a signal `set_signal()` to positibe/zero value, correspondingly.  
 6. **User notification about trigger**
     - We might want to deliver to the index of signal that triggered handler execution
+    - Fast way to demultiplex which trigger resulted in handler invocation
+    - `get/set_signal()` are not enough to understand unless flow state stores a threshold or `get/set_threshold` is implemented
+    - anyway, will need to spend some instructions instead of doing simple clean `switch` statement.
+    - it's possible that handler will observe signal index with lower priority (e.g., if burst completion is always noticed before ECN) - signal trigger prios?
 7. **Notes on implementing CCs**
-    - Currently we're 
     - Swift: we don't support pacer delay output and don't have FP cwnd defined
-    - DCTCP: no load balancing
+    - DCTCP: no load balancing, uses uint32_t to work with alpha, might be broken due to casts
+    - DCQCN: uses floats local state
 
 ### Runtime
 1. Can we generalize current pthread-based scheduler+flow-threads to the portable sofwtare C runtime SDK, such that it can be seamlessly integrated with HTSIM, DPA/BF or into libfabric (RxD)?

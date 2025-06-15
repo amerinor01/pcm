@@ -164,6 +164,9 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
         attr->accumulation_op_fn = flow_signal_accumulation_no_op;
         attr->trigger_check_fn = flow_signal_trigger_timer_check;
         attr->trigger_rearm_fn = flow_signal_trigger_timer_reset;
+    } else if (attr->type == SIG_DATA_TX) {
+        attr->trigger_check_fn = flow_signal_trigger_burst_check;
+        attr->trigger_rearm_fn = flow_signal_trigger_burst_reset;
     }
 
     attr->is_trigger = true;
@@ -204,11 +207,22 @@ int algorithm_config_local_state_add(struct algorithm_config *config,
     return SUCCESS;
 }
 
-int algorithm_config_local_state_set(struct algorithm_config *config,
-                                     size_t user_index, int initial_value) {
+int algorithm_config_local_state_int_set(struct algorithm_config *config,
+                                         size_t user_index, int initial_value) {
     struct local_state_attr *attr;
+    uint64_t encoded_val = encode_int(initial_value);
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
-                       user_index, initial_value, attr);
+                       user_index, encoded_val, attr);
+    return SUCCESS;
+}
+
+int algorithm_config_local_state_float_set(struct algorithm_config *config,
+                                           size_t user_index,
+                                           float initial_value) {
+    struct local_state_attr *attr;
+    uint64_t encoded_val = encode_float(initial_value);
+    ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
+                       user_index, encoded_val, attr);
     return SUCCESS;
 }
 

@@ -3,7 +3,7 @@ CFLAGS   := -I. -I../include -Wall -Wextra -O3 -fPIC
 
 LIBPCM   := ../lib/libpcm.so
 
-all: libreno_accum.so libreno_std.so libdctcp.so libswift.so app_main
+all: libreno_accum.so libreno_std.so libdctcp.so libswift.so libdcqcn.so app_main
 
 libreno_accum.so: reno_accumulated.c tcp.h $(LIBPCM)
 	$(CC) $(CFLAGS) -DHANDLER_BUILD -shared -o $@ reno_accumulated.c -L../lib -lpcm
@@ -17,10 +17,13 @@ libdctcp.so: dctcp.c tcp.h $(LIBPCM)
 libswift.so: swift.c swift.h $(LIBPCM)
 	$(CC) $(CFLAGS) -DHANDLER_BUILD -shared -o $@ swift.c -L../lib -lpcm
 
+libdcqcn.so: dcqcn.c dcqcn.h $(LIBPCM)
+	$(CC) $(CFLAGS) -DHANDLER_BUILD -shared -o $@ dcqcn.c -L../lib -lpcm
+
 main.o: main.c tcp.h
 	$(CC) $(CFLAGS) -c $< -o $@
 
-app_main: main.o libreno_accum.so libreno_std.so libdctcp.so libswift.so $(LIBPCM)
+app_main: main.o libreno_accum.so libreno_std.so libdctcp.so libswift.so libdcqcn.so $(LIBPCM)
 	$(CC) main.o -L../lib -lpcm -o $@
 
 clean:

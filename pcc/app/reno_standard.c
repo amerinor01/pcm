@@ -43,7 +43,7 @@ int algorithm_main() {
     }
 
 exit_handler:
-    set_signal(TCP_SIG_IDX_ACK, state.num_acks);
+    set_signal(TCP_SIG_IDX_ACK, state.num_acks); // TODO: use update call here to not lose buffered ACKs
     set_control(TCP_CTRL_IDX_CWND, state.cwnd);
     set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, state.ssthresh);
     set_local_state(TCP_LOCAL_STATE_IDX_ACKED, state.tot_acked);

@@ -80,10 +80,11 @@ struct algorithm_config {
 #define TGEN_BANDWIDTH_BPS 100000000UL // 100 Mbps
 #define TGEN_DROP_PROB 0.01            // 1% packet drop probability
 #define TGEN_NACK_PROB 0.02            // 2% NACK probability (duplicate ACK)
-#define TGEN_ECN_CONG_PROB 0.3
+#define TGEN_ECN_CONG_PROB 0.1
 #define TGEN_PACKET_SIZE 1500 // bytes per packet (MSS)
 #define TGEN_THREAD_SLEEP_TIME_US 1000
-#define TGEN_RTT 100
+#define TGEN_RTT 10
+#define TGEN_MSS 4096
 
 enum flow_thread_state {
     FLOW_THREAD_STOP = 0,
@@ -96,7 +97,7 @@ struct flow {
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
     atomic_int datapath_state[FLOW_DATAPATH_STATE_SIZE];
-    int local_state[FLOW_LOCAL_STATE_SIZE];
+    uint64_t local_state[FLOW_LOCAL_STATE_SIZE];
     size_t trigger_user_index;
     struct timespec start_ts;
     pthread_t thread; // CLOCK_MONOTHONIC
@@ -138,8 +139,11 @@ int algorithm_config_control_initial_value_set(struct algorithm_config *config,
                                                int initial_value);
 int algorithm_config_local_state_add(struct algorithm_config *config,
                                      size_t user_index);
-int algorithm_config_local_state_set(struct algorithm_config *config,
-                                     size_t user_index, int initial_value);
+int algorithm_config_local_state_int_set(struct algorithm_config *config,
+                                         size_t user_index, int initial_value);
+int algorithm_config_local_state_float_set(struct algorithm_config *config,
+                                           size_t user_index,
+                                           float initial_value);
 int algorithm_config_compile(struct algorithm_config *config,
                              const char *compile_path, char **err);
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
@@ -153,6 +157,10 @@ bool flow_signal_trigger_timer_check(const flow_t *flow,
                                      const struct signal_attr *attr);
 bool flow_signal_triggers_check(flow_t *flow);
 void flow_signal_trigger_timer_reset(flow_t *flow,
+                                     const struct signal_attr *attr);
+void flow_signal_trigger_burst_reset(flow_t *flow,
+                                     const struct signal_attr *attr);
+bool flow_signal_trigger_burst_check(const flow_t *flow,
                                      const struct signal_attr *attr);
 void flow_signal_triggers_rearm(flow_t *flow);
 void flow_signal_accumulation_op_sum(flow_t *flow,

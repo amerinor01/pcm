@@ -1,13 +1,16 @@
 #ifndef _UTIL_H_
 #define _UTIL_H_
 
+#include <stddef.h>
+#include <stdint.h>
+
 #include "impl.h"
 #include "lwlog.h"
 
 #define CLOCK_GETTIME_TS_DIFF_GET(tp_start, tp_end)                            \
     ((((double)tp_end.tv_sec * 1e9 + (double)tp_end.tv_nsec) -                 \
       ((double)tp_start.tv_sec * 1e9 + (double)tp_start.tv_nsec)) /            \
-     1e9)
+     1e3)
 
 #define LOG_DBG(FORMAT, ...)                                                   \
     {                                                                          \
@@ -172,6 +175,8 @@ static inline const char *signal_type_to_string(signal_t type) {
         return "SIG_ECN";
     case SIG_RTT:
         return "SIG_RTT";
+    case SIG_DATA_TX:
+        return "SIG_DATA_TX";
     case SIG_ELAPSED_TIME:
         return "SIG_ELAPSED_TIME";
     default:
@@ -194,6 +199,45 @@ static inline const char *signal_accum_type_to_string(signal_accum_t type) {
         return "SIG_ACCUM_UNKNOWN";
     }
     return "SIG_ACCUM_UNKNOWN";
+}
+
+#define STATIC_ASSERT _Static_assert
+
+STATIC_ASSERT(sizeof(float) <= sizeof(uint64_t),
+              "float datatype must fit into 64 bits");
+STATIC_ASSERT(sizeof(int) <= sizeof(uint64_t),
+              "int datatype must fit into 64 bits");
+
+/* encode any value T into 64-bit representation */
+static inline uint64_t encode_u64(const void *val, size_t val_size) {
+    uint64_t u;
+    memcpy(&u, val, val_size);
+    return u;
+}
+
+/* decode a 64-bit raw into a value T */
+static inline void decode_u64(uint64_t u, void *out, size_t out_size) {
+    memcpy(out, &u, out_size);
+}
+
+static inline float decode_float(uint64_t u) {
+    float f;
+    decode_u64(u, &f, sizeof(f));
+    return f;
+}
+
+static inline int decode_int(uint64_t u) {
+    int x;
+    decode_u64(u, &x, sizeof(x));
+    return x;
+}
+
+static inline uint64_t encode_float(float f) {
+    return encode_u64(&f, sizeof(f));
+}
+
+static inline uint64_t encode_int(uint32_t x) {
+    return encode_u64(&x, sizeof(x));
 }
 
 #endif /* _UTIL_H_ */

@@ -63,11 +63,25 @@ err_t register_local_state_pcmc(size_t user_index, handle_t handle) {
                                             user_index);
 }
 
+err_t register_local_state_initial_value_float_pcmc(size_t user_index,
+                                                    float initial_value,
+                                                    handle_t handle) {
+    return algorithm_config_local_state_float_set(
+        (struct algorithm_config *)handle, user_index, initial_value);
+}
+
+err_t register_local_state_initial_value_int_pcmc(size_t user_index,
+                                                  int initial_value,
+                                                  handle_t handle) {
+    return algorithm_config_local_state_int_set(
+        (struct algorithm_config *)handle, user_index, initial_value);
+}
+
 err_t register_local_state_initial_value_pcmc(size_t user_index,
                                               int initial_value,
                                               handle_t handle) {
-    return algorithm_config_local_state_set((struct algorithm_config *)handle,
-                                            user_index, initial_value);
+    return register_local_state_initial_value_int_pcmc(user_index,
+                                                       initial_value, handle);
 }
 
 err_t register_algorithm_pcmc(const char *compile_path,
