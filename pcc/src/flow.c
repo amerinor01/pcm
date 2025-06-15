@@ -62,6 +62,31 @@ bool flow_signal_trigger_overflow_check(const flow_t *flow,
     return false;
 }
 
+void flow_signal_trigger_burst_reset(flow_t *flow,
+                                     const struct signal_attr *attr) {
+    int burst =
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index];
+    if (burst) {
+        // post reset state of 1 indicates that burst acts as an active trigger
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index] = 1;
+    }
+}
+
+bool flow_signal_trigger_burst_check(const flow_t *flow,
+                                     const struct signal_attr *attr) {
+    int burst =
+        flow->datapath_state[FLOW_SIGNALS_OFFSET + attr->metadata.index];
+    int threshold = flow->datapath_state[FLOW_SIGNALS_THRESHOLDS_OFFSET +
+                                         attr->metadata.index];
+    if (burst) {
+        // subtract 1 here to remove the original activation flag
+        if ((burst - 1) >= threshold) {
+            return true;
+        }
+    }
+    return false;
+}
+
 bool flow_signal_trigger_timer_check(const flow_t *flow,
                                      const struct signal_attr *attr) {
     int timer =
@@ -207,7 +232,7 @@ void flow_signal_triggers_rearm(flow_t *flow) {
     }
 }
 
-bool flow_signal_triggers_check(const flow_t *flow) {
+bool flow_signal_triggers_check(flow_t *flow) {
     const struct algorithm_config *config = flow->config;
     struct slist_entry *item, *prev;
     slist_foreach(&config->signals_list, item, prev) {
@@ -215,6 +240,7 @@ bool flow_signal_triggers_check(const flow_t *flow) {
         struct signal_attr *attr =
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
+            flow->trigger_user_index = attr->metadata.index;
             return true;
         }
     }

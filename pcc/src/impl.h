@@ -97,6 +97,7 @@ struct flow {
     const struct algorithm_config *config;
     atomic_int datapath_state[FLOW_DATAPATH_STATE_SIZE];
     int local_state[FLOW_LOCAL_STATE_SIZE];
+    size_t trigger_user_index;
     struct timespec start_ts;
     pthread_t thread; // CLOCK_MONOTHONIC
     atomic_int thread_state;
@@ -150,7 +151,7 @@ bool flow_signal_trigger_overflow_check(const flow_t *flow,
                                         const struct signal_attr *attr);
 bool flow_signal_trigger_timer_check(const flow_t *flow,
                                      const struct signal_attr *attr);
-bool flow_signal_triggers_check(const flow_t *flow);
+bool flow_signal_triggers_check(flow_t *flow);
 void flow_signal_trigger_timer_reset(flow_t *flow,
                                      const struct signal_attr *attr);
 void flow_signal_triggers_rearm(flow_t *flow);

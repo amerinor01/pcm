@@ -218,6 +218,7 @@ int __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, int val);
 int __flow_signal_get(const void *ctx, size_t user_index);
 void __flow_signal_set(void *ctx, size_t user_index, int val);
+size_t __flow_signal_trigger_user_index_get(void *ctx);
 int __flow_local_state_get(const void *ctx, size_t user_index);
 void __flow_local_state_set(void *ctx, size_t user_index, int val);
 
@@ -253,6 +254,13 @@ void __flow_local_state_set(void *ctx, size_t user_index, int val);
  * @param[in] val          New signal value.
  */
 #define set_signal(user_index, val) __flow_signal_set(ctx, user_index, val)
+
+/**
+ * @brief Get user index of signal that triggered handler.
+ *
+ * @return[in] user_index   User-defined signal index.
+ */
+#define get_signal_invoke_trigger_user_index() __flow_signal_trigger_user_index_get(ctx)
 
 /**
  * @brief Read the current control knob value within a handler.
