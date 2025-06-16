@@ -8,6 +8,7 @@
 #include "dcqcn.h"
 #include "network.h"
 #include "pcm.h"
+#include "smartt.h"
 #include "swift.h"
 #include "tcp.h"
 
@@ -232,6 +233,95 @@ int dcqcn_pcmc_init(handle_t new_handle) {
     return SUCCESS;
 }
 
+int smartt_pcmc_init(handle_t new_handle) {
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SMARTT_LOCAL_STATE_ACKED_BYTES, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
+                    SMARTT_LOCAL_STATE_ACKED_BYTES, 0, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SMARTT_LOCAL_STATE_BYTES_IGNORED, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
+                    SMARTT_LOCAL_STATE_BYTES_IGNORED, 0, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_local_state_pcmc(SMARTT_LOCAL_STATE_BYTES_TO_IGNORE,
+                                          new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
+                    SMARTT_LOCAL_STATE_BYTES_TO_IGNORE, 0, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SMARTT_LOCAL_STATE_TRIGGER_QA, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
+                    SMARTT_LOCAL_STATE_TRIGGER_QA, 0, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SMARTT_LOCAL_STATE_QA_DEADLINE, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
+                    SMARTT_LOCAL_STATE_QA_DEADLINE, 0, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SMARTT_LOCAL_STATE_FAST_COUNT, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
+                    SMARTT_LOCAL_STATE_FAST_COUNT, 0, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SMARTT_LOCAL_STATE_FAST_ACTIVE, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
+                    SMARTT_LOCAL_STATE_FAST_ACTIVE, 0, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_signal_pcmc(SIG_ACK, SIG_ACCUM_SUM, SMARTT_SIG_NUM_ACK,
+                                     new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_signal_invoke_trigger_pcmc(SMARTT_SIG_NUM_ACK, 1, new_handle),
+        SUCCESS);
+
+    EXIT_ON_ERR(register_signal_pcmc(SIG_RTO, SIG_ACCUM_SUM, SMARTT_SIG_NUM_RTO,
+                                     new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_signal_invoke_trigger_pcmc(SMARTT_SIG_NUM_RTO, 1, new_handle),
+        SUCCESS);
+
+    EXIT_ON_ERR(register_signal_pcmc(SIG_NACK, SIG_ACCUM_SUM,
+                                     SMARTT_SIG_NUM_NACK, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_signal_invoke_trigger_pcmc(SMARTT_SIG_NUM_NACK, 1, new_handle),
+        SUCCESS);
+
+    EXIT_ON_ERR(register_signal_pcmc(SIG_ELAPSED_TIME, SIG_ACCUM_SUM,
+                                     SMARTT_SIG_ELAPSED_TIME, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_signal_pcmc(SIG_RTT, SIG_ACCUM_LAST,
+                                     SMARTT_SIG_LAST_RTT, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_signal_pcmc(SIG_ECN, SIG_ACCUM_SUM, SMARTT_SIG_NUM_ECN,
+                                     new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(
+        register_control_pcmc(CTRL_CWND, SMARTT_CTRL_CWND_BYTES, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(register_control_initial_value_pcmc(
+                    SMARTT_CTRL_CWND_BYTES, SMARTT_MAX_CWND_BYTES, new_handle),
+                SUCCESS);
+    return SUCCESS;
+}
+
 int pcmc_init(const char *algo_name, device_t *dev_ctx,
               const char *reno_handler_path, handle_t *algo_handler) {
 
@@ -252,6 +342,9 @@ int pcmc_init(const char *algo_name, device_t *dev_ctx,
     } else if (!strcmp(algo_name, "dcqcn")) {
         fprintf(stdout, "Algorithm requested: DCQCN\n");
         EXIT_ON_ERR(dcqcn_pcmc_init(new_handle), SUCCESS);
+    } else if (!strcmp(algo_name, "smartt")) {
+        fprintf(stdout, "Algorithm requested: SMaRTT\n");
+        EXIT_ON_ERR(smartt_pcmc_init(new_handle), SUCCESS);
     } else {
         fprintf(stderr, "Unknown algorithm name %s\n", algo_name);
         exit(EXIT_FAILURE);
