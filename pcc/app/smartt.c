@@ -1,10 +1,6 @@
-/* smartt.c – TCP smartt sender control loop */
 #include "smartt.h"
 #include "algo_utils.h"
 #include "pcm.h"
-
-#include <math.h>
-#include <stdio.h>
 
 static inline int smartt_quick_adapt(struct smartt_state_snapshot *state) {
     int adapted = 0;
@@ -105,21 +101,21 @@ int algorithm_main() {
 
     if (state.num_nacks > 0) {
         smartt_handle_loss_signal(&state);
-        set_signal(SMARTT_SIG_NUM_NACK, state.num_nacks - 1);
+        update_signal(SMARTT_SIG_NUM_NACK, -1);
         goto save_state;
     }
 
     if (state.num_rtos > 0) {
         smartt_handle_loss_signal(&state);
-        set_signal(SMARTT_SIG_NUM_RTO, state.num_rtos - 1);
+        update_signal(SMARTT_SIG_NUM_RTO, -1);
         goto save_state;
     }
 
     if (state.num_acks > 0) {
         smartt_handle_ack(&state);
-        set_signal(SMARTT_SIG_NUM_ACK, state.num_acks - 1);
+        update_signal(SMARTT_SIG_NUM_ACK, -1);
         if (state.num_ecns) {
-            set_signal(SMARTT_SIG_NUM_ECN, state.num_ecns - 1);
+            update_signal(SMARTT_SIG_NUM_ECN, -1);
         }
     }
 

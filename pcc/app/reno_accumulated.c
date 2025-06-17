@@ -40,13 +40,13 @@ int algorithm_main() {
     int cwnd = get_control(TCP_CTRL_IDX_CWND) / FABRIC_LINK_MTU;
     int ssthresh = get_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH);
     int tot_acked = get_local_state(TCP_LOCAL_STATE_IDX_ACKED) + num_acks;
-
+    int num_acks_consumed = 0;
     /* 1) Fast retransmit: multiplicative decrease */
     if (num_nacks > 0) {
         ssthresh = MAX(cwnd >> num_nacks, 2);
         cwnd = ssthresh;
         tot_acked = 0;
-        set_signal(TCP_SIG_IDX_NACK, 0);
+        update_signal(TCP_SIG_IDX_NACK, -1);
     }
 
     /* 2) Timeout recovery */
@@ -59,7 +59,7 @@ int algorithm_main() {
         } else {
             num_rtos = 0;
         }
-        set_signal(TCP_SIG_IDX_RTO, 0);
+        update_signal(TCP_SIG_IDX_RTO, -1);
     }
 
     /*
@@ -71,6 +71,7 @@ int algorithm_main() {
      * be ignored (subsequent RTOs after first RTO recovery).
      */
     if (num_nacks == 0 && num_rtos == 0 && tot_acked > 0) {
+        num_acks_consumed = num_acks;
         /* 3) ACK processing in case there is no loss */
         /* 3.1) slow start: +1 MSS per ACK */
         if (cwnd < ssthresh) {
@@ -103,7 +104,7 @@ int algorithm_main() {
         }
     }
 
-    set_signal(TCP_SIG_IDX_ACK, 0);
+    update_signal(TCP_SIG_IDX_ACK, -num_acks_consumed);
     set_control(TCP_CTRL_IDX_CWND, cwnd * FABRIC_LINK_MTU);
     set_local_state(TCP_LOCAL_STATE_IDX_ACKED, tot_acked);
     set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, ssthresh);

@@ -48,12 +48,12 @@ static inline void swift_ack_reaction(struct swift_state_shapshot *state) {
     if (state->delay < target_delay) {
         /* Additive Increase */
         state->cwnd +=
-            SWIFT_AI * FABRIC_BASE_RTT * state->num_acks / state->cwnd;
+            FABRIC_LINK_MTU * SWIFT_AI * (state->tot_acked / state->cwnd);
         // Note: we DO NOT support FP fractional cwnd (yet)
         // if (state->cwnd >= 1) {
-        //    state->cwnd += SWIFT_AI * state->num_acks / state->cwnd;
+        //    state->cwnd += SWIFT_AI * state->tot_acked / state->cwnd;
         //} else {
-        //    state->cwnd += SWIFT_AI * state->num_acks;
+        //    state->cwnd += SWIFT_AI * state->tot_acked;
         //}
     } else {
         /* Multiplicative Decrease */
@@ -78,8 +78,9 @@ int algorithm_main() {
     struct swift_state_shapshot state;
     state.num_nacks = get_signal(SWIFT_SIG_IDX_NACK);
     state.num_rtos = get_signal(SWIFT_SIG_IDX_RTO);
-    state.num_acks = get_local_state(SWIFT_LOCAL_STATE_IDX_ACKED) +
-                     get_signal(SWIFT_SIG_IDX_ACK);
+    state.num_acks = get_signal(SWIFT_SIG_IDX_ACK);
+    state.tot_acked = get_local_state(SWIFT_LOCAL_STATE_IDX_ACKED) +
+                      state.num_acks * FABRIC_LINK_MTU;
     state.delay = get_signal(SWIFT_SIG_IDX_RTT);
     state.now = get_signal(SIWFT_SIG_IDX_ELAPSED_TIME);
     state.t_last_decrease =
@@ -99,13 +100,11 @@ int algorithm_main() {
 
     if (state.num_nacks > 0) {
         swift_nack_recovery(&state);
-        set_signal(SWIFT_SIG_IDX_NACK, 0);
-        goto exit_handler;
+        update_signal(SWIFT_SIG_IDX_NACK, -1);
     } else if (state.num_rtos > 0) {
         swift_timeout_recovery(&state);
-        set_signal(SWIFT_SIG_IDX_RTO, 0);
-        goto exit_handler;
-    } else if (state.num_acks > 0) {
+        update_signal(SWIFT_SIG_IDX_RTO, -1);
+    } else if (state.tot_acked > 0) {
         swift_ack_reaction(&state);
     } else {
         return ERROR;
@@ -123,7 +122,7 @@ int algorithm_main() {
      */
     if (state.cwnd < state.cwnd_prev) {
         state.t_last_decrease = state.now;
-        state.num_acks = 0;
+        state.tot_acked = 0;
     }
 
     // Pacer delay is not supported (yet)
@@ -133,9 +132,8 @@ int algorithm_main() {
     //    state.pacer_delay = 0;
     //}
 
-exit_handler:
-    set_signal(SWIFT_SIG_IDX_ACK, 0);
-    set_local_state(SWIFT_LOCAL_STATE_IDX_ACKED, state.num_acks);
+    update_signal(SWIFT_SIG_IDX_ACK, -state.num_acks);
+    set_local_state(SWIFT_LOCAL_STATE_IDX_ACKED, state.tot_acked);
     set_local_state(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE,
                     state.t_last_decrease);
     set_local_state(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT, state.retransmit_cnt);

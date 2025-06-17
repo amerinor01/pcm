@@ -22,9 +22,6 @@ Check PCC definitions
     - For the signals, not sure we want to have a generic `uet_set_signal(idx, value)` on the handler side. Looks like we implicitly assume that all signals start from zero (right after PCMI is instantiated) and can eventually increase upon some events are happening (hence they can be used as triggers upon *reaching* the threshold). Thus rather then having a set and allow user to set signal to an arbitrary current value (even above the threshold which makes no sense!), I'd have two calls: `uet_signal_reset(idx)` + `uet_signal_threshold(..)`?
     - Is it possible that signals can have diferent type of thresholding/triggering?
     - It should be possible for some signals (e.g., RTT) to be initialzed with non zero def (to support `uet_signal_reset` in this case, an additional logic would be needed).
-    a. **Signal update call**
-        - we defined new `update` call on signal to avoid losing events with `set(..)`
-        - *possible bug* it takes int as an update argument: if signal datatype is uint32_t, int will cover only half
     - *TODO:* `signal_set_initial_value()` is missing
     - For timer/burst triggers we support the following semantics:
         - Handler can enable/disable trigger by setting a signal `set_signal()` to positibe/zero value, correspondingly.

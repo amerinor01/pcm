@@ -45,8 +45,8 @@ int tcp_pcmc_config(handle_t new_handle) {
 
     EXIT_ON_ERR(register_control_pcmc(CTRL_CWND, TCP_CTRL_IDX_CWND, new_handle),
                 SUCCESS);
-    EXIT_ON_ERR(register_control_initial_value_pcmc(TCP_CTRL_IDX_CWND,
-                                                    FABRIC_MIN_CWND, new_handle),
+    EXIT_ON_ERR(register_control_initial_value_pcmc(
+                    TCP_CTRL_IDX_CWND, FABRIC_MIN_CWND, new_handle),
                 SUCCESS);
 
     EXIT_ON_ERR(
@@ -207,10 +207,10 @@ int dcqcn_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(register_local_state_pcmc(DCQCN_LOCAL_STATE_IDX_RATE_TARGET,
                                           new_handle),
                 SUCCESS);
-    EXIT_ON_ERR(
-        register_local_state_initial_value_float_pcmc(
-            DCQCN_LOCAL_STATE_IDX_RATE_TARGET, FABRIC_LINK_RATE_GBPS, new_handle),
-        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_float_pcmc(
+                    DCQCN_LOCAL_STATE_IDX_RATE_TARGET, FABRIC_LINK_RATE_GBPS,
+                    new_handle),
+                SUCCESS);
 
     EXIT_ON_ERR(register_local_state_pcmc(
                     DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS, new_handle),
@@ -316,7 +316,7 @@ int smartt_pcmc_init(handle_t new_handle) {
                 SUCCESS);
 
     EXIT_ON_ERR(
-        register_control_pcmc(CTRL_CWND, FABRIC_LINK_MTU, new_handle),
+        register_control_pcmc(CTRL_CWND, SMARTT_CTRL_CWND_BYTES, new_handle),
         SUCCESS);
     EXIT_ON_ERR(register_control_initial_value_pcmc(
                     SMARTT_CTRL_CWND_BYTES, FABRIC_MAX_CWND, new_handle),

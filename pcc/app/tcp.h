@@ -27,15 +27,11 @@ enum tcp_local_var_idxs {
     TCP_LOCAL_STATE_IDX_ALPHA = 5
 };
 
-#ifdef HANDLER_BUILD
-int algorithm_main();
-
-#define TCP_RTO_RECOVERY_SSTHRESH(state) (MAX((state->cwnd) >> 1, 2))
-
 struct tcp_state_snapshot {
     int num_nacks;
     int num_rtos;
     int num_acks;
+    int num_acks_consumed;
     int cwnd;
     int ssthresh;
     int tot_acked;
@@ -47,6 +43,11 @@ struct tcp_state_snapshot {
     uint32_t alpha;
 #endif
 };
+
+#ifdef HANDLER_BUILD
+int algorithm_main();
+
+#define TCP_RTO_RECOVERY_SSTHRESH(state) (MAX((state->cwnd) >> 1, 2))
 
 /**
  * @brief Fast Recovery

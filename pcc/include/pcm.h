@@ -244,6 +244,7 @@ int __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, int val);
 int __flow_signal_get(const void *ctx, size_t user_index);
 void __flow_signal_set(void *ctx, size_t user_index, int val);
+void __flow_signal_update(void *ctx, size_t user_index, int val);
 size_t __flow_signal_trigger_user_index_get(void *ctx);
 int __flow_local_state_int_get(const void *ctx, size_t user_index);
 void __flow_local_state_int_set(void *ctx, size_t user_index, int val);
@@ -316,12 +317,21 @@ void __flow_local_state_float_set(void *ctx, size_t user_index, float val);
 #define get_signal(user_index) __flow_signal_get(ctx, user_index)
 
 /**
- * @brief Update the signal value within a handler.
+ * @brief Set the signal value within a handler.
  *
  * @param[in] user_index   User-defined signal index.
  * @param[in] val          New signal value.
  */
 #define set_signal(user_index, val) __flow_signal_set(ctx, user_index, val)
+
+/**
+ * @brief Update the signal value within a handler.
+ *
+ * @param[in] user_index   User-defined signal index.
+ * @param[in] val          Update value.
+ */
+#define update_signal(user_index, val)                                         \
+    __flow_signal_update(ctx, user_index, val)
 
 /**
  * @brief Get user index of signal that triggered handler.

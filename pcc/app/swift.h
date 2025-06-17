@@ -39,6 +39,7 @@ enum swift_local_var_idxs {
 struct swift_state_shapshot {
     int num_nacks;
     int num_rtos;
+    int tot_acked;
     int num_acks;
     int now;
     int rtt_estim;
