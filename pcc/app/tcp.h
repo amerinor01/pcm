@@ -1,11 +1,11 @@
 #ifndef _RENO_H_
 #define _RENO_H_
 
-#include "pcm.h"
 #include "algo_utils.h"
+#include "fabric_params.h"
+#include "pcm.h"
 
 #define TCP_SSTHRESH_INIT INT_MAX
-#define TCP_CWND_INIT 1
 #define DCTCP_MAX_ALPHA 1024U
 #define DCTCP_SHIFT_G 4 /* g = 1/2^4 EWMA weight */
 

@@ -37,7 +37,7 @@ int algorithm_main() {
     int num_nacks = get_signal(TCP_SIG_IDX_NACK);
     int num_rtos = get_signal(TCP_SIG_IDX_RTO);
     int num_acks = get_signal(TCP_SIG_IDX_ACK);
-    int cwnd = get_control(TCP_CTRL_IDX_CWND);
+    int cwnd = get_control(TCP_CTRL_IDX_CWND) / FABRIC_LINK_MTU;
     int ssthresh = get_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH);
     int tot_acked = get_local_state(TCP_LOCAL_STATE_IDX_ACKED) + num_acks;
 
@@ -104,7 +104,7 @@ int algorithm_main() {
     }
 
     set_signal(TCP_SIG_IDX_ACK, 0);
-    set_control(TCP_CTRL_IDX_CWND, cwnd);
+    set_control(TCP_CTRL_IDX_CWND, cwnd * FABRIC_LINK_MTU);
     set_local_state(TCP_LOCAL_STATE_IDX_ACKED, tot_acked);
     set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, ssthresh);
 

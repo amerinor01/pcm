@@ -12,8 +12,8 @@ static inline int smartt_quick_adapt(struct smartt_state_snapshot *state) {
         if (state->trigger_qa) {
             state->trigger_qa = 0;
             adapted = 1;
-            state->cwnd =
-                (int)(MAX(state->acked_bytes, SMARTT_MTU) * SMARTT_QA_SCALING);
+            state->cwnd = (int)(MAX(state->acked_bytes, FABRIC_LINK_MTU) *
+                                SMARTT_QA_SCALING);
             state->bytes_to_ignore = state->cwnd;
             state->bytes_ignored = 0;
         }
@@ -24,11 +24,11 @@ static inline int smartt_quick_adapt(struct smartt_state_snapshot *state) {
 }
 
 static inline int smartt_fast_increase(struct smartt_state_snapshot *state) {
-    if (ABS((float)state->last_rtt - SMARTT_BASE_RTT) < 1e-6 &&
+    if (ABS((float)state->last_rtt - FABRIC_BASE_RTT) < 1e-6 &&
         !state->num_ecns) {
-        state->fast_count += SMARTT_MTU; // last_pkt_size
+        state->fast_count += FABRIC_LINK_MTU; // last_pkt_size
         if (state->fast_count > state->cwnd || state->fast_active) {
-            state->cwnd += (int)(SMARTT_K_CONST * SMARTT_MTU);
+            state->cwnd += (int)(SMARTT_K_CONST * FABRIC_LINK_MTU);
             state->fast_active = 1;
         }
     } else {
@@ -48,20 +48,21 @@ static inline void smartt_core_cases(struct smartt_state_snapshot *state) {
         state->cwnd = (int)((float)state->cwnd * MAX(0.5, mdf));
     } else if (!state->num_ecns && state->last_rtt > SMARTT_TARGET_RTT) {
         /* Fair Increase */
-        state->cwnd += (SMARTT_MTU / (float)state->cwnd) *
-                       (float)(SMARTT_MTU * SMARTT_FI_CONST);
+        state->cwnd += (FABRIC_LINK_MTU / (float)state->cwnd) *
+                       (float)(FABRIC_LINK_MTU * SMARTT_FI_CONST);
     } else if (!state->num_ecns && state->last_rtt <= SMARTT_TARGET_RTT) {
         /* Proportional Increase */
         int increase =
             ((SMARTT_TARGET_RTT - state->last_rtt) / state->last_rtt) *
-            SMARTT_MTU / state->cwnd * (int)(SMARTT_MTU * SMARTT_PI_CONST);
-        state->cwnd += MIN(SMARTT_MTU, increase);
+            FABRIC_LINK_MTU / state->cwnd *
+            (int)(FABRIC_LINK_MTU * (float)SMARTT_PI_CONST);
+        state->cwnd += MIN(FABRIC_LINK_MTU, increase);
     }
 }
 
 static inline void
 smartt_handle_loss_signal(struct smartt_state_snapshot *state) {
-    state->cwnd -= SMARTT_MTU; // state->last_pkt_size
+    state->cwnd -= FABRIC_LINK_MTU; // state->last_pkt_size
     state->trigger_qa = 1;
     // SMaRTT paper explicitly mentions that NACKED/TRIMMED/RTO'ed
     // packet needs to be retransmistted here.
@@ -72,10 +73,10 @@ smartt_handle_loss_signal(struct smartt_state_snapshot *state) {
 }
 
 static inline void smartt_handle_ack(struct smartt_state_snapshot *state) {
-    state->acked_bytes += SMARTT_MTU; // state->last_pkt_size
+    state->acked_bytes += FABRIC_LINK_MTU; // state->last_pkt_size
 
     if (state->bytes_ignored < state->bytes_to_ignore) {
-        state->bytes_ignored += SMARTT_MTU; // state->last_pkt_size
+        state->bytes_ignored += FABRIC_LINK_MTU; // state->last_pkt_size
     } else if (!(smartt_quick_adapt(state) || smartt_fast_increase(state))) {
         smartt_core_cases(state);
     }
@@ -124,8 +125,7 @@ int algorithm_main() {
 
 save_state:
     // clamp cwnd
-    state.cwnd =
-        MAX(MIN(state.cwnd, SMARTT_MAX_CWND_BYTES), SMARTT_MIN_CWND_BYTES);
+    state.cwnd = MAX(MIN(state.cwnd, FABRIC_MAX_CWND), FABRIC_MIN_CWND);
     set_control(SMARTT_CTRL_CWND_BYTES, state.cwnd);
 
     set_local_state(SMARTT_LOCAL_STATE_ACKED_BYTES, state.acked_bytes);

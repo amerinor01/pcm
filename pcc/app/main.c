@@ -6,6 +6,7 @@
 #include <unistd.h>
 
 #include "dcqcn.h"
+#include "fabric_params.h"
 #include "network.h"
 #include "pcm.h"
 #include "smartt.h"
@@ -45,7 +46,7 @@ int tcp_pcmc_config(handle_t new_handle) {
     EXIT_ON_ERR(register_control_pcmc(CTRL_CWND, TCP_CTRL_IDX_CWND, new_handle),
                 SUCCESS);
     EXIT_ON_ERR(register_control_initial_value_pcmc(TCP_CTRL_IDX_CWND,
-                                                    TCP_CWND_INIT, new_handle),
+                                                    FABRIC_MIN_CWND, new_handle),
                 SUCCESS);
 
     EXIT_ON_ERR(
@@ -126,8 +127,8 @@ int swift_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(
         register_control_pcmc(CTRL_CWND, SWIFT_CTRL_IDX_CWND, new_handle),
         SUCCESS);
-    EXIT_ON_ERR(register_control_initial_value_pcmc(SWIFT_CTRL_IDX_CWND,
-                                                    SWIFT_MIN_CWND, new_handle),
+    EXIT_ON_ERR(register_control_initial_value_pcmc(
+                    SWIFT_CTRL_IDX_CWND, FABRIC_MIN_CWND, new_handle),
                 SUCCESS);
 
     EXIT_ON_ERR(
@@ -198,16 +199,17 @@ int dcqcn_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(
         register_local_state_pcmc(DCQCN_LOCAL_STATE_IDX_RATE_CUR, new_handle),
         SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
-                    DCQCN_LOCAL_STATE_IDX_RATE_CUR, DCQCN_MAX_RATE, new_handle),
-                SUCCESS);
+    EXIT_ON_ERR(
+        register_local_state_initial_value_float_pcmc(
+            DCQCN_LOCAL_STATE_IDX_RATE_CUR, FABRIC_LINK_RATE_GBPS, new_handle),
+        SUCCESS);
 
     EXIT_ON_ERR(register_local_state_pcmc(DCQCN_LOCAL_STATE_IDX_RATE_TARGET,
                                           new_handle),
                 SUCCESS);
     EXIT_ON_ERR(
-        register_local_state_initial_value_int_pcmc(
-            DCQCN_LOCAL_STATE_IDX_RATE_TARGET, DCQCN_MAX_RATE, new_handle),
+        register_local_state_initial_value_float_pcmc(
+            DCQCN_LOCAL_STATE_IDX_RATE_TARGET, FABRIC_LINK_RATE_GBPS, new_handle),
         SUCCESS);
 
     EXIT_ON_ERR(register_local_state_pcmc(
@@ -227,8 +229,8 @@ int dcqcn_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(
         register_control_pcmc(CTRL_CWND, DCQCN_CTRL_IDX_CWND, new_handle),
         SUCCESS);
-    EXIT_ON_ERR(register_control_initial_value_pcmc(DCQCN_CTRL_IDX_CWND,
-                                                    DCQCN_MAX_CWND, new_handle),
+    EXIT_ON_ERR(register_control_initial_value_pcmc(
+                    DCQCN_CTRL_IDX_CWND, FABRIC_MAX_CWND, new_handle),
                 SUCCESS);
     return SUCCESS;
 }
@@ -314,10 +316,10 @@ int smartt_pcmc_init(handle_t new_handle) {
                 SUCCESS);
 
     EXIT_ON_ERR(
-        register_control_pcmc(CTRL_CWND, SMARTT_CTRL_CWND_BYTES, new_handle),
+        register_control_pcmc(CTRL_CWND, FABRIC_LINK_MTU, new_handle),
         SUCCESS);
     EXIT_ON_ERR(register_control_initial_value_pcmc(
-                    SMARTT_CTRL_CWND_BYTES, SMARTT_MAX_CWND_BYTES, new_handle),
+                    SMARTT_CTRL_CWND_BYTES, FABRIC_MAX_CWND, new_handle),
                 SUCCESS);
     return SUCCESS;
 }

@@ -13,7 +13,7 @@ int algorithm_main() {
     state.num_nacks = get_signal(TCP_SIG_IDX_NACK);
     state.num_rtos = get_signal(TCP_SIG_IDX_RTO);
     state.num_acks = get_signal(TCP_SIG_IDX_ACK);
-    state.cwnd = get_control(TCP_CTRL_IDX_CWND);
+    state.cwnd = get_control(TCP_CTRL_IDX_CWND) / FABRIC_LINK_MTU;
     state.ssthresh = get_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH);
     state.tot_acked = get_local_state(TCP_LOCAL_STATE_IDX_ACKED);
     state.in_fast_recovery = get_local_state(TCP_LOCAL_STATE_IDX_IN_FAST_RECOV);
@@ -43,8 +43,8 @@ int algorithm_main() {
     }
 
 exit_handler:
-    set_signal(TCP_SIG_IDX_ACK, state.num_acks); // TODO: use update call here to not lose buffered ACKs
-    set_control(TCP_CTRL_IDX_CWND, state.cwnd);
+    set_signal(TCP_SIG_IDX_ACK, state.num_acks);
+    set_control(TCP_CTRL_IDX_CWND, state.cwnd * FABRIC_LINK_MTU);
     set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, state.ssthresh);
     set_local_state(TCP_LOCAL_STATE_IDX_ACKED, state.tot_acked);
     set_local_state(TCP_LOCAL_STATE_IDX_IN_FAST_RECOV, state.in_fast_recovery);

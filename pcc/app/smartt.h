@@ -1,23 +1,19 @@
 #ifndef _SMARTT_H_
 #define _SMARTT_H_
 
-#define SMARTT_MTU 4096  /* bytes */
-#define BDP (900 * 1024) /* bytes, example for 100Gbps@12us RTT */
-#define SMARTT_MIN_CWND_BYTES SMARTT_MTU   /* minimum cwnd = 1 MTU */
-#define SMARTT_MAX_CWND_BYTES (BDP) /* max cwnd = 1.25 BDP */
+#include "fabric_params.h"
 
 /* smartt parameters */
 #define SMARTT_TRTT_FACTOR 1.5 /* target RTT factor over base RTT */
-#define SMARTT_BASE_RTT 4      /* us */
-#define SMARTT_TARGET_RTT ((int)(SMARTT_BASE_RTT * SMARTT_TRTT_FACTOR))
+#define SMARTT_TARGET_RTT (FABRIC_BASE_RTT * SMARTT_TRTT_FACTOR)
 #define SMARTT_PI_CONST_COMP(brtt, trtt)                                       \
     ((brtt) / (trtt - brtt)) /* proportional increase */
-#define SMARTT_PI_CONST SMARTT_PI_CONST_COMP(SMARTT_BASE_RTT, SMARTT_TARGET_RTT)
+#define SMARTT_PI_CONST SMARTT_PI_CONST_COMP(FABRIC_BASE_RTT, SMARTT_TARGET_RTT)
 #define SMARTT_MD_CONST 0.8   /* multiplicative decrease constant */
-#define SMARTT_FI_CONST 0.5  /* fair increase constant */
+#define SMARTT_FI_CONST 0.5   /* fair increase constant */
 #define SMARTT_K_CONST 2      /* fast increase constant */
 #define SMARTT_QA_SCALING 0.8 /* QuickAdapt scaling factor */
-#define SMARTT_QA_DEADLINE (SMARTT_TRTT_FACTOR * SMARTT_BASE_RTT)
+#define SMARTT_QA_DEADLINE (SMARTT_TRTT_FACTOR * FABRIC_BASE_RTT)
 
 struct smartt_state_snapshot {
     int acked_bytes;     /* bytes acked since last QA */
