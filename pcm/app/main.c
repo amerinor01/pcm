@@ -151,6 +151,15 @@ int swift_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(register_local_state_initial_value_pcmc(
                     SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT, 0, new_handle),
                 SUCCESS);
+
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(
+        register_local_state_initial_value_pcmc(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM,
+                                                FABRIC_BASE_RTT, new_handle),
+        SUCCESS);
+
     return SUCCESS;
 }
 
