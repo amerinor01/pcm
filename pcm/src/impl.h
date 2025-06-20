@@ -77,21 +77,6 @@ struct algorithm_config {
 #define FLOW_LOCAL_STATE_VARS_OFFSET 0
 #define FLOW_LOCAL_STATE_SIZE ALGO_CONF_MAX_LOCAL_STATE_VARS
 
-#define TGEN_BANDWIDTH_BPS 100000000UL // 100 Mbps
-#define TGEN_DROP_PROB 0.01            // 1% packet drop probability
-#define TGEN_NACK_PROB 0.02            // 2% NACK probability (duplicate ACK)
-#define TGEN_ECN_CONG_PROB 0.1
-#define TGEN_PACKET_SIZE 1500 // bytes per packet (MSS)
-#define TGEN_THREAD_SLEEP_TIME_US 1000
-#define TGEN_RTT 10
-#define TGEN_MSS 4096
-
-enum flow_thread_state {
-    FLOW_THREAD_STOP = 0,
-    FLOW_THREAD_INIT = 1,
-    FLOW_THREAD_RUNNING = 2
-};
-
 struct flow {
     addr_t addr;
     struct slist_entry flow_list_entry;
@@ -101,8 +86,8 @@ struct flow {
     size_t trigger_user_index;
     struct timespec start_ts;
     pthread_t thread; // CLOCK_MONOTHONIC
-    atomic_int thread_state;
-    int status;
+    atomic_int progress_state;
+    int err_status;
 };
 
 #define SCHEDULER_SLEEP_US 1000 // 10 ms

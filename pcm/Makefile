@@ -2,12 +2,13 @@
 ifeq ($(origin CC),default)
 CC = clang
 endif
-CFLAGS = -fPIC -Iinclude -Iapp -Wall -Wextra -O3
+CFLAGS = -fPIC -Iinclude -Iapp -Ialgos -Wall -Wextra -O3
 LDFLAGS = -shared
 
 SRCDIR = src
 INCDIR = include
 APPDIR = app
+ALGODIR = algos
 LIBDIR = lib
 BINDIR = bin
 
@@ -21,7 +22,7 @@ ALGO_PLUGIN_NAMES := reno_accumulated reno_standard dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
 
 # Application target
-APP_OBJS := $(BINDIR)/main.o
+APP_OBJS := $(BINDIR)/main.o $(BINDIR)/app_traffic_gen.o
 APP_TARGET := $(BINDIR)/app_main
 
 .PHONY: all clean distclean
@@ -38,17 +39,17 @@ $(SRCDIR)/%.o: $(SRCDIR)/%.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 # Build dctcp plugin (requires BUILD_ALGO_DCTCP)
-$(LIBDIR)/libdctcp.so: $(APPDIR)/dctcp.c $(PCM_LIB_TARGET)
+$(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
-	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) -o $@ $(APPDIR)/dctcp.c -L$(LIBDIR) -lpcm
+	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) -o $@ $(ALGODIR)/dctcp.c -L$(LIBDIR) -lpcm
 
 # Build other algorithm plugins
-$(LIBDIR)/lib%.so: $(APPDIR)/%.c $(PCM_LIB_TARGET)
+$(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
-	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $(APPDIR)/$*.c -L$(LIBDIR) -lpcm
+	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $(ALGODIR)/$*.c -L$(LIBDIR) -lpcm
 
-# Compile main application object
-$(BINDIR)/main.o: $(APPDIR)/main.c $(APPDIR)/tcp.h
+# Compile main application objects
+$(BINDIR)/%.o: $(APPDIR)/%.c
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 

@@ -169,7 +169,7 @@ static void *device_scheduler_thread_fn(void *arg) {
         slist_foreach(&scheduler->flow_list, item, prev) {
             (void)prev; /* suppress complier warning */
             flow_t *flow = container_of(item, flow_t, flow_list_entry);
-            if (flow->thread_state != FLOW_THREAD_RUNNING) {
+            if (flow_progress_state_get(flow) != FLOW_THREAD_RUNNING) {
                 scheduler->status = ERROR;
                 break;
             }

@@ -3,9 +3,6 @@
 #include "impl.h"
 #include "util.h"
 
-// Forward declarations
-static void *flow_default_traffic_gen_fn(void *arg);
-
 signal_trigger_rearm_fn flow_signal_trigger_rearm_no_op = NULL;
 signal_accumulation_op_fn flow_signal_accumulation_no_op = NULL;
 
@@ -160,10 +157,8 @@ int flow_create(device_t *device, flow_t **flow,
 
     flow_state_init(new_flow->config, new_flow);
 
-    new_flow->thread_state = FLOW_THREAD_INIT;
-    if (pthread_create(&new_flow->thread, NULL,
-                       traffic_gen_fn ? traffic_gen_fn
-                                      : flow_default_traffic_gen_fn,
+    flow_progress_state_set(new_flow, FLOW_THREAD_INIT);
+    if (pthread_create(&new_flow->thread, NULL, traffic_gen_fn,
                        (void *)new_flow)) {
         LOG_CRIT("[dev=%p] failed to start thread for flow=%p addr=%u", device,
                  new_flow, new_flow->addr);
@@ -173,7 +168,7 @@ int flow_create(device_t *device, flow_t **flow,
     LOG_DBG("[dev=%p] started thread for flow=%p addr=%u", device, new_flow,
             new_flow->addr);
 
-    while (new_flow->thread_state != FLOW_THREAD_RUNNING) {
+    while (flow_progress_state_get(new_flow) != FLOW_THREAD_RUNNING) {
         ;
         /* wait for the new flow to initialize (arm triggers) */
     }
@@ -204,13 +199,13 @@ int flow_destroy(flow_t *flow) {
         ret = ERROR;
     }
 
-    flow->thread_state = FLOW_THREAD_STOP;
+    flow->progress_state = FLOW_THREAD_STOP;
     if (pthread_join(flow->thread, NULL)) {
         LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow, flow->addr);
         ret = ERROR;
     }
 
-    if (flow->status != SUCCESS) {
+    if (flow_error_status_get(flow) != SUCCESS) {
         LOG_CRIT("[flow=%p addr=%u] flow thread completed with error", flow,
                  flow->addr);
         ret = ERROR;
@@ -278,14 +273,14 @@ void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
     }
 }
 
-static int flow_cwnd_get(const flow_t *flow) {
+int flow_cwnd_get(const flow_t *flow) {
     size_t cwnd_idx;
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
         &flow->config->controls_list, struct control_attr, CTRL_CWND, cwnd_idx);
     return __flow_control_get(flow, cwnd_idx);
 }
 
-static int flow_time_init(flow_t *flow) {
+int flow_time_init(flow_t *flow) {
     // CLOCK_MONOTHONIC is system wide clock so it should be safe to share
     // it between flow and scheduler threads
     if (clock_gettime(CLOCK_MONOTONIC, &flow->start_ts))
@@ -293,61 +288,15 @@ static int flow_time_init(flow_t *flow) {
     return SUCCESS;
 }
 
-// Flow thread: emulate bandwidth, drops, NACKs, RTOs
-static void *flow_default_traffic_gen_fn(void *arg) {
-    flow_t *flow = arg;
-
-    LOG_PRINT("[flow=%p, addr=%u] traffic generation started", flow,
-              flow->addr);
-
-    unsigned int rnd = (unsigned int)time(NULL);
-    const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
-
-    // Initialize time related signals of flow before traffic generation
-    // starts
-    if (flow_time_init(flow) != SUCCESS) {
-        flow->status = ERROR;
-        flow->thread_state = FLOW_THREAD_STOP;
-        goto flow_thread_join;
-    }
-
-    // At that point flow is not yet added to the scheduler, so
-    // all flow triggers need to be manually armed
-    flow_signal_triggers_rearm(flow);
-
-    // Signal that flow is ready to be added to the scheduler
-    flow->thread_state = FLOW_THREAD_RUNNING;
-
-    while (flow->thread_state == FLOW_THREAD_RUNNING) {
-        int cwnd = flow_cwnd_get(flow);
-        if (cwnd == 0) {
-            usleep(TGEN_THREAD_SLEEP_TIME_US);
-            continue;
-        }
-        int to_send = cwnd < pkts_per_ms ? cwnd : pkts_per_ms;
-        flow_signals_update(flow, SIG_DATA_TX, to_send * TGEN_MSS);
-        double roll = (double)rand_r(&rnd) / RAND_MAX;
-        if (roll < TGEN_DROP_PROB) {
-            flow_signals_update(flow, SIG_RTO, 1);
-        } else if (roll < TGEN_DROP_PROB + TGEN_NACK_PROB) {
-            flow_signals_update(flow, SIG_NACK, 1);
-        } else {
-            flow_signals_update(flow, SIG_RTT, TGEN_RTT);
-            flow_signals_update(flow, SIG_ACK, 1);
-            if (roll < TGEN_ECN_CONG_PROB) {
-                flow_signals_update(flow, SIG_ECN, 1);
-            }
-        }
-        usleep(TGEN_THREAD_SLEEP_TIME_US);
-        LOG_PRINT("[flow=%p, addr=%u] traffic generator stats: "
-                  "pkts_per_ms=%d, to_send=%d, cwnd=%d",
-                  flow, flow->addr, pkts_per_ms, to_send, cwnd);
-    }
-
-    flow->status = SUCCESS;
-flow_thread_join:
-    LOG_PRINT("[flow=%p, addr=%u] traffic generation terminated with "
-              "status=%d",
-              flow, flow->addr, flow->status);
-    return NULL;
+void flow_progress_state_set(flow_t *flow, flow_state_t new_state) {
+    flow->progress_state = new_state;
 }
+
+flow_state_t flow_progress_state_get(const flow_t *flow) {
+    return flow->progress_state;
+}
+
+void flow_error_status_set(flow_t *flow, int status) {
+    flow->err_status = status;
+}
+int flow_error_status_get(const flow_t *flow) { return flow->err_status; }

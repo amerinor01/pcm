@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "app_traffic_gen.h"
 #include "dcqcn.h"
 #include "fabric_params.h"
 #include "network.h"
@@ -398,7 +399,7 @@ int main(int argc, char **argv) {
     }
 
     for (int i = 0; i < num_flows; i++)
-        EXIT_ON_ERR(flow_create(dev_ctx, &flows[i], NULL), SUCCESS);
+        EXIT_ON_ERR(flow_create(dev_ctx, &flows[i], &app_flow_traffic_gen_fn), SUCCESS);
 
     /* Traffic flows */
     usleep(test_duration);
