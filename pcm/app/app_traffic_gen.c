@@ -11,7 +11,7 @@
 void *app_flow_traffic_gen_fn(void *arg) {
     flow_t *flow = arg;
 
-    if (flow_progress_state_get(flow) != FLOW_THREAD_INIT) {
+    if (flow_state_get(flow) != FLOW_STATE_INIT) {
         flow_error_status_set(flow, ERROR);
         goto flow_thread_join;
     }
@@ -25,7 +25,7 @@ void *app_flow_traffic_gen_fn(void *arg) {
     // starts
     if (flow_time_init(flow) != SUCCESS) {
         flow_error_status_set(flow, ERROR);
-        flow_progress_state_set(flow, FLOW_THREAD_RUNNING);
+        flow_state_set(flow, FLOW_STATE_RUNNING);
         goto flow_thread_join;
     }
 
@@ -34,9 +34,9 @@ void *app_flow_traffic_gen_fn(void *arg) {
     flow_signal_triggers_rearm(flow);
 
     // Signal that flow is ready to be added to the scheduler
-    flow_progress_state_set(flow, FLOW_THREAD_RUNNING);
+    flow_state_set(flow, FLOW_STATE_RUNNING);
 
-    while (flow_progress_state_get(flow) == FLOW_THREAD_RUNNING) {
+    while (flow_state_get(flow) == FLOW_STATE_RUNNING) {
         int cwnd = flow_cwnd_get(flow);
         if (cwnd == 0) {
             usleep(TGEN_THREAD_SLEEP_TIME_US);

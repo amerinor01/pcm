@@ -388,7 +388,8 @@ int main(int argc, char **argv) {
     char *handler_path = argv[4];
 
     device_t *dev_ctx;
-    EXIT_ON_ERR(device_init(NULL, &dev_ctx), SUCCESS);
+    EXIT_ON_ERR(device_init(NULL, DEVICE_SCHEDULER_PROGRESS_AUTO, &dev_ctx),
+                SUCCESS);
 
     handle_t pcmc;
     EXIT_ON_ERR(pcmc_init(algo_name, dev_ctx, handler_path, &pcmc), 0);
@@ -399,7 +400,8 @@ int main(int argc, char **argv) {
     }
 
     for (int i = 0; i < num_flows; i++)
-        EXIT_ON_ERR(flow_create(dev_ctx, &flows[i], &app_flow_traffic_gen_fn), SUCCESS);
+        EXIT_ON_ERR(flow_create(dev_ctx, &flows[i], &app_flow_traffic_gen_fn),
+                    SUCCESS);
 
     /* Traffic flows */
     usleep(test_duration);

@@ -157,7 +157,7 @@ int flow_create(device_t *device, flow_t **flow,
 
     flow_state_init(new_flow->config, new_flow);
 
-    flow_progress_state_set(new_flow, FLOW_THREAD_INIT);
+    flow_state_set(new_flow, FLOW_STATE_INIT);
     if (pthread_create(&new_flow->thread, NULL, traffic_gen_fn,
                        (void *)new_flow)) {
         LOG_CRIT("[dev=%p] failed to start thread for flow=%p addr=%u", device,
@@ -168,7 +168,7 @@ int flow_create(device_t *device, flow_t **flow,
     LOG_DBG("[dev=%p] started thread for flow=%p addr=%u", device, new_flow,
             new_flow->addr);
 
-    while (flow_progress_state_get(new_flow) != FLOW_THREAD_RUNNING) {
+    while (flow_state_get(new_flow) != FLOW_STATE_RUNNING) {
         ;
         /* wait for the new flow to initialize (arm triggers) */
     }
@@ -199,7 +199,7 @@ int flow_destroy(flow_t *flow) {
         ret = ERROR;
     }
 
-    flow->progress_state = FLOW_THREAD_STOP;
+    flow->progress_state = FLOW_STATE_STOP;
     if (pthread_join(flow->thread, NULL)) {
         LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow, flow->addr);
         ret = ERROR;
@@ -273,6 +273,16 @@ void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
     }
 }
 
+bool flow_handler_invoke_on_trigger(flow_t *flow) {
+    if (flow_signal_triggers_check(flow)) {
+        flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
+        flow->config->algorithm_fn((void *)flow);
+        flow_signal_triggers_rearm(flow);
+        return true;
+    }
+    return false;
+}
+
 int flow_cwnd_get(const flow_t *flow) {
     size_t cwnd_idx;
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
@@ -288,13 +298,11 @@ int flow_time_init(flow_t *flow) {
     return SUCCESS;
 }
 
-void flow_progress_state_set(flow_t *flow, flow_state_t new_state) {
+void flow_state_set(flow_t *flow, flow_state_t new_state) {
     flow->progress_state = new_state;
 }
 
-flow_state_t flow_progress_state_get(const flow_t *flow) {
-    return flow->progress_state;
-}
+flow_state_t flow_state_get(const flow_t *flow) { return flow->progress_state; }
 
 void flow_error_status_set(flow_t *flow, int status) {
     flow->err_status = status;
