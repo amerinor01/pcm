@@ -84,8 +84,8 @@ struct flow {
     atomic_int datapath_state[FLOW_DATAPATH_STATE_SIZE];
     uint64_t local_state[FLOW_LOCAL_STATE_SIZE];
     size_t trigger_user_index;
-    struct timespec start_ts;
-    pthread_t thread; // CLOCK_MONOTHONIC
+    struct timespec start_ts; // CLOCK_MONOTHONIC
+    pthread_t thread;
     atomic_int status;
     int err;
 };
@@ -94,12 +94,14 @@ struct flow {
 
 struct scheduler {
     struct slist_entry *cur_flow;
-    bool progress_auto;
-    pthread_mutex_t flow_list_lock;
     struct slist flow_list;
-    pthread_t thread;
-    atomic_bool running;
-    int status;
+    bool progress_auto;
+    struct scheduler_progress_thread {
+        pthread_mutex_t flow_list_lock;
+        pthread_t thread;
+        atomic_bool running;
+        int err;
+    } progress_auto_thread;
 };
 
 struct device {

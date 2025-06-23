@@ -85,12 +85,13 @@ int device_scheduler_init(struct scheduler *scheduler,
         sched_progress == DEVICE_SCHEDULER_PROGRESS_AUTO ? true : false;
 
     if (scheduler->progress_auto) {
-        scheduler->status = SUCCESS;
-        if (pthread_mutex_init(&scheduler->flow_list_lock, NULL))
+        scheduler->progress_auto_thread.err = SUCCESS;
+        if (pthread_mutex_init(&scheduler->progress_auto_thread.flow_list_lock,
+                               NULL))
             return ERROR;
-        scheduler->running = true;
-        if (pthread_create(&scheduler->thread, NULL, device_scheduler_thread_fn,
-                           (void *)scheduler))
+        scheduler->progress_auto_thread.running = true;
+        if (pthread_create(&scheduler->progress_auto_thread.thread, NULL,
+                           device_scheduler_thread_fn, (void *)scheduler))
             goto err;
     } else {
         scheduler->cur_flow = NULL;
@@ -100,9 +101,9 @@ int device_scheduler_init(struct scheduler *scheduler,
 
 err:
     if (scheduler->progress_auto) {
-        scheduler->status = ERROR;
-        scheduler->running = false;
-        pthread_mutex_destroy(&scheduler->flow_list_lock);
+        scheduler->progress_auto_thread.err = ERROR;
+        scheduler->progress_auto_thread.running = false;
+        pthread_mutex_destroy(&scheduler->progress_auto_thread.flow_list_lock);
     }
     return ERROR;
 }
@@ -111,16 +112,17 @@ int device_scheduler_destroy(struct scheduler *scheduler) {
     int ret = SUCCESS;
 
     if (scheduler->progress_auto) {
-        if (!scheduler->running)
+        if (!scheduler->progress_auto_thread.running)
             return ERROR;
-        scheduler->running = false;
-        if (pthread_join(scheduler->thread, NULL))
+        scheduler->progress_auto_thread.running = false;
+        if (pthread_join(scheduler->progress_auto_thread.thread, NULL))
             ret = ERROR;
 
-        if (scheduler->status)
+        if (scheduler->progress_auto_thread.err)
             ret = ERROR;
 
-        if (pthread_mutex_destroy(&scheduler->flow_list_lock))
+        if (pthread_mutex_destroy(
+                &scheduler->progress_auto_thread.flow_list_lock))
             ret = ERROR;
     }
 
@@ -129,13 +131,13 @@ int device_scheduler_destroy(struct scheduler *scheduler) {
 
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
     if (scheduler->progress_auto &&
-        pthread_mutex_lock(&scheduler->flow_list_lock))
+        pthread_mutex_lock(&scheduler->progress_auto_thread.flow_list_lock))
         return ERROR;
 
     slist_insert_tail(&flow->flow_list_entry, &scheduler->flow_list);
 
     if (scheduler->progress_auto &&
-        pthread_mutex_unlock(&scheduler->flow_list_lock))
+        pthread_mutex_unlock(&scheduler->progress_auto_thread.flow_list_lock))
         return ERROR;
 
     return SUCCESS;
@@ -143,7 +145,7 @@ int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
 
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
     if (scheduler->progress_auto &&
-        pthread_mutex_lock(&scheduler->flow_list_lock))
+        pthread_mutex_lock(&scheduler->progress_auto_thread.flow_list_lock))
         return ERROR;
 
     struct slist_entry *item, *prev;
@@ -158,7 +160,7 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
     }
 
     if (scheduler->progress_auto &&
-        pthread_mutex_unlock(&scheduler->flow_list_lock))
+        pthread_mutex_unlock(&scheduler->progress_auto_thread.flow_list_lock))
         return ERROR;
 
     if (!found) {
@@ -177,9 +179,10 @@ static void *device_scheduler_thread_fn(void *arg) {
     LOG_DBG("scheduler thread started");
 
     size_t num_triggers = 0;
-    while (scheduler->running) {
-        if (pthread_mutex_lock(&scheduler->flow_list_lock)) {
-            scheduler->status = ERROR;
+    while (scheduler->progress_auto_thread.running) {
+        if (pthread_mutex_lock(
+                &scheduler->progress_auto_thread.flow_list_lock)) {
+            scheduler->progress_auto_thread.err = ERROR;
             break;
         }
 
@@ -188,7 +191,7 @@ static void *device_scheduler_thread_fn(void *arg) {
             (void)prev; /* suppress complier warning */
             flow_t *flow = container_of(item, flow_t, flow_list_entry);
             if (flow_status_get(flow) != FLOW_STATUS_RUNNING) {
-                scheduler->status = ERROR;
+                scheduler->progress_auto_thread.err = ERROR;
                 break;
             }
             if (flow_handler_invoke_on_trigger(flow)) {
@@ -196,17 +199,18 @@ static void *device_scheduler_thread_fn(void *arg) {
             }
         }
 
-        if (pthread_mutex_unlock(&scheduler->flow_list_lock))
-            scheduler->status = ERROR;
+        if (pthread_mutex_unlock(
+                &scheduler->progress_auto_thread.flow_list_lock))
+            scheduler->progress_auto_thread.err = ERROR;
 
-        if (scheduler->status == ERROR)
+        if (scheduler->progress_auto_thread.err == ERROR)
             break;
 
         usleep(SCHEDULER_SLEEP_US);
     }
 
     LOG_DBG("scheduler thread finished, num_triggers=%zu, status=%d",
-            num_triggers, scheduler->status);
+            num_triggers, scheduler->progress_auto_thread.err);
 
     return NULL;
 }
