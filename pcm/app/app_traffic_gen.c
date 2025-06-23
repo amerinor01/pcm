@@ -11,33 +11,16 @@
 void *app_flow_traffic_gen_fn(void *arg) {
     flow_t *flow = arg;
 
-    if (flow_status_get(flow) != FLOW_STATUS_INIT) {
-        flow_error_set(flow, ERROR);
-        goto flow_thread_join;
-    }
-
-    fprintf(stdout, "[flow=%p,] traffic generation started\n", flow);
-
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;
 
-    // Initialize time related signals of flow before traffic generation
-    // starts
-    if (flow_time_init(flow) != SUCCESS) {
-        flow_error_set(flow, ERROR);
-        flow_status_set(flow, FLOW_STATUS_STOP);
-        goto flow_thread_join;
+    while (!flow_is_ready(flow)) {
+        ; // datapath might still need to finish setup (arm triggers)
     }
 
-    // At that point flow is not yet added to the scheduler, so
-    // all flow triggers need to be manually armed
-    flow_signal_triggers_rearm(flow);
+    fprintf(stdout, "[app_flow=%p] started\n", flow);
 
-    // Signal that flow is ready to be added to the scheduler
-    flow_status_set(flow, FLOW_STATUS_RUNNING);
-
-    // Once flow gets destroyed, device will change its status
-    while (flow_status_get(flow) == FLOW_STATUS_RUNNING) {
+    while (flow_is_ready(flow)) {
         int cwnd = flow_cwnd_get(flow);
         if (cwnd == 0) {
             usleep(TGEN_THREAD_SLEEP_TIME_US);
@@ -59,16 +42,10 @@ void *app_flow_traffic_gen_fn(void *arg) {
         }
         usleep(TGEN_THREAD_SLEEP_TIME_US);
         fprintf(stdout,
-                "[flow=%p] traffic generator stats: "
-                "pkts_per_ms=%d, to_send=%d, cwnd=%d\n",
+                "[app_flow=%p] stats: pkts_per_ms=%d, to_send=%d, cwnd=%d\n",
                 flow, pkts_per_ms, to_send, cwnd);
     }
 
-    flow_error_set(flow, SUCCESS);
-flow_thread_join:
-    fprintf(stdout,
-            "[flow=%p] traffic generation terminated with "
-            "status=%d\n",
-            flow, flow_error_get(flow));
+    fprintf(stdout, "[app_flow=%p] terminated\n", flow);
     return NULL;
 }

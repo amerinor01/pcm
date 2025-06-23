@@ -124,16 +124,16 @@ int algorithm_config_signal_add(struct algorithm_config *config,
     attr->accum_type = accum_type;
     switch (attr->accum_type) {
     case SIG_ACCUM_SUM:
-        attr->accumulation_op_fn = flow_signal_accumulation_op_sum;
+        attr->accumulation_op_fn = config->device->flow_ops.datapath.sum;
         break;
     case SIG_ACCUM_LAST:
-        attr->accumulation_op_fn = flow_signal_accumulation_op_last;
+        attr->accumulation_op_fn = config->device->flow_ops.datapath.last;
         break;
     case SIG_ACCUM_MIN:
-        attr->accumulation_op_fn = flow_signal_accumulation_op_min;
+        attr->accumulation_op_fn = config->device->flow_ops.datapath.min;
         break;
     case SIG_ACCUM_MAX:
-        attr->accumulation_op_fn = flow_signal_accumulation_op_max;
+        attr->accumulation_op_fn = config->device->flow_ops.datapath.max;
         break;
     default:
         LOG_CRIT("[dev=%p conf=%p] unknown or unsupported signal accumulation "
@@ -143,7 +143,8 @@ int algorithm_config_signal_add(struct algorithm_config *config,
     }
 
     if (attr->type == SIG_ELAPSED_TIME)
-        attr->accumulation_op_fn = flow_signal_elapsed_time_accumulation_op;
+        attr->accumulation_op_fn =
+            config->device->flow_ops.datapath.elapsed_time;
 
     return SUCCESS;
 }
@@ -156,17 +157,17 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
     if (threshold <= 0)
         return ERROR;
 
-    attr->trigger_check_fn = flow_signal_trigger_overflow_check;
-    attr->trigger_rearm_fn = flow_signal_trigger_rearm_no_op;
+    attr->trigger_check_fn = config->device->flow_ops.datapath.overflow_check;
+    attr->trigger_arm_fn = flow_signal_trigger_arm_no_op;
 
     // trigger on elapsed time (timer) relies on aux state
     if (attr->type == SIG_ELAPSED_TIME) {
         attr->accumulation_op_fn = flow_signal_accumulation_no_op;
-        attr->trigger_check_fn = flow_signal_trigger_timer_check;
-        attr->trigger_rearm_fn = flow_signal_trigger_timer_reset;
+        attr->trigger_check_fn = config->device->flow_ops.datapath.timer_check;
+        attr->trigger_arm_fn = config->device->flow_ops.datapath.timer_reset;
     } else if (attr->type == SIG_DATA_TX) {
-        attr->trigger_check_fn = flow_signal_trigger_burst_check;
-        attr->trigger_rearm_fn = flow_signal_trigger_burst_reset;
+        attr->trigger_check_fn = config->device->flow_ops.datapath.burst_check;
+        attr->trigger_arm_fn = config->device->flow_ops.datapath.burst_reset;
     }
 
     attr->is_trigger = true;
