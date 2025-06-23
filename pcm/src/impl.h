@@ -86,8 +86,8 @@ struct flow {
     size_t trigger_user_index;
     struct timespec start_ts;
     pthread_t thread; // CLOCK_MONOTHONIC
-    atomic_int progress_state;
-    int err_status;
+    atomic_int status;
+    int err;
 };
 
 #define SCHEDULER_SLEEP_US 1000 // 10 ms
@@ -137,7 +137,7 @@ int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
 const struct algorithm_config *
 device_flow_id_to_config_match(const device_t *device, addr_t id);
-bool device_scheduler_progress(device_t *device);
+
 void flow_signals_update(flow_t *flow, signal_t signal_type, int value);
 bool flow_handler_invoke_on_trigger(flow_t *flow);
 bool flow_signal_trigger_overflow_check(const flow_t *flow,

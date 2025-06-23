@@ -14,11 +14,11 @@ typedef enum device_scheduler_progress_type {
     DEVICE_SCHEDULER_PROGRESS_MANUAL = 1
 } device_scheduler_progress_type_t;
 
-typedef enum flow_state {
-    FLOW_STATE_STOP = 0,
-    FLOW_STATE_INIT = 1,
-    FLOW_STATE_RUNNING = 2
-} flow_state_t;
+typedef enum flow_status {
+    FLOW_STATUS_STOP = 0,
+    FLOW_STATUS_INIT = 1,
+    FLOW_STATUS_RUNNING = 2
+} flow_status_t;
 
 int device_destroy(device_t *device);
 int device_init(const char *device_name,
@@ -33,9 +33,9 @@ int flow_time_init(flow_t *flow);
 int flow_cwnd_get(const flow_t *flow);
 void flow_signal_triggers_rearm(flow_t *flow);
 void flow_signals_update(flow_t *flow, signal_t signal_type, int value);
-void flow_state_set(flow_t *flow, flow_state_t new_state);
-flow_state_t flow_state_get(const flow_t *flow);
-void flow_error_status_set(flow_t *flow, int status);
-int flow_error_status_get(const flow_t *flow);
+void flow_status_set(flow_t *flow, flow_status_t new_status);
+flow_status_t flow_status_get(const flow_t *flow);
+void flow_error_set(flow_t *flow, int error);
+int flow_error_get(const flow_t *flow);
 
 #endif /* _NETWORK_H_ */

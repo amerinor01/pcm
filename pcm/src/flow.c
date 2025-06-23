@@ -157,7 +157,7 @@ int flow_create(device_t *device, flow_t **flow,
 
     flow_state_init(new_flow->config, new_flow);
 
-    flow_state_set(new_flow, FLOW_STATE_INIT);
+    flow_status_set(new_flow, FLOW_STATUS_INIT);
     if (pthread_create(&new_flow->thread, NULL, traffic_gen_fn,
                        (void *)new_flow)) {
         LOG_CRIT("[dev=%p] failed to start thread for flow=%p addr=%u", device,
@@ -168,7 +168,7 @@ int flow_create(device_t *device, flow_t **flow,
     LOG_DBG("[dev=%p] started thread for flow=%p addr=%u", device, new_flow,
             new_flow->addr);
 
-    while (flow_state_get(new_flow) != FLOW_STATE_RUNNING) {
+    while (flow_status_get(new_flow) != FLOW_STATUS_RUNNING) {
         ;
         /* wait for the new flow to initialize (arm triggers) */
     }
@@ -199,13 +199,13 @@ int flow_destroy(flow_t *flow) {
         ret = ERROR;
     }
 
-    flow->progress_state = FLOW_STATE_STOP;
+    flow_status_set(flow, FLOW_STATUS_STOP);
     if (pthread_join(flow->thread, NULL)) {
         LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow, flow->addr);
         ret = ERROR;
     }
 
-    if (flow_error_status_get(flow) != SUCCESS) {
+    if (flow_error_get(flow) != SUCCESS) {
         LOG_CRIT("[flow=%p addr=%u] flow thread completed with error", flow,
                  flow->addr);
         ret = ERROR;
@@ -298,13 +298,11 @@ int flow_time_init(flow_t *flow) {
     return SUCCESS;
 }
 
-void flow_state_set(flow_t *flow, flow_state_t new_state) {
-    flow->progress_state = new_state;
+void flow_status_set(flow_t *flow, flow_status_t new_status) {
+    flow->status = new_status;
 }
 
-flow_state_t flow_state_get(const flow_t *flow) { return flow->progress_state; }
+flow_status_t flow_status_get(const flow_t *flow) { return flow->status; }
 
-void flow_error_status_set(flow_t *flow, int status) {
-    flow->err_status = status;
-}
-int flow_error_status_get(const flow_t *flow) { return flow->err_status; }
+void flow_error_set(flow_t *flow, int err) { flow->err = err; }
+int flow_error_get(const flow_t *flow) { return flow->err; }

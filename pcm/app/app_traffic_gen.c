@@ -11,8 +11,8 @@
 void *app_flow_traffic_gen_fn(void *arg) {
     flow_t *flow = arg;
 
-    if (flow_state_get(flow) != FLOW_STATE_INIT) {
-        flow_error_status_set(flow, ERROR);
+    if (flow_status_get(flow) != FLOW_STATUS_INIT) {
+        flow_error_set(flow, ERROR);
         goto flow_thread_join;
     }
 
@@ -24,8 +24,8 @@ void *app_flow_traffic_gen_fn(void *arg) {
     // Initialize time related signals of flow before traffic generation
     // starts
     if (flow_time_init(flow) != SUCCESS) {
-        flow_error_status_set(flow, ERROR);
-        flow_state_set(flow, FLOW_STATE_RUNNING);
+        flow_error_set(flow, ERROR);
+        flow_status_set(flow, FLOW_STATUS_STOP);
         goto flow_thread_join;
     }
 
@@ -34,9 +34,10 @@ void *app_flow_traffic_gen_fn(void *arg) {
     flow_signal_triggers_rearm(flow);
 
     // Signal that flow is ready to be added to the scheduler
-    flow_state_set(flow, FLOW_STATE_RUNNING);
+    flow_status_set(flow, FLOW_STATUS_RUNNING);
 
-    while (flow_state_get(flow) == FLOW_STATE_RUNNING) {
+    // Once flow gets destroyed, device will change its status
+    while (flow_status_get(flow) == FLOW_STATUS_RUNNING) {
         int cwnd = flow_cwnd_get(flow);
         if (cwnd == 0) {
             usleep(TGEN_THREAD_SLEEP_TIME_US);
@@ -63,11 +64,11 @@ void *app_flow_traffic_gen_fn(void *arg) {
                 flow, pkts_per_ms, to_send, cwnd);
     }
 
-    flow_error_status_set(flow, SUCCESS);
+    flow_error_set(flow, SUCCESS);
 flow_thread_join:
     fprintf(stdout,
             "[flow=%p] traffic generation terminated with "
             "status=%d\n",
-            flow, flow_error_status_get(flow));
+            flow, flow_error_get(flow));
     return NULL;
 }
