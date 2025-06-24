@@ -1,14 +1,16 @@
 #include <unistd.h>
 
 #include "impl.h"
+#include "pthread_flow.h"
 #include "util.h"
 
-int device_scheduler_init(struct scheduler *scheduler);
+int device_scheduler_init(struct scheduler *scheduler,
+                          bool needs_progress_thread);
 int device_scheduler_destroy(struct scheduler *scheduler);
 static void *device_scheduler_thread_fn(void *arg);
 
-int device_init(const char *device_name, device_t **out) {
-    (void)device_name;
+int device_init(const char *flow_plugin_name, device_t **out) {
+
     device_t *device = calloc(1, sizeof(*device));
     if (!device) {
         LOG_CRIT("failed to allocate new device");
@@ -17,7 +19,19 @@ int device_init(const char *device_name, device_t **out) {
 
     slist_init(&device->configs_list);
 
-    if (device_scheduler_init(&device->scheduler)) {
+    bool needs_progress_thread = false;
+    if (!strcmp(pthrd_flow_plugin_name, flow_plugin_name)) {
+        if (pthrd_flow_ops_init(&device->flow_ops) != SUCCESS) {
+            LOG_CRIT("failed to initialize flow backend %s", flow_plugin_name);
+            goto destroy_scheduler;
+        }
+        needs_progress_thread = true;
+    } else {
+        LOG_CRIT("unknown flow backend name %s", flow_plugin_name);
+        goto destroy_scheduler;
+    }
+
+    if (device_scheduler_init(&device->scheduler, needs_progress_thread)) {
         LOG_CRIT("failed to initialize device scheduler");
         goto err;
     }
@@ -26,6 +40,8 @@ int device_init(const char *device_name, device_t **out) {
 
     return SUCCESS;
 
+destroy_scheduler:
+    device_scheduler_destroy(&device->scheduler);
 err:
     free(device);
 
@@ -62,7 +78,7 @@ device_flow_id_to_config_match(const device_t *device, addr_t addr) {
         struct algorithm_config *config =
             container_of(item, struct algorithm_config, list_entry);
         /*
-         * Rather than doing real matching below, the code below mimics it with
+         * Rather than doing real matching, the code below mimics it with
          * logical OR.
          */
         if (config->active && (config->matching_rule_mask | addr)) {
@@ -74,60 +90,74 @@ device_flow_id_to_config_match(const device_t *device, addr_t addr) {
     return NULL;
 }
 
-int device_scheduler_init(struct scheduler *scheduler) {
-    if (pthread_mutex_init(&scheduler->flow_list_lock, NULL))
-        return ERROR;
-
+int device_scheduler_init(struct scheduler *scheduler,
+                          bool needs_progress_thread) {
     slist_init(&scheduler->flow_list);
 
-    scheduler->status = SUCCESS;
-    scheduler->running = true;
-    if (pthread_create(&scheduler->thread, NULL, device_scheduler_thread_fn,
-                       (void *)scheduler))
-        goto err;
+    scheduler->progress_auto = needs_progress_thread;
+
+    if (scheduler->progress_auto) {
+        scheduler->progress.thread.err = SUCCESS;
+        if (pthread_mutex_init(&scheduler->progress.thread.flow_list_lock,
+                               NULL))
+            return ERROR;
+        scheduler->progress.thread.running = true;
+        if (pthread_create(&scheduler->progress.thread.pthread_obj, NULL,
+                           device_scheduler_thread_fn, (void *)scheduler))
+            goto err;
+    } else {
+        scheduler->progress.cur_flow = NULL;
+    }
 
     return SUCCESS;
 
 err:
-    scheduler->status = ERROR;
-    scheduler->running = false;
-    pthread_mutex_destroy(&scheduler->flow_list_lock);
+    if (scheduler->progress_auto) {
+        scheduler->progress.thread.err = ERROR;
+        scheduler->progress.thread.running = false;
+        pthread_mutex_destroy(&scheduler->progress.thread.flow_list_lock);
+    }
     return ERROR;
 }
 
 int device_scheduler_destroy(struct scheduler *scheduler) {
     int ret = SUCCESS;
 
-    if (!scheduler->running)
-        return ERROR;
+    if (scheduler->progress_auto) {
+        if (!scheduler->progress.thread.running)
+            return ERROR;
+        scheduler->progress.thread.running = false;
+        if (pthread_join(scheduler->progress.thread.pthread_obj, NULL))
+            ret = ERROR;
 
-    scheduler->running = false;
-    if (pthread_join(scheduler->thread, NULL))
-        ret = ERROR;
+        if (scheduler->progress.thread.err)
+            ret = ERROR;
 
-    if (scheduler->status)
-        ret = ERROR;
-
-    if (pthread_mutex_destroy(&scheduler->flow_list_lock))
-        ret = ERROR;
+        if (pthread_mutex_destroy(&scheduler->progress.thread.flow_list_lock)) {
+            ret = ERROR;
+        }
+    }
 
     return ret;
 }
 
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
-    if (pthread_mutex_lock(&scheduler->flow_list_lock))
+    if (scheduler->progress_auto &&
+        pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
         return ERROR;
 
     slist_insert_tail(&flow->flow_list_entry, &scheduler->flow_list);
 
-    if (pthread_mutex_unlock(&scheduler->flow_list_lock))
+    if (scheduler->progress_auto &&
+        pthread_mutex_unlock(&scheduler->progress.thread.flow_list_lock))
         return ERROR;
 
     return SUCCESS;
 }
 
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
-    if (pthread_mutex_lock(&scheduler->flow_list_lock))
+    if (scheduler->progress_auto &&
+        pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
         return ERROR;
 
     struct slist_entry *item, *prev;
@@ -137,11 +167,14 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
         if (container_of(item, flow_t, flow_list_entry) == flow) {
             slist_remove(&scheduler->flow_list, item, prev);
             found = true;
+            if (!scheduler->progress_auto)
+                scheduler->progress.cur_flow = NULL;
             break;
         }
     }
 
-    if (pthread_mutex_unlock(&scheduler->flow_list_lock))
+    if (scheduler->progress_auto &&
+        pthread_mutex_unlock(&scheduler->progress.thread.flow_list_lock))
         return ERROR;
 
     if (!found) {
@@ -157,11 +190,12 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
 static void *device_scheduler_thread_fn(void *arg) {
     struct scheduler *scheduler = arg;
 
-    LOG_DBG("scheduler started");
+    LOG_DBG("scheduler thread started");
 
-    while (scheduler->running) {
-        if (pthread_mutex_lock(&scheduler->flow_list_lock)) {
-            scheduler->status = ERROR;
+    size_t num_triggers = 0;
+    while (scheduler->progress.thread.running) {
+        if (pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock)) {
+            scheduler->progress.thread.err = ERROR;
             break;
         }
 
@@ -169,27 +203,42 @@ static void *device_scheduler_thread_fn(void *arg) {
         slist_foreach(&scheduler->flow_list, item, prev) {
             (void)prev; /* suppress complier warning */
             flow_t *flow = container_of(item, flow_t, flow_list_entry);
-            if (flow->thread_state != FLOW_THREAD_RUNNING) {
-                scheduler->status = ERROR;
-                break;
-            }
-            if (flow_signal_triggers_check(flow)) {
-                flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
-                flow->config->algorithm_fn((void *)flow);
-                flow_signal_triggers_rearm(flow);
+            if (flow_handler_invoke_on_trigger(flow)) {
+                num_triggers++;
             }
         }
 
-        if (pthread_mutex_unlock(&scheduler->flow_list_lock))
-            scheduler->status = ERROR;
+        if (pthread_mutex_unlock(&scheduler->progress.thread.flow_list_lock))
+            scheduler->progress.thread.err = ERROR;
 
-        if (scheduler->status == ERROR)
+        if (scheduler->progress.thread.err == ERROR)
             break;
 
         usleep(SCHEDULER_SLEEP_US);
     }
 
-    LOG_DBG("scheduler finished with status=%d", scheduler->status);
+    LOG_DBG("scheduler thread finished, num_triggers=%zu, status=%d",
+            num_triggers, scheduler->progress.thread.err);
 
     return NULL;
+}
+
+bool device_scheduler_progress(device_t *device) {
+    if (slist_empty(&device->scheduler.flow_list))
+        return false;
+
+    if (device->scheduler.progress.cur_flow == NULL)
+        device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;
+
+    flow_t *flow = container_of(device->scheduler.progress.cur_flow, flow_t,
+                                flow_list_entry);
+
+    bool triggered = false;
+    if (flow_handler_invoke_on_trigger(flow))
+        triggered = true;
+
+    if (device->scheduler.progress.cur_flow == device->scheduler.flow_list.tail)
+        device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;
+
+    return triggered;
 }

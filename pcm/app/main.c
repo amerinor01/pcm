@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "app_traffic_gen.h"
 #include "dcqcn.h"
 #include "fabric_params.h"
 #include "network.h"
@@ -151,6 +152,15 @@ int swift_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(register_local_state_initial_value_pcmc(
                     SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT, 0, new_handle),
                 SUCCESS);
+
+    EXIT_ON_ERR(
+        register_local_state_pcmc(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM, new_handle),
+        SUCCESS);
+    EXIT_ON_ERR(
+        register_local_state_initial_value_pcmc(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM,
+                                                FABRIC_BASE_RTT, new_handle),
+        SUCCESS);
+
     return SUCCESS;
 }
 
@@ -378,7 +388,7 @@ int main(int argc, char **argv) {
     char *handler_path = argv[4];
 
     device_t *dev_ctx;
-    EXIT_ON_ERR(device_init(NULL, &dev_ctx), SUCCESS);
+    EXIT_ON_ERR(device_init("pthread", &dev_ctx), SUCCESS);
 
     handle_t pcmc;
     EXIT_ON_ERR(pcmc_init(algo_name, dev_ctx, handler_path, &pcmc), 0);
@@ -389,7 +399,8 @@ int main(int argc, char **argv) {
     }
 
     for (int i = 0; i < num_flows; i++)
-        EXIT_ON_ERR(flow_create(dev_ctx, &flows[i], NULL), SUCCESS);
+        EXIT_ON_ERR(flow_create(dev_ctx, &flows[i], &app_flow_traffic_gen_fn),
+                    SUCCESS);
 
     /* Traffic flows */
     usleep(test_duration);

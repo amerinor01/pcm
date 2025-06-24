@@ -150,16 +150,14 @@
         (found_attr_ptr)->metadata.value = val;                                \
     }
 
-#define ATTR_LIST_FLOW_STATE_INIT(attr_list, attr_type, state_ptr,             \
-                                  state_offset)                                \
+#define ATTR_LIST_FLOW_STATE_INIT(attr_list, attr_type, state_ptr)             \
     {                                                                          \
         attr_type *cur_attr = NULL;                                            \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
             (void)prev; /* suppress complier warning */                        \
             cur_attr = container_of(item, attr_type, metadata.list_entry);     \
-            (state_ptr)[(state_offset) + cur_attr->metadata.index] =           \
-                cur_attr->metadata.value;                                      \
+            (state_ptr)[cur_attr->metadata.index] = cur_attr->metadata.value;  \
         }                                                                      \
     }
 

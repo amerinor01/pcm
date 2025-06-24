@@ -5,7 +5,8 @@
 ## Project structure
 - `./include` - contains API definitions of PCM and abstract NIC that supports PCM
 - `./src` - contains implementation of the PCM and NIC APIs
-- `./app` - contains examples of PCM-based congestion control algorithms (NewReno, DCTCP, DCQCN, Swift, SMaRTT) and application that runs them on a synthetic flow
+- `./algos` - contains examples of PCM-based congestion control algorithms: NewReno, DCTCP, DCQCN, Swift, SMaRTT
+- `./app` - contains application that runs N synthetic flows served by a given CC algo
 
 ## Running synthetic application
 

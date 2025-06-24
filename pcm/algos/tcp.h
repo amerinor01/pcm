@@ -56,7 +56,8 @@ int algorithm_main();
  * dup‐ACK
  */
 #define FAST_RECOVERY_DEFINE(algo_name, ssthresh_comp)                         \
-    inline void algo_name##_fast_recovery(struct tcp_state_snapshot *state) {  \
+    static inline void algo_name##_fast_recovery(                              \
+        struct tcp_state_snapshot *state) {                                    \
         if (!state->in_fast_recovery) {                                        \
             state->ssthresh = (int)ssthresh_comp(state);                       \
             state->cwnd = state->ssthresh + 3;                                 \
@@ -75,7 +76,7 @@ int algorithm_main();
  *   - clear fast‐recovery flag
  *   - do NOT count this ACK toward standard increase
  */
-inline void tcp_fast_recovery_exit(struct tcp_state_snapshot *state) {
+static inline void tcp_fast_recovery_exit(struct tcp_state_snapshot *state) {
     state->cwnd = state->ssthresh;
     state->in_fast_recovery = 0;
     state->num_acks -= 1;
@@ -87,7 +88,7 @@ inline void tcp_fast_recovery_exit(struct tcp_state_snapshot *state) {
  * On any RTO, unconditionally halve cwnd -> ssthresh, set cwnd = 1 MSS,
  * and exit fast recovery if we were in it.
  */
-inline void tcp_timeout_recovery(struct tcp_state_snapshot *state) {
+static inline void tcp_timeout_recovery(struct tcp_state_snapshot *state) {
     state->ssthresh = TCP_RTO_RECOVERY_SSTHRESH(state);
     state->cwnd = 1;
     state->in_fast_recovery = 0;
@@ -99,7 +100,7 @@ inline void tcp_timeout_recovery(struct tcp_state_snapshot *state) {
  *
  * - In slow start (cwnd < ssthresh), cwnd += 1 MSS per ACK.
  */
-inline void tcp_slow_start(struct tcp_state_snapshot *state) {
+static inline void tcp_slow_start(struct tcp_state_snapshot *state) {
     int to_ssthresh = MIN(state->num_acks, state->ssthresh - state->cwnd);
     state->cwnd += to_ssthresh;
     state->num_acks -= to_ssthresh;
@@ -113,7 +114,7 @@ inline void tcp_slow_start(struct tcp_state_snapshot *state) {
  * - when tot_acked >= cwnd, do cwnd++,
  * - subtract cwnd from tot_acked to preserve any “leftover” credit.
  */
-inline void tcp_cong_avoid(struct tcp_state_snapshot *state) {
+static inline void tcp_cong_avoid(struct tcp_state_snapshot *state) {
 
     if (state->tot_acked >= state->cwnd) {
         /* If credits accumulated at a higher w, apply them gently now. */

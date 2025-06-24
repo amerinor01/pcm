@@ -87,6 +87,8 @@ int algorithm_main() {
         get_local_state(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE);
     state.retransmit_cnt =
         get_local_state(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT);
+    state.rtt_estim =
+        get_local_state(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM);
     state.cwnd = get_control(SWIFT_CTRL_IDX_CWND);
 
     state.can_decrease = (state.now - state.t_last_decrease) >= state.rtt_estim;
@@ -137,6 +139,7 @@ int algorithm_main() {
     set_local_state(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE,
                     state.t_last_decrease);
     set_local_state(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT, state.retransmit_cnt);
+    set_local_state(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM, state.rtt_estim);
     set_control(SWIFT_CTRL_IDX_CWND, state.cwnd);
 
     return SUCCESS;
