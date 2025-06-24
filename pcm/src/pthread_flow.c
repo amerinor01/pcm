@@ -1,92 +1,6 @@
 #include "pthread_flow.h"
 #include "util.h"
 
-int pthrd_flow_signal_get(const void *ctx, size_t user_index) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    return flow_ctx->signals[user_index];
-}
-
-void pthrd_flow_signal_set(void *ctx, size_t user_index, int val) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    flow_ctx->signals[user_index] = val;
-}
-
-void pthrd_flow_signal_update(void *ctx, size_t user_index, int val) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    flow_ctx->signals[user_index] += val;
-}
-
-int pthrd_flow_control_get(const void *ctx, size_t user_index) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    return flow_ctx->controls[user_index];
-}
-
-void pthrd_flow_control_set(void *ctx, size_t user_index, int val) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    flow_ctx->controls[user_index] = val;
-}
-
-int pthrd_flow_local_state_int_get(const void *ctx, size_t user_index) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    return decode_int(flow_ctx->local_state[user_index]);
-}
-
-void pthrd_flow_local_state_int_set(void *ctx, size_t user_index, int val) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    flow_ctx->local_state[user_index] = encode_int(val);
-}
-
-float pthrd_flow_local_state_float_get(const void *ctx, size_t user_index) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    return decode_float(flow_ctx->local_state[user_index]);
-}
-
-void pthrd_flow_local_state_float_set(void *ctx, size_t user_index, float val) {
-    struct pthrd_flow *flow_ctx =
-        ((struct pthrd_flow *)(((struct flow *)ctx)->backend_ctx));
-    flow_ctx->local_state[user_index] = encode_float(val);
-}
-
-void pthrd_flow_signal_accumulation_op_sum(flow_t *flow,
-                                           const struct signal_attr *attr,
-                                           int signal) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    flow_ctx->signals[attr->metadata.index] += signal;
-}
-
-void pthrd_flow_signal_accumulation_op_last(flow_t *flow,
-                                            const struct signal_attr *attr,
-                                            int signal) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    flow_ctx->signals[attr->metadata.index] = signal;
-}
-
-void pthrd_flow_signal_accumulation_op_min(flow_t *flow,
-                                           const struct signal_attr *attr,
-                                           int signal) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    if (signal < flow_ctx->signals[attr->metadata.index]) {
-        flow_ctx->signals[attr->metadata.index] = signal;
-    }
-}
-
-void pthrd_flow_signal_accumulation_op_max(flow_t *flow,
-                                           const struct signal_attr *attr,
-                                           int signal) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    if (signal > flow_ctx->signals[attr->metadata.index]) {
-        flow_ctx->signals[attr->metadata.index] = signal;
-    }
-}
-
 void pthrd_flow_signal_elapsed_time_accumulation_op(
     flow_t *flow, const struct signal_attr *attr, int signal) {
     (void)signal;
@@ -97,40 +11,6 @@ void pthrd_flow_signal_elapsed_time_accumulation_op(
     }
     flow_ctx->signals[attr->metadata.index] =
         CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts);
-}
-
-bool pthrd_flow_signal_trigger_overflow_check(const flow_t *flow,
-                                              const struct signal_attr *attr) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    int value = flow_ctx->signals[attr->metadata.index];
-    int threshold = flow_ctx->thresholds[attr->metadata.index];
-    if (value >= threshold)
-        return true;
-    return false;
-}
-
-void pthrd_flow_signal_trigger_burst_reset(flow_t *flow,
-                                           const struct signal_attr *attr) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    int burst = flow_ctx->signals[attr->metadata.index];
-    if (burst) {
-        // post reset state of 1 indicates that burst acts as an active trigger
-        flow_ctx->signals[attr->metadata.index] = 1;
-    }
-}
-
-bool pthrd_flow_signal_trigger_burst_check(const flow_t *flow,
-                                           const struct signal_attr *attr) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    int burst = flow_ctx->signals[attr->metadata.index];
-    int threshold = flow_ctx->thresholds[attr->metadata.index];
-    if (burst) {
-        // subtract 1 here to remove the original activation flag
-        if ((burst - 1) >= threshold) {
-            return true;
-        }
-    }
-    return false;
 }
 
 bool pthrd_flow_signal_trigger_timer_check(const flow_t *flow,
@@ -231,6 +111,23 @@ thread_destroy:
     return pthrd_flow_destroy(flow);
 }
 
+PLUGIN_FLOW_SIGNAL_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_SIGNAL_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_TRIGGER_OVERFLOW_CHECK_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_DEFINE(pthrd)
+
 const char *pthrd_flow_plugin_name = "pthread";
 
 struct flow_plugin_ops pthrd_flow_ops = {
@@ -238,26 +135,31 @@ struct flow_plugin_ops pthrd_flow_ops = {
     .control.destroy = pthrd_flow_destroy,
     .control.is_ready = pthrd_flow_is_ready,
 
-    .datapath.burst_check = pthrd_flow_signal_trigger_burst_check,
-    .datapath.burst_reset = pthrd_flow_signal_trigger_burst_reset,
+    .datapath.burst_check = PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_FN(pthrd),
+    .datapath.burst_reset = PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_FN(pthrd),
+    .datapath.last = PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_FN(pthrd),
+    .datapath.max = PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_FN(pthrd),
+    .datapath.min = PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_FN(pthrd),
+    .datapath.sum = PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(pthrd),
+    .datapath.overflow_check =
+        PLUGIN_FLOW_TRIGGER_OVERFLOW_CHECK_GENERIC_FN(pthrd),
     .datapath.elapsed_time = pthrd_flow_signal_elapsed_time_accumulation_op,
-    .datapath.last = pthrd_flow_signal_accumulation_op_last,
-    .datapath.max = pthrd_flow_signal_accumulation_op_max,
-    .datapath.min = pthrd_flow_signal_accumulation_op_min,
-    .datapath.sum = pthrd_flow_signal_accumulation_op_sum,
-    .datapath.overflow_check = pthrd_flow_signal_trigger_overflow_check,
     .datapath.timer_check = pthrd_flow_signal_trigger_timer_check,
     .datapath.timer_reset = pthrd_flow_signal_trigger_timer_reset,
 
-    .handler.control_set = pthrd_flow_control_set,
-    .handler.control_get = pthrd_flow_control_get,
-    .handler.signal_set = pthrd_flow_signal_set,
-    .handler.signal_get = pthrd_flow_signal_get,
-    .handler.signal_update = pthrd_flow_signal_update,
-    .handler.local_state_int_get = pthrd_flow_local_state_int_get,
-    .handler.local_state_int_set = pthrd_flow_local_state_int_set,
-    .handler.local_state_float_get = pthrd_flow_local_state_float_get,
-    .handler.local_state_float_set = pthrd_flow_local_state_float_set};
+    .handler.control_set = PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(pthrd),
+    .handler.control_get = PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(pthrd),
+    .handler.signal_set = PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(pthrd),
+    .handler.signal_get = PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(pthrd),
+    .handler.signal_update = PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(pthrd),
+    .handler.local_state_int_get =
+        PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(pthrd),
+    .handler.local_state_int_set =
+        PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(pthrd),
+    .handler.local_state_float_get =
+        PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(pthrd),
+    .handler.local_state_float_set =
+        PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(pthrd)};
 
 int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     *flow_ops = pthrd_flow_ops;

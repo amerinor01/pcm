@@ -238,4 +238,184 @@ static inline uint64_t encode_int(uint32_t x) {
     return encode_u64(&x, sizeof(x));
 }
 
+#define PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)                         \
+    plugin_name##_flow_signal_get
+#define PLUGIN_FLOW_SIGNAL_GET_GENERIC_DEFINE(plugin_name)                     \
+    int PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)(const void *ctx,        \
+                                                       size_t user_index) {    \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return flow_ctx->signals[user_index];                                  \
+    }
+
+#define PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(plugin_name)                         \
+    plugin_name##_flow_signal_set
+#define PLUGIN_FLOW_SIGNAL_SET_GENERIC_DEFINE(plugin_name)                     \
+    void PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(plugin_name)(                       \
+        void *ctx, size_t user_index, int val) {                               \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        flow_ctx->signals[user_index] = val;                                   \
+    }
+
+#define PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(plugin_name)                      \
+    plugin_name##_flow_signal_update
+#define PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_DEFINE(plugin_name)                  \
+    void PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(plugin_name)(                    \
+        void *ctx, size_t user_index, int val) {                               \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        flow_ctx->signals[user_index] += val;                                  \
+    }
+
+#define PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)                        \
+    plugin_name##_flow_control_get
+#define PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(plugin_name)                    \
+    int plugin_name##_flow_control_get(const void *ctx, size_t user_index) {   \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return flow_ctx->controls[user_index];                                 \
+    }
+
+#define PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(plugin_name)                        \
+    plugin_name##_flow_control_set
+#define PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(plugin_name)                    \
+    void plugin_name##_flow_control_set(void *ctx, size_t user_index,          \
+                                        int val) {                             \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        flow_ctx->controls[user_index] = val;                                  \
+    }
+
+#define PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(plugin_name)                \
+    plugin_name##_flow_local_state_int_get
+#define PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_DEFINE(plugin_name)            \
+    int plugin_name##_flow_local_state_int_get(const void *ctx,                \
+                                               size_t user_index) {            \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return decode_int(flow_ctx->local_state[user_index]);                  \
+    }
+
+#define PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(plugin_name)                \
+    plugin_name##_flow_local_state_int_set
+#define PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_DEFINE(plugin_name)            \
+    void plugin_name##_flow_local_state_int_set(void *ctx, size_t user_index,  \
+                                                int val) {                     \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        flow_ctx->local_state[user_index] = encode_int(val);                   \
+    }
+
+#define PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(plugin_name)              \
+    plugin_name##_flow_local_state_float_get
+#define PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_DEFINE(plugin_name)          \
+    float PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(plugin_name)(           \
+        const void *ctx, size_t user_index) {                                  \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return decode_float(flow_ctx->local_state[user_index]);                \
+    }
+
+#define PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(plugin_name)              \
+    plugin_name##_flow_local_state_float_set
+#define PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_DEFINE(plugin_name)          \
+    void PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(plugin_name)(            \
+        void *ctx, size_t user_index, float val) {                             \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        flow_ctx->local_state[user_index] = encode_float(val);                 \
+    }
+
+#define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(plugin_name)                \
+    plugin_name##_flow_signal_accumulation_op_sum
+#define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(plugin_name)            \
+    void PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(plugin_name)(              \
+        flow_t * flow, const struct signal_attr *attr, int signal) {           \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        flow_ctx->signals[attr->metadata.index] += signal;                     \
+    }
+
+#define PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_FN(plugin_name)               \
+    plugin_name##_flow_signal_accumulation_op_last
+#define PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_DEFINE(plugin_name)           \
+    void PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_FN(plugin_name)(             \
+        flow_t * flow, const struct signal_attr *attr, int signal) {           \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        flow_ctx->signals[attr->metadata.index] = signal;                      \
+    }
+
+#define PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_FN(plugin_name)                \
+    plugin_name##_flow_signal_accumulation_op_min
+#define PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_DEFINE(plugin_name)            \
+    void PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_FN(plugin_name)(              \
+        flow_t * flow, const struct signal_attr *attr, int signal) {           \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        if (signal < flow_ctx->signals[attr->metadata.index]) {                \
+            flow_ctx->signals[attr->metadata.index] = signal;                  \
+        }                                                                      \
+    }
+
+#define PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_FN(plugin_name)                \
+    plugin_name##_flow_signal_accumulation_op_max
+#define PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_DEFINE(plugin_name)            \
+    void PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_FN(plugin_name)(              \
+        flow_t * flow, const struct signal_attr *attr, int signal) {           \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        if (signal > flow_ctx->signals[attr->metadata.index]) {                \
+            flow_ctx->signals[attr->metadata.index] = signal;                  \
+        }                                                                      \
+    }
+
+#define PLUGIN_FLOW_TRIGGER_OVERFLOW_CHECK_GENERIC_FN(plugin_name)             \
+    plugin_name##_flow_trigger_overflow_check
+#define PLUGIN_FLOW_TRIGGER_OVERFLOW_CHECK_GENERIC_DEFINE(plugin_name)         \
+    bool PLUGIN_FLOW_TRIGGER_OVERFLOW_CHECK_GENERIC_FN(plugin_name)(           \
+        const flow_t *flow, const struct signal_attr *attr) {                  \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        int value = flow_ctx->signals[attr->metadata.index];                   \
+        int threshold = flow_ctx->thresholds[attr->metadata.index];            \
+        if (value >= threshold)                                                \
+            return true;                                                       \
+        return false;                                                          \
+    }
+
+/* post reset state of 1 indicates that burst acts as an active
+ * trigger */
+#define PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_FN(plugin_name)                \
+    plugin_name##_flow_trigger_burst_reset
+#define PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_DEFINE(plugin_name)            \
+    void PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_FN(plugin_name)(              \
+        flow_t * flow, const struct signal_attr *attr) {                       \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        int burst = flow_ctx->signals[attr->metadata.index];                   \
+        if (burst) {                                                           \
+            flow_ctx->signals[attr->metadata.index] = 1;                       \
+        }                                                                      \
+    }
+
+#define PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_FN(plugin_name)                \
+    plugin_name##_flow_trigger_burst_check
+/* subtract 1 below to remove the original activation flag */
+#define PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_DEFINE(plugin_name)            \
+    bool PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_FN(plugin_name)(              \
+        const flow_t *flow, const struct signal_attr *attr) {                  \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        int burst = flow_ctx->signals[attr->metadata.index];                   \
+        int threshold = flow_ctx->thresholds[attr->metadata.index];            \
+        if (burst) {                                                           \
+            if ((burst - 1) >= threshold) {                                    \
+                return true;                                                   \
+            }                                                                  \
+        }                                                                      \
+        return false;                                                          \
+    }
+
 #endif /* _UTIL_H_ */
