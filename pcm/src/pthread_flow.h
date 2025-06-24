@@ -18,7 +18,6 @@ struct pthrd_flow {
     struct timespec start_ts;
     pthread_t pthread_obj;
     atomic_bool running;
-    int err;
 };
 
 int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops);
