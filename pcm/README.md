@@ -1,11 +1,11 @@
-# Programmable Congestion Management (PCM) prototype implementation
+# Programmable Congestion Management (PCM) SDK
 
 ![](pcm_arch.png)
 
 ## Project structure
 - `./include` - contains API definitions of PCM and abstract NIC that supports PCM
 - `./src` - contains implementation of the PCM and NIC APIs
-- `./algos` - contains examples of PCM-based congestion control algorithms: NewReno, DCTCP, DCQCN, Swift, SMaRTT
+- `./algorithms` - contains examples of PCM-based congestion control algorithms: NewReno, DCTCP, DCQCN, Swift, SMaRTT
 - `./app` - contains application that runs N synthetic flows served by a given CC algo
 
 ## Running synthetic application

@@ -2,13 +2,13 @@
 ifeq ($(origin CC),default)
 CC = clang
 endif
-CFLAGS = -fPIC -Iinclude -Iapp -Ialgos -Wall -Wextra -O3
+CFLAGS = -fPIC -Iinclude -Iapp -Ialgorithms -Wall -Wextra -O3
 LDFLAGS = -shared
 
 SRCDIR = src
 INCDIR = include
 APPDIR = app
-ALGODIR = algos
+ALGODIR = algorithms
 LIBDIR = lib
 BINDIR = bin
 
