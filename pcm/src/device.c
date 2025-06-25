@@ -1,5 +1,7 @@
 #include <unistd.h>
 
+#include "htsim_flow.h"
+
 #include "impl.h"
 #include "pthread_flow.h"
 #include "util.h"
@@ -26,6 +28,11 @@ int device_init(const char *flow_plugin_name, device_t **out) {
             goto destroy_scheduler;
         }
         needs_progress_thread = true;
+    } else if (!strcmp(htsim_flow_plugin_name, flow_plugin_name)) {
+        if (htsim_flow_ops_init(&device->flow_ops) != SUCCESS) {
+            LOG_CRIT("failed to initialize flow backend %s", flow_plugin_name);
+            goto destroy_scheduler;
+        }
     } else {
         LOG_CRIT("unknown flow backend name %s", flow_plugin_name);
         goto destroy_scheduler;

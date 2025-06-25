@@ -1,67 +1,80 @@
-# Compiler and flags
 ifeq ($(origin CC),default)
-CC = clang
+CC     := clang
 endif
-CFLAGS = -fPIC -Iinclude -Iapp -Ialgorithms -Wall -Wextra -O3 
-LDFLAGS = -shared
 
-SRCDIR = src
-INCDIR = include
-APPDIR = app
-ALGODIR = algorithms
-LIBDIR = lib
-BINDIR = bin
+CFLAGS  := -fPIC -Iinclude -Iapp -Ialgorithms -Wall -Wextra -O3
+LDFLAGS := -shared
 
-# Library sources and objects
+SRCDIR           := src
+INCDIR           := include
+APPDIR           := app
+ALGODIR          := algorithms
+LIBDIR           := lib
+BINDIR           := bin
+
 PCM_LIB_SRCS := $(wildcard $(SRCDIR)/*.c)
-PCM_LIB_OBJS := $(PCM_LIB_SRCS:.c=.o)
+
+HTSIM_ROOT_DIR   ?= ../../HTSIM/sim/
+BUILD_HTSIM_FLOW_PLUGIN ?= 0
+
+ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
+  PCM_LIB_CFLAGS := -DBUILD_HTSIM_FLOW_PLUGIN -I$(HTSIM_ROOT_DIR)
+  PCM_LIB_LDLIBS := -L$(HTSIM_ROOT_DIR) -lhtsim -lstdc++
+else
+  PCM_LIB_CFLAGS :=
+  PCM_LIB_LDLIBS :=
+endif
+
+PCM_LIB_OBJS   := $(PCM_LIB_SRCS:%.c=%.o)
 PCM_LIB_TARGET := $(LIBDIR)/libpcm.so
 
-# Plugin names and targets
 ALGO_PLUGIN_NAMES := reno_accumulated reno_standard dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
 
-# Application target
-APP_OBJS := $(BINDIR)/main.o $(BINDIR)/app_traffic_gen.o
-APP_TARGET := $(BINDIR)/app_main
+APP_OBJS     := $(BINDIR)/main.o $(BINDIR)/app_traffic_gen.o
+APP_TARGET   := $(BINDIR)/app_main
 
 .PHONY: all clean distclean
-
 all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(APP_TARGET)
 
-# Build main library
+# build libpcm.so
 $(PCM_LIB_TARGET): $(PCM_LIB_OBJS)
 	@mkdir -p $(LIBDIR)
-	$(CC) $(LDFLAGS) -o $@ $^
+	$(CC) $(LDFLAGS) $(PCM_LIB_LDLIBS) -o $@ $^
 
-# Compile library .o files (output PCM_LIB_OBJS)
 $(SRCDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(PCM_LIB_CFLAGS) -c $< -o $@
 
-# Build dctcp plugin (requires BUILD_ALGO_DCTCP)
+# build algorithm plugins: lib<algoname>.so
 $(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
+<<<<<<< HEAD
 	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) -o $@ $(ALGODIR)/dctcp.c -L$(LIBDIR) -lpcm -lm
+=======
+	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) \
+	    -o $@ $< -L$(LIBDIR) -lpcm
+>>>>>>> 4114757 (add htsim flow plugin)
 
-# Build other algorithm plugins
 $(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
+<<<<<<< HEAD
 	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $(ALGODIR)/$*.c -L$(LIBDIR) -lpcm -lm
+=======
+	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) \
+	    -o $@ $< -L$(LIBDIR) -lpcm
+>>>>>>> 4114757 (add htsim flow plugin)
 
-# Compile main application objects
+# build the app_main
 $(BINDIR)/%.o: $(APPDIR)/%.c
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-# Link application
 $(APP_TARGET): $(APP_OBJS)
 	@mkdir -p $(BINDIR)
 	$(CC) $^ -L$(LIBDIR) -lpcm -o $@
 
-# Remove build artifacts
 clean:
 	rm -f $(PCM_LIB_OBJS) $(ALGO_PLUGIN_LIBS) $(APP_OBJS) $(APP_TARGET)
 
-# Remove everything (including directories)
 distclean: clean
 	rm -rf $(LIBDIR) $(BINDIR)

@@ -1,53 +1,6 @@
 #include "pthread_flow.h"
 #include "util.h"
 
-void pthrd_flow_signal_elapsed_time_accumulation_op(
-    flow_t *flow, const struct signal_attr *attr, int signal) {
-    (void)signal;
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    struct timespec now_ts;
-    if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
-        LOG_FATAL("clock_gettime failed");
-    }
-    flow_ctx->signals[attr->metadata.index] =
-        CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts);
-}
-
-bool pthrd_flow_signal_trigger_timer_check(const flow_t *flow,
-                                           const struct signal_attr *attr) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    int timer = flow_ctx->signals[attr->metadata.index];
-    int threshold = flow_ctx->thresholds[attr->metadata.index];
-    if (timer) {
-        struct timespec now_ts;
-        if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
-            LOG_FATAL("clock_gettime failed");
-        }
-        if (CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts) - timer >=
-            threshold) {
-            LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d",
-                    (int)CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts),
-                    timer, threshold);
-            return true;
-        }
-    }
-    return false;
-}
-
-void pthrd_flow_signal_trigger_timer_reset(flow_t *flow,
-                                           const struct signal_attr *attr) {
-    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
-    int timer = flow_ctx->signals[attr->metadata.index];
-    if (timer) {
-        struct timespec now_ts;
-        if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
-            LOG_FATAL("clock_gettime failed");
-        }
-        flow_ctx->signals[attr->metadata.index] =
-            CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts);
-    }
-}
-
 bool pthrd_flow_is_ready(const flow_t *flow) {
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
     return flow_ctx->running;
@@ -127,6 +80,12 @@ PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_TRIGGER_OVERFLOW_CHECK_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_SIGNAL_ELAPSED_TIME_ACCUMULATION_OP_GENERIC_DEFINE(
+    pthrd, clock_gettime_now, clock_gettime_ts_diff_us_get)
+PLUGIN_FLOW_TRIGGER_TIMER_CHECK_GENERIC_DEFINE(pthrd, clock_gettime_now,
+                                               clock_gettime_ts_diff_us_get)
+PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_DEFINE(pthrd, clock_gettime_now,
+                                               clock_gettime_ts_diff_us_get)
 
 const char *pthrd_flow_plugin_name = "pthread";
 
@@ -143,9 +102,10 @@ struct flow_plugin_ops pthrd_flow_ops = {
     .datapath.sum = PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(pthrd),
     .datapath.overflow_check =
         PLUGIN_FLOW_TRIGGER_OVERFLOW_CHECK_GENERIC_FN(pthrd),
-    .datapath.elapsed_time = pthrd_flow_signal_elapsed_time_accumulation_op,
-    .datapath.timer_check = pthrd_flow_signal_trigger_timer_check,
-    .datapath.timer_reset = pthrd_flow_signal_trigger_timer_reset,
+    .datapath.elapsed_time =
+        PLUGIN_FLOW_SIGNAL_ELAPSED_TIME_ACCUMULATION_OP_GENERIC_FN(pthrd),
+    .datapath.timer_check = PLUGIN_FLOW_TRIGGER_TIMER_CHECK_GENERIC_FN(pthrd),
+    .datapath.timer_reset = PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_FN(pthrd),
 
     .handler.control_set = PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(pthrd),
     .handler.control_get = PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(pthrd),
