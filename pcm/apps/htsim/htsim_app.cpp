@@ -20,7 +20,7 @@
 #include "pipe.h"
 #include "shortflows.h"
 #include "topology.h"
-#include "uec.h"
+#include "htsim_pcm_src.hpp"
 #include <filesystem>
 // #include "vl2_topology.h"
 
@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
     queue_type queue_choice = COMPOSITE;
     bool ignore_ecn_data = true;
     bool ignore_ecn_ack = true;
-    UecSrc::set_fast_drop(false);
+    PcmSrc::set_fast_drop(false);
     bool do_jitter = false;
     bool do_exponential_gain = false;
     bool use_fast_increase = false;
@@ -187,18 +187,18 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-use_mixed")) {
             use_mixed = atoi(argv[i + 1]);
-            // UecSrc::set_use_mixed(use_mixed);
+            // PcmSrc::set_use_mixed(use_mixed);
             CompositeQueue::set_use_mixed(use_mixed);
             printf("UseMixed: %d\n", use_mixed);
             i++;
         } else if (!strcmp(argv[i], "-once_per_rtt")) {
             once_per_rtt = atoi(argv[i + 1]);
-            UecSrc::set_once_per_rtt(once_per_rtt);
+            PcmSrc::set_once_per_rtt(once_per_rtt);
             printf("OnceRTTDecrease: %d\n", once_per_rtt);
             i++;
         } else if (!strcmp(argv[i], "-stop_pacing_after_rtt")) {
             stop_pacing_after_rtt = atoi(argv[i + 1]);
-            UecSrc::set_stop_pacing(stop_pacing_after_rtt);
+            PcmSrc::set_stop_pacing(stop_pacing_after_rtt);
             i++;
         } else if (!strcmp(argv[i], "-linkspeed")) {
             // linkspeed specified is in Mbps
@@ -213,21 +213,21 @@ int main(int argc, char **argv) {
             kmin = atoi(argv[i + 1]);
             printf("KMin: %d\n", atoi(argv[i + 1]));
             CompositeQueue::set_kMin(kmin);
-            UecSrc::set_kmin(kmin / 100.0);
+            PcmSrc::set_kmin(kmin / 100.0);
             i++;
         } else if (!strcmp(argv[i], "-k")) {
             fat_tree_k = atoi(argv[i + 1]);
             i++;
         } else if (!strcmp(argv[i], "-ratio_os_stage_1")) {
             ratio_os_stage_1 = atoi(argv[i + 1]);
-            UecSrc::set_os_ratio_stage_1(ratio_os_stage_1);
+            PcmSrc::set_os_ratio_stage_1(ratio_os_stage_1);
             i++;
         } else if (!strcmp(argv[i], "-kmax")) {
             // kmin as percentage of queue size (0..100)
             kmax = atoi(argv[i + 1]);
             printf("KMax: %d\n", atoi(argv[i + 1]));
             CompositeQueue::set_kMax(kmax);
-            UecSrc::set_kmax(kmax / 100.0);
+            PcmSrc::set_kmax(kmax / 100.0);
             i++;
         } else if (!strcmp(argv[i], "-pfc_marking")) {
             pfc_marking = atoi(argv[i + 1]);
@@ -247,30 +247,30 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-disable_case_3")) {
             disable_case_3 = atoi(argv[i + 1]);
-            UecSrc::set_disable_case_3(disable_case_3);
+            PcmSrc::set_disable_case_3(disable_case_3);
             printf("DisableCase3: %d\n", disable_case_3);
             i++;
         } else if (!strcmp(argv[i], "-jump_to")) {
-            UecSrc::jump_to = atoi(argv[i + 1]);
+            PcmSrc::jump_to = atoi(argv[i + 1]);
             i++;
         } else if (!strcmp(argv[i], "-reaction_delay")) {
             reaction_delay = atoi(argv[i + 1]);
-            UecSrc::set_reaction_delay(reaction_delay);
+            PcmSrc::set_reaction_delay(reaction_delay);
             printf("ReactionDelay: %d\n", reaction_delay);
             i++;
         } else if (!strcmp(argv[i], "-precision_ts")) {
             precision_ts = atoi(argv[i + 1]);
             FatTreeSwitch::set_precision_ts(precision_ts * 1000);
-            UecSrc::set_precision_ts(precision_ts * 1000);
+            PcmSrc::set_precision_ts(precision_ts * 1000);
             printf("Precision: %d\n", precision_ts * 1000);
             i++;
         } else if (!strcmp(argv[i], "-disable_case_4")) {
             disable_case_4 = atoi(argv[i + 1]);
-            UecSrc::set_disable_case_4(disable_case_4);
+            PcmSrc::set_disable_case_4(disable_case_4);
             printf("DisableCase4: %d\n", disable_case_4);
             i++;
         } else if (!strcmp(argv[i], "-stop_after_quick")) {
-            UecSrc::set_stop_after_quick(true);
+            PcmSrc::set_stop_after_quick(true);
             printf("StopAfterQuick: %d\n", true);
 
         } else if (!strcmp(argv[i], "-number_entropies")) {
@@ -291,14 +291,14 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-pacing_delay")) {
             pacing_delay = atoi(argv[i + 1]);
-            UecSrc::set_pacing_delay(pacing_delay);
+            PcmSrc::set_pacing_delay(pacing_delay);
             i++;
         } else if (!strcmp(argv[i], "-use_pacing")) {
             use_pacing = atoi(argv[i + 1]);
-            UecSrc::set_use_pacing(use_pacing);
+            PcmSrc::set_use_pacing(use_pacing);
             i++;
         } else if (!strcmp(argv[i], "-fast_drop")) {
-            UecSrc::set_fast_drop(atoi(argv[i + 1]));
+            PcmSrc::set_fast_drop(atoi(argv[i + 1]));
             printf("FastDrop: %d\n", atoi(argv[i + 1]));
             i++;
         } else if (!strcmp(argv[i], "-seed")) {
@@ -323,37 +323,37 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-do_jitter")) {
             do_jitter = atoi(argv[i + 1]);
-            UecSrc::set_do_jitter(do_jitter);
+            PcmSrc::set_do_jitter(do_jitter);
             printf("DoJitter: %d\n", do_jitter);
             i++;
         } else if (!strcmp(argv[i], "-do_exponential_gain")) {
             do_exponential_gain = atoi(argv[i + 1]);
-            UecSrc::set_do_exponential_gain(do_exponential_gain);
+            PcmSrc::set_do_exponential_gain(do_exponential_gain);
             printf("DoExpGain: %d\n", do_exponential_gain);
             i++;
         } else if (!strcmp(argv[i], "-use_fast_increase")) {
             use_fast_increase = atoi(argv[i + 1]);
-            UecSrc::set_use_fast_increase(use_fast_increase);
+            PcmSrc::set_use_fast_increase(use_fast_increase);
             printf("FastIncrease: %d\n", use_fast_increase);
             i++;
         } else if (!strcmp(argv[i], "-use_super_fast_increase")) {
             use_super_fast_increase = atoi(argv[i + 1]);
-            UecSrc::set_use_super_fast_increase(use_super_fast_increase);
+            PcmSrc::set_use_super_fast_increase(use_super_fast_increase);
             printf("FastIncreaseSuper: %d\n", use_super_fast_increase);
             i++;
         } else if (!strcmp(argv[i], "-gain_value_med_inc")) {
             gain_value_med_inc = std::stod(argv[i + 1]);
-            // UecSrc::set_gain_value_med_inc(gain_value_med_inc);
+            // PcmSrc::set_gain_value_med_inc(gain_value_med_inc);
             printf("GainValueMedIncrease: %f\n", gain_value_med_inc);
             i++;
         } else if (!strcmp(argv[i], "-jitter_value_med_inc")) {
             jitter_value_med_inc = std::stod(argv[i + 1]);
-            // UecSrc::set_jitter_value_med_inc(jitter_value_med_inc);
+            // PcmSrc::set_jitter_value_med_inc(jitter_value_med_inc);
             printf("JitterValue: %f\n", jitter_value_med_inc);
             i++;
         } else if (!strcmp(argv[i], "-decrease_on_nack")) {
             double decrease_on_nack = std::stod(argv[i + 1]);
-            UecSrc::set_decrease_on_nack(decrease_on_nack);
+            PcmSrc::set_decrease_on_nack(decrease_on_nack);
             i++;
         } else if (!strcmp(argv[i], "-phantom_in_series")) {
             CompositeQueue::set_use_phantom_in_series();
@@ -364,7 +364,7 @@ int main(int argc, char **argv) {
             printf("PhantomUseBothForECNMarking: %d\n", 1);
         } else if (!strcmp(argv[i], "-delay_gain_value_med_inc")) {
             delay_gain_value_med_inc = std::stod(argv[i + 1]);
-            // UecSrc::set_delay_gain_value_med_inc(delay_gain_value_med_inc);
+            // PcmSrc::set_delay_gain_value_med_inc(delay_gain_value_med_inc);
             printf("DelayGainValue: %f\n", delay_gain_value_med_inc);
             i++;
         } else if (!strcmp(argv[i], "-tm")) {
@@ -373,7 +373,7 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-target_rtt_percentage_over_base")) {
             target_rtt_percentage_over_base = atoi(argv[i + 1]);
-            UecSrc::set_target_rtt_percentage_over_base(target_rtt_percentage_over_base);
+            PcmSrc::set_target_rtt_percentage_over_base(target_rtt_percentage_over_base);
             printf("TargetRTT: %d\n", target_rtt_percentage_over_base);
             i++;
         } else if (!strcmp(argv[i], "-num_failed_links")) {
@@ -381,26 +381,26 @@ int main(int argc, char **argv) {
             FatTreeTopology::set_failed_links(num_failed_links);
             i++;
         } else if (!strcmp(argv[i], "-fast_drop_rtt")) {
-            UecSrc::set_fast_drop_rtt(atoi(argv[i + 1]));
+            PcmSrc::set_fast_drop_rtt(atoi(argv[i + 1]));
             i++;
         } else if (!strcmp(argv[i], "-y_gain")) {
             y_gain = std::stod(argv[i + 1]);
-            UecSrc::set_y_gain(y_gain);
+            PcmSrc::set_y_gain(y_gain);
             printf("YGain: %f\n", y_gain);
             i++;
         } else if (!strcmp(argv[i], "-x_gain")) {
             x_gain = std::stod(argv[i + 1]);
-            UecSrc::set_x_gain(x_gain);
+            PcmSrc::set_x_gain(x_gain);
             printf("XGain: %f\n", x_gain);
             i++;
         } else if (!strcmp(argv[i], "-z_gain")) {
             z_gain = std::stod(argv[i + 1]);
-            UecSrc::set_z_gain(z_gain);
+            PcmSrc::set_z_gain(z_gain);
             printf("ZGain: %f\n", z_gain);
             i++;
         } else if (!strcmp(argv[i], "-w_gain")) {
             w_gain = std::stod(argv[i + 1]);
-            UecSrc::set_w_gain(w_gain);
+            PcmSrc::set_w_gain(w_gain);
             printf("WGain: %f\n", w_gain);
             i++;
         } else if (!strcmp(argv[i], "-starting_cwnd_ratio")) {
@@ -419,12 +419,12 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-explicit_base_rtt")) {
             explicit_base_rtt = ((uint64_t)atoi(argv[i + 1])) * 1000;
             printf("BaseRTTForced: %d\n", explicit_base_rtt);
-            UecSrc::set_explicit_rtt(explicit_base_rtt);
+            PcmSrc::set_explicit_rtt(explicit_base_rtt);
             i++;
         } else if (!strcmp(argv[i], "-explicit_target_rtt")) {
             explicit_target_rtt = ((uint64_t)atoi(argv[i + 1])) * 1000;
             printf("TargetRTTForced: %lu\n", explicit_target_rtt);
-            UecSrc::set_explicit_target_rtt(explicit_target_rtt);
+            PcmSrc::set_explicit_target_rtt(explicit_target_rtt);
             i++;
         } else if (!strcmp(argv[i], "-queue_size_ratio")) {
             queue_size_ratio = std::stod(argv[i + 1]);
@@ -432,12 +432,12 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-bonus_drop")) {
             bonus_drop = std::stod(argv[i + 1]);
-            UecSrc::set_bonus_drop(bonus_drop);
+            PcmSrc::set_bonus_drop(bonus_drop);
             printf("BonusDrop: %f\n", bonus_drop);
             i++;
         } else if (!strcmp(argv[i], "-drop_value_buffer")) {
             drop_value_buffer = std::stod(argv[i + 1]);
-            UecSrc::set_buffer_drop(drop_value_buffer);
+            PcmSrc::set_buffer_drop(drop_value_buffer);
             printf("BufferDrop: %f\n", drop_value_buffer);
             i++;
         } else if (!strcmp(argv[i], "-goal")) {
@@ -451,27 +451,27 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-use_exp_avg_ecn")) {
             use_exp_avg_ecn = atoi(argv[i + 1]);
             printf("UseExpAvgEcn: %d\n", use_exp_avg_ecn);
-            UecSrc::set_exp_avg_ecn(use_exp_avg_ecn);
+            PcmSrc::set_exp_avg_ecn(use_exp_avg_ecn);
             i++;
         } else if (!strcmp(argv[i], "-use_exp_avg_rtt")) {
             use_exp_avg_rtt = atoi(argv[i + 1]);
             printf("UseExpAvgRtt: %d\n", use_exp_avg_rtt);
-            UecSrc::set_exp_avg_rtt(use_exp_avg_rtt);
+            PcmSrc::set_exp_avg_rtt(use_exp_avg_rtt);
             i++;
         } else if (!strcmp(argv[i], "-exp_avg_rtt_value")) {
             exp_avg_rtt_value = std::stod(argv[i + 1]);
             printf("UseExpAvgRttValue: %d\n", exp_avg_rtt_value);
-            UecSrc::set_exp_avg_rtt_value(exp_avg_rtt_value);
+            PcmSrc::set_exp_avg_rtt_value(exp_avg_rtt_value);
             i++;
         } else if (!strcmp(argv[i], "-exp_avg_ecn_value")) {
             exp_avg_ecn_value = std::stod(argv[i + 1]);
             printf("UseExpAvgecn_value: %d\n", exp_avg_ecn_value);
-            UecSrc::set_exp_avg_ecn_value(exp_avg_ecn_value);
+            PcmSrc::set_exp_avg_ecn_value(exp_avg_ecn_value);
             i++;
         } else if (!strcmp(argv[i], "-exp_avg_alpha")) {
             exp_avg_alpha = std::stod(argv[i + 1]);
             printf("UseExpAvgalpha: %d\n", exp_avg_alpha);
-            UecSrc::set_exp_avg_alpha(exp_avg_alpha);
+            PcmSrc::set_exp_avg_alpha(exp_avg_alpha);
             i++;
         } else if (!strcmp(argv[i], "-phantom_size")) {
             phantom_size = atoi(argv[i + 1]);
@@ -520,61 +520,61 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-queue_type")) {
             if (!strcmp(argv[i + 1], "composite")) {
                 queue_choice = COMPOSITE;
-                UecSrc::set_queue_type("composite");
+                PcmSrc::set_queue_type("composite");
             } else if (!strcmp(argv[i + 1], "composite_bts")) {
                 queue_choice = COMPOSITE_BTS;
-                UecSrc::set_queue_type("composite_bts");
+                PcmSrc::set_queue_type("composite_bts");
                 printf("Name Running: UEC BTS\n");
             } else if (!strcmp(argv[i + 1], "lossless_input")) {
                 queue_choice = LOSSLESS_INPUT;
-                UecSrc::set_queue_type("lossless_input");
+                PcmSrc::set_queue_type("lossless_input");
                 printf("Name Running: UEC Queueless\n");
             }
             i++;
         } else if (!strcmp(argv[i], "-algorithm")) {
             if (!strcmp(argv[i + 1], "delayA")) {
-                UecSrc::set_alogirthm("delayA");
+                PcmSrc::set_alogirthm("delayA");
                 printf("Name Running: UEC Version A\n");
             } else if (!strcmp(argv[i + 1], "smartt")) {
-                UecSrc::set_alogirthm("smartt");
+                PcmSrc::set_alogirthm("smartt");
                 printf("Name Running: SMaRTT\n");
             } else if (!strcmp(argv[i + 1], "mprdma")) {
-                UecSrc::set_alogirthm("mprdma");
+                PcmSrc::set_alogirthm("mprdma");
                 printf("Name Running: SMaRTT Per RTT\n");
             } else if (!strcmp(argv[i + 1], "delayC")) {
-                UecSrc::set_alogirthm("delayC");
+                PcmSrc::set_alogirthm("delayC");
             } else if (!strcmp(argv[i + 1], "delayD")) {
-                UecSrc::set_alogirthm("delayD");
+                PcmSrc::set_alogirthm("delayD");
                 printf("Name Running: STrack\n");
             } else if (!strcmp(argv[i + 1], "standard_trimming")) {
-                UecSrc::set_alogirthm("standard_trimming");
+                PcmSrc::set_alogirthm("standard_trimming");
                 printf("Name Running: UEC Version D\n");
             } else if (!strcmp(argv[i + 1], "rtt")) {
-                UecSrc::set_alogirthm("rtt");
+                PcmSrc::set_alogirthm("rtt");
                 printf("Name Running: SMaRTT RTT Only\n");
             } else if (!strcmp(argv[i + 1], "ecn")) {
-                UecSrc::set_alogirthm("ecn");
+                PcmSrc::set_alogirthm("ecn");
                 printf("Name Running: SMaRTT ECN Only Constant\n");
             } else if (!strcmp(argv[i + 1], "custom")) {
-                UecSrc::set_alogirthm("custom");
+                PcmSrc::set_alogirthm("custom");
                 printf("Name Running: SMaRTT ECN Only Variable\n");
             } else if (!strcmp(argv[i + 1], "intersmartt")) {
-                UecSrc::set_alogirthm("intersmartt");
+                PcmSrc::set_alogirthm("intersmartt");
                 printf("Name Running: SMaRTT InterDataCenter\n");
             } else if (!strcmp(argv[i + 1], "intersmartt_new")) {
-                UecSrc::set_alogirthm("intersmartt_new");
+                PcmSrc::set_alogirthm("intersmartt_new");
                 printf("Name Running: SMaRTT InterDataCenter\n");
             } else if (!strcmp(argv[i + 1], "intersmartt_simple")) {
-                UecSrc::set_alogirthm("intersmartt_simple");
+                PcmSrc::set_alogirthm("intersmartt_simple");
                 printf("Name Running: SMaRTT InterDataCenter\n");
             } else if (!strcmp(argv[i + 1], "intersmartt")) {
-                UecSrc::set_alogirthm("intersmartt");
+                PcmSrc::set_alogirthm("intersmartt");
                 printf("Name Running: SMaRTT InterDataCenter\n");
             } else if (!strcmp(argv[i + 1], "intersmartt_composed")) {
-                UecSrc::set_alogirthm("intersmartt_composed");
+                PcmSrc::set_alogirthm("intersmartt_composed");
                 printf("Name Running: SMaRTT InterDataCenter\n");
             } else if (!strcmp(argv[i + 1], "smartt_2")) {
-                UecSrc::set_alogirthm("smartt_2");
+                PcmSrc::set_alogirthm("smartt_2");
                 printf("Name Running: SMaRTT smartt_2\n");
             } else {
                 printf("Wrong Algorithm Name\n");
@@ -609,7 +609,7 @@ int main(int argc, char **argv) {
         LosslessInputQueue::_low_threshold = Packet::data_packet_size() * 25;
         LosslessInputQueue::_mark_pfc_amount = pfc_marking;
     }
-    UecSrc::set_quickadapt_lossless_rtt(quickadapt_lossless_rtt);
+    PcmSrc::set_quickadapt_lossless_rtt(quickadapt_lossless_rtt);
 
     // Routing
     // float ar_sticky_delta = 10;
@@ -648,13 +648,13 @@ int main(int argc, char **argv) {
     }
     if (explicit_starting_cwnd != 0) {
         actual_starting_cwnd = explicit_starting_cwnd;
-        UecSrc::set_explicit_bdp(explicit_bdp);
+        PcmSrc::set_explicit_bdp(explicit_bdp);
     }
 
-    UecSrc::set_starting_cwnd(actual_starting_cwnd);
+    PcmSrc::set_starting_cwnd(actual_starting_cwnd);
     if (max_queue_size != 0) {
         queuesize = max_queue_size;
-        UecSrc::set_switch_queue_size(max_queue_size);
+        PcmSrc::set_switch_queue_size(max_queue_size);
     }
 
     printf("Using BDP of %lu - Queue is %lld - Starting Window is %lu - RTT "
@@ -683,16 +683,16 @@ int main(int argc, char **argv) {
 
     logfile.setStartTime(timeFromSec(0));
 
-    // UecLoggerSimple uecLogger;
-    // logfile.addLogger(uecLogger);
+    // PcmLoggerSimple pcmLogger;
+    // logfile.addLogger(pcmLogger);
     TrafficLoggerSimple traffic_logger = TrafficLoggerSimple();
     logfile.addLogger(traffic_logger);
 
-    // UecSrc *uecSrc;
-    // UecSink *uecSink;
+    // PcmSrc *pcmSrc;
+    // PcmSink *pcmSink;
 
-    UecSrc::setRouteStrategy(route_strategy);
-    UecSink::setRouteStrategy(route_strategy);
+    PcmSrc::setRouteStrategy(route_strategy);
+    PcmSink::setRouteStrategy(route_strategy);
 
     // Route *routeout, *routein;
     // double extrastarttime;
@@ -774,10 +774,10 @@ int main(int argc, char **argv) {
         } else {
             if (interdc_delay != 0) {
                 FatTreeInterDCTopology::set_interdc_delay(interdc_delay);
-                UecSrc::set_interdc_delay(interdc_delay);
+                PcmSrc::set_interdc_delay(interdc_delay);
             } else {
                 FatTreeInterDCTopology::set_interdc_delay(hop_latency);
-                UecSrc::set_interdc_delay(hop_latency);
+                PcmSrc::set_interdc_delay(hop_latency);
             }
             FatTreeInterDCTopology::set_tiers(3);
             FatTreeInterDCTopology::set_os_stage_2(fat_tree_k);
@@ -805,9 +805,9 @@ int main(int argc, char **argv) {
 
         map<flowid_t, TriggerTarget *> flowmap;
         vector<connection *> *all_conns = conns->getAllConnections();
-        vector<UecSrc *> uec_srcs;
-        UecSrc *uecSrc;
-        UecSink *uecSnk;
+        vector<PcmSrc *> pcm_srcs;
+        PcmSrc *pcmSrc;
+        PcmSink *pcmSnk;
 
         for (size_t c = 0; c < all_conns->size(); c++) {
             connection *crt = all_conns->at(c);
@@ -832,54 +832,54 @@ int main(int argc, char **argv) {
                 actual_starting_cwnd = bdp_local * starting_cwnd_ratio;
             }
 
-            UecSrc::set_starting_cwnd(actual_starting_cwnd * 2);
+            PcmSrc::set_starting_cwnd(actual_starting_cwnd * 2);
             printf("Setting CWND to %lu\n", actual_starting_cwnd);
 
             printf("Using BDP of %lu - Queue is %lld - Starting Window is %lu\n", bdp_local, queuesize,
                    actual_starting_cwnd);
 
-            uecSrc = new UecSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6);
+            pcmSrc = new PcmSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6);
 
-            uecSrc->setNumberEntropies(256);
-            uec_srcs.push_back(uecSrc);
-            uecSrc->set_dst(dest);
+            pcmSrc->setNumberEntropies(256);
+            pcm_srcs.push_back(pcmSrc);
+            pcmSrc->set_dst(dest);
             printf("Reaching here\n");
             if (crt->flowid) {
-                uecSrc->set_flowid(crt->flowid);
+                pcmSrc->set_flowid(crt->flowid);
                 assert(flowmap.find(crt->flowid) == flowmap.end()); // don't have dups
-                flowmap[crt->flowid] = uecSrc;
+                flowmap[crt->flowid] = pcmSrc;
             }
 
             if (crt->size > 0) {
-                uecSrc->setFlowSize(crt->size);
+                pcmSrc->setFlowSize(crt->size);
             }
 
             if (crt->trigger) {
                 Trigger *trig = conns->getTrigger(crt->trigger, eventlist);
-                trig->add_target(*uecSrc);
+                trig->add_target(*pcmSrc);
             }
             if (crt->send_done_trigger) {
                 Trigger *trig = conns->getTrigger(crt->send_done_trigger, eventlist);
-                uecSrc->set_end_trigger(*trig);
+                pcmSrc->set_end_trigger(*trig);
             }
 
-            uecSnk = new UecSink();
+            pcmSnk = new PcmSink();
 
-            uecSrc->setName("uec_" + ntoa(src) + "_" + ntoa(dest));
+            pcmSrc->setName("pcm_" + ntoa(src) + "_" + ntoa(dest));
 
-            cout << "uec_" + ntoa(src) + "_" + ntoa(dest) << endl;
-            logfile.writeName(*uecSrc);
+            cout << "pcm_" + ntoa(src) + "_" + ntoa(dest) << endl;
+            logfile.writeName(*pcmSrc);
 
-            uecSnk->set_src(src);
+            pcmSnk->set_src(src);
 
-            uecSnk->setName("uec_sink_" + ntoa(src) + "_" + ntoa(dest));
-            logfile.writeName(*uecSnk);
+            pcmSnk->setName("pcm_sink_" + ntoa(src) + "_" + ntoa(dest));
+            logfile.writeName(*pcmSnk);
             if (crt->recv_done_trigger) {
                 Trigger *trig = conns->getTrigger(crt->recv_done_trigger, eventlist);
-                uecSnk->set_end_trigger(*trig);
+                pcmSnk->set_end_trigger(*trig);
             }
 
-            // uecRtxScanner->registerUec(*uecSrc);
+            // pcmRtxScanner->registerPcm(*pcmSrc);
 
             switch (route_strategy) {
             case ECMP_FIB:
@@ -901,9 +901,9 @@ int main(int argc, char **argv) {
                 } else if (top_dc != NULL) {
                     int idx_dc = top_dc->get_dc_id(src);
                     int idx_dc_to = top_dc->get_dc_id(dest);
-                    uecSrc->src_dc = top_dc->get_dc_id(src);
-                    uecSrc->dest_dc = top_dc->get_dc_id(dest);
-                    uecSrc->updateParams();
+                    pcmSrc->src_dc = top_dc->get_dc_id(src);
+                    pcmSrc->dest_dc = top_dc->get_dc_id(dest);
+                    pcmSrc->updateParams();
 
                     printf("Source in Datacenter %d - Dest in Datacenter %d\n", idx_dc, idx_dc_to);
 
@@ -924,25 +924,25 @@ int main(int argc, char **argv) {
                                                                      ->getRemoteEndpoint());
                 }
 
-                uecSrc->from = src;
-                uecSnk->to = dest;
-                uecSrc->connect(srctotor, dsttotor, *uecSnk, crt->start);
-                uecSrc->set_paths(number_entropies);
-                uecSnk->set_paths(number_entropies);
+                pcmSrc->from = src;
+                pcmSnk->to = dest;
+                pcmSrc->connect(srctotor, dsttotor, *pcmSnk, crt->start);
+                pcmSrc->set_paths(number_entropies);
+                pcmSnk->set_paths(number_entropies);
 
                 // register src and snk to receive packets src their respective
                 // TORs.
                 if (top != NULL) {
-                    top->switches_lp[top->HOST_POD_SWITCH(src)]->addHostPort(src, uecSrc->flow_id(), uecSrc);
-                    top->switches_lp[top->HOST_POD_SWITCH(dest)]->addHostPort(dest, uecSrc->flow_id(), uecSnk);
+                    top->switches_lp[top->HOST_POD_SWITCH(src)]->addHostPort(src, pcmSrc->flow_id(), pcmSrc);
+                    top->switches_lp[top->HOST_POD_SWITCH(dest)]->addHostPort(dest, pcmSrc->flow_id(), pcmSnk);
                 } else {
                     int idx_dc = top_dc->get_dc_id(src);
                     int idx_dc_to = top_dc->get_dc_id(dest);
 
                     top_dc->switches_lp[idx_dc][top_dc->HOST_POD_SWITCH(src % top_dc->no_of_nodes())]->addHostPort(
-                            src % top_dc->no_of_nodes(), uecSrc->flow_id(), uecSrc);
+                            src % top_dc->no_of_nodes(), pcmSrc->flow_id(), pcmSrc);
                     top_dc->switches_lp[idx_dc_to][top_dc->HOST_POD_SWITCH(dest % top_dc->no_of_nodes())]->addHostPort(
-                            dest % top_dc->no_of_nodes(), uecSrc->flow_id(), uecSnk);
+                            dest % top_dc->no_of_nodes(), pcmSrc->flow_id(), pcmSnk);
                 }
                 break;
             }
@@ -960,8 +960,8 @@ int main(int argc, char **argv) {
         while (eventlist.doNextEvent()) {
         }
 
-        for (std::size_t i = 0; i < uec_srcs.size(); ++i) {
-            delete uec_srcs[i];
+        for (std::size_t i = 0; i < pcm_srcs.size(); ++i) {
+            delete pcm_srcs[i];
         }
 
     } else if (goal_filename.size() > 0) {
@@ -981,10 +981,10 @@ int main(int argc, char **argv) {
         } else {
             if (interdc_delay != 0) {
                 FatTreeInterDCTopology::set_interdc_delay(interdc_delay);
-                UecSrc::set_interdc_delay(interdc_delay);
+                PcmSrc::set_interdc_delay(interdc_delay);
             } else {
                 FatTreeInterDCTopology::set_interdc_delay(hop_latency);
-                UecSrc::set_interdc_delay(hop_latency);
+                PcmSrc::set_interdc_delay(hop_latency);
             }
             FatTreeInterDCTopology::set_tiers(3);
             FatTreeInterDCTopology::set_os_stage_2(fat_tree_k);

@@ -5,7 +5,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#include "impl.h"
+#include "../impl.h"
 
 extern const char *htsim_flow_plugin_name;
 

@@ -1,6 +1,6 @@
 #include <unistd.h>
 
-#include "htsim_flow.h"
+#include "htsim/htsim_flow.h"
 
 #include "impl.h"
 #include "pthread_flow.h"

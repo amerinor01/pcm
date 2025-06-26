@@ -6,7 +6,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "network.h"
+#include "pcm_network.h"
 #include "pcm.h"
 #include "slist.h"
 

@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #include "traffic_gen.h"
-#include "network.h"
+#include "pcm_network.h"
 #include "pcm.h"
 
 // Flow thread: emulate constant bandwidth, drops, NACKs, RTOs

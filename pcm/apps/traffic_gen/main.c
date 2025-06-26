@@ -8,7 +8,7 @@
 #include "traffic_gen.h"
 #include "dcqcn.h"
 #include "fabric_params.h"
-#include "network.h"
+#include "pcm_network.h"
 #include "pcm.h"
 #include "smartt.h"
 #include "swift.h"

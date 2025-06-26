@@ -1,7 +1,7 @@
 #include "htsim_flow.h"
-#include "util.h"
+#include "../util.h"
 #ifdef BUILD_HTSIM_FLOW_PLUGIN
-#include "pcm_time_wrapper_c.h"
+#include "htsim_pcm_time_wrapper_c.h"
 #endif
 
 const char *htsim_flow_plugin_name = "htsim";

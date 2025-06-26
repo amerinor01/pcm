@@ -4,27 +4,39 @@ CXX    := clang++
 endif
 
 CFLAGS  := -fPIC -Iinclude -Iapp -Ialgorithms -Wall -Wextra -O3
+CXXFLAGS := $(CFLAGS) -std=c++17
 LDFLAGS := -shared
 
-SRCDIR := src
-INCDIR := include
-ALGODIR := algorithms
-LIBDIR := lib
-BINDIR := bin
-APPSDIR := apps
+SRCDIR           := src
+HTSIM_SUBDIR     := $(SRCDIR)/htsim
+INCDIR           := include
+ALGODIR          := algorithms
+LIBDIR           := lib
+BINDIR           := bin
+APPSDIR          := apps
 
-PCM_LIB_SRCS := $(wildcard $(SRCDIR)/*.c)
+# Core PCM sources (C only)
+PCM_C_SRCS       := $(wildcard $(SRCDIR)/*.c) $(wildcard $(HTSIM_SUBDIR)/*.c)
+PCM_CPP_SRCS     :=
 
-# htsim related variables to enable PCM htsim plugin and application
+# Optionally include HTSIM plugin sources and application
 BUILD_HTSIM_FLOW_PLUGIN ?= 0
 ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
-  HTSIM_ROOT_DIR ?= ../../HTSIM/sim/
-  PCM_LIB_CFLAGS := -DBUILD_HTSIM_FLOW_PLUGIN -I$(HTSIM_ROOT_DIR) -I$(HTSIM_ROOT_DIR)/datacenter
-  PCM_LIB_LDLIBS := -L$(HTSIM_ROOT_DIR) -lhtsim -lstdc++
-  HTSIM_APP_SRCS := $(APPSDIR)/htsim/
-  # objects from htsim build
-  HTSIM_APP_PREREQ_OBJS := $(HTSIM_ROOT_DIR)/libhtsim.a \
-  	$(HTSIM_ROOT_DIR)/datacenter/firstfit.o \
+
+# Root of external HTSIM simulation code
+HTSIM_ROOT_DIR ?= ../../HTSIM/sim/
+
+PCM_CPP_SRCS := $(wildcard $(HTSIM_SUBDIR)/*.cpp)
+HTSIM_PCM_LIB_CFLAGS := -DBUILD_HTSIM_FLOW_PLUGIN -I$(HTSIM_ROOT_DIR) -I$(HTSIM_ROOT_DIR)/datacenter
+HTSIM_PCM_LIB_LDLIBS := -L$(HTSIM_ROOT_DIR) -lhtsim -lstdc++
+
+HTSIM_APP_SRCS := $(APPSDIR)/htsim/
+HTSIM_APP_OBJS := $(HTSIM_APP_SRCS)/htsim_app.o
+HTSIM_APP_TARGET := $(BINDIR)/htsim_flow_app
+HTSIM_APP_CFLAGS := -I$(SRCDIR)/htsim/
+HTSIM_APP_PREREQ_OBJS := \
+	$(HTSIM_ROOT_DIR)/libhtsim.a \
+	$(HTSIM_ROOT_DIR)/datacenter/firstfit.o \
 	$(HTSIM_ROOT_DIR)/datacenter/vl2_topology.o \
 	$(HTSIM_ROOT_DIR)/datacenter/fat_tree_topology.o \
 	$(HTSIM_ROOT_DIR)/datacenter/fat_tree_interdc_topology.o \
@@ -37,55 +49,61 @@ ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
 	$(HTSIM_ROOT_DIR)/datacenter/multihomed_fat_tree_topology.o \
 	$(HTSIM_ROOT_DIR)/datacenter/star_topology.o \
 	$(HTSIM_ROOT_DIR)/datacenter/logsim-interface.o
-  HTSIM_APP_OBJS := $(HTSIM_APP_SRCS)/htsim_app.o
-  HTSIM_APP_TARGET := $(BINDIR)/htsim_app
-  HTSIM_APP_CFLAGS := -std=c++17
-else
-  PCM_LIB_CFLAGS :=
-  PCM_LIB_LDLIBS :=
 endif
 
-PCM_LIB_OBJS   := $(PCM_LIB_SRCS:%.c=%.o)
-PCM_LIB_TARGET := $(LIBDIR)/libpcm.so
+# Gather all object files
+PCM_C_OBJS       := $(PCM_C_SRCS:%.c=%.o)
+PCM_CPP_OBJS     := $(PCM_CPP_SRCS:%.cpp=%.o)
+PCM_LIB_OBJS     := $(PCM_C_OBJS) $(PCM_CPP_OBJS)
+PCM_LIB_TARGET   := $(LIBDIR)/libpcm.so
 
 ALGO_PLUGIN_NAMES := reno_accumulated reno_standard dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
 
-TGEN_APP_SRCS     := $(APPSDIR)/traffic_gen/
+TGEN_APP_SRCS     := $(APPSDIR)/traffic_gen
 TGEN_APP_OBJS     := $(TGEN_APP_SRCS)/main.o $(TGEN_APP_SRCS)/traffic_gen.o
 TGEN_APP_TARGET   := $(BINDIR)/traffic_gen_app
 
 .PHONY: all clean distclean
+# Include empty HTSIM_APP_TARGET if disabled
 all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(TGEN_APP_TARGET) $(HTSIM_APP_TARGET)
 
-# build libpcm.so
-$(PCM_LIB_TARGET): $(PCM_LIB_OBJS)
-	@mkdir -p $(LIBDIR)
-	$(CC) $(LDFLAGS) $(PCM_LIB_LDLIBS) -o $@ $^
+# -----------------------------------------------
+# PCM core
+# -----------------------------------------------
 
 $(SRCDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) $(CFLAGS) $(PCM_LIB_CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(HTSIM_PCM_LIB_CFLAGS) -c $< -o $@
 
-# build algorithm plugins: lib<algoname>.so
+# htsim plugin C++ sources
+ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
+$(HTSIM_SUBDIR)/%.o: $(HTSIM_SUBDIR)/%.cpp
+	$(CXX) $(CXXFLAGS) $(HTSIM_PCM_LIB_CFLAGS) -c $< -o $@
+endif
+
+# Link into libpcm.so
+$(PCM_LIB_TARGET): $(PCM_LIB_OBJS)
+	@mkdir -p $(LIBDIR)
+	$(CC) $(LDFLAGS) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS)
+
+# -----------------------------------------------
+# Algorithm plugins
+# -----------------------------------------------
+
+# DCTCP is special as it needs BUILD_ALGO_DCTCP
 $(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
-<<<<<<< HEAD
-	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) -o $@ $(ALGODIR)/dctcp.c -L$(LIBDIR) -lpcm -lm
-=======
 	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) \
-	    -o $@ $< -L$(LIBDIR) -lpcm
->>>>>>> 4114757 (add htsim flow plugin)
+	    -o $@ $< -L$(LIBDIR) -lpcm -lm
 
+# other algos
 $(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
-<<<<<<< HEAD
-	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $(ALGODIR)/$*.c -L$(LIBDIR) -lpcm -lm
-=======
-	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) \
-	    -o $@ $< -L$(LIBDIR) -lpcm
->>>>>>> 4114757 (add htsim flow plugin)
+	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lpcm -lm
 
-# build the traffic_gen application
+# -----------------------------------------------
+# Traffic generator app
+# -----------------------------------------------
 $(TGEN_APP_SRCS)/%.o: $(TGEN_APP_SRCS)/%.c
 	@mkdir -p $(BINDIR)
 	$(CC) $(CFLAGS) -c $< -o $@
@@ -94,20 +112,31 @@ $(TGEN_APP_TARGET): $(TGEN_APP_OBJS)
 	@mkdir -p $(BINDIR)
 	$(CC) $^ -L$(LIBDIR) -lpcm -o $@
 
-# build the htsim application if requested
+# -----------------------------------------------
+# HTSIM application
+# -----------------------------------------------
+
 ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
 
 $(HTSIM_APP_SRCS)/%.o: $(HTSIM_APP_SRCS)/%.cpp
 	@mkdir -p $(BINDIR)
-	$(CXX) $(CFLAGS) $(PCM_LIB_CFLAGS) $(HTSIM_APP_CFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(HTSIM_PCM_LIB_CFLAGS) $(HTSIM_APP_CFLAGS) -c $< -o $@
 
 $(HTSIM_APP_TARGET): $(HTSIM_APP_PREREQ_OBJS) $(HTSIM_APP_OBJS)
-	$(CXX) -o $@ $^ $(PCM_LIB_LDLIBS)
+	@mkdir -p $(BINDIR)
+	$(CXX) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) -L$(LIBDIR) -lpcm
 
 endif
 
 clean:
-	rm -f $(PCM_LIB_OBJS) $(ALGO_PLUGIN_LIBS) $(TGEN_APP_OBJS) $(TGEN_APP_TARGET)
+	@echo "Cleaning build artifacts..."
+	@find $(SRCDIR) -name '*.o' -delete
+	@find $(HTSIM_SUBDIR) -name '*.o' -delete
+	@find $(TGEN_APP_SRCS) -name '*.o' -delete
+	@rm -f $(PCM_LIB_TARGET)
+	@rm -f $(ALGO_PLUGIN_LIBS)
+	@rm -f $(TGEN_APP_TARGET)
+	@if [ -n "$(HTSIM_APP_TARGET)" ]; then rm -f $(HTSIM_APP_TARGET); fi
 
 distclean: clean
 	rm -rf $(LIBDIR) $(BINDIR)
