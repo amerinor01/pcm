@@ -3,7 +3,7 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "app_traffic_gen.h"
+#include "traffic_gen.h"
 #include "network.h"
 #include "pcm.h"
 

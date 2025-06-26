@@ -5,7 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "app_traffic_gen.h"
+#include "traffic_gen.h"
 #include "dcqcn.h"
 #include "fabric_params.h"
 #include "network.h"
