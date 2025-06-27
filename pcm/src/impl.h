@@ -1,8 +1,15 @@
 #ifndef _IMPL_H_
 #define _IMPL_H_
 
-#include <pthread.h>
+#if defined(__cplusplus)
+#include <atomic>
+typedef std::atomic<bool> atomic_bool;
+extern "C" {
+#else
 #include <stdatomic.h>
+#endif
+
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -165,5 +172,9 @@ device_flow_id_to_config_match(const device_t *device, addr_t id);
 
 void flow_triggers_arm(flow_t *flow);
 bool flow_handler_invoke_on_trigger(flow_t *flow);
+
+#ifdef __cplusplus
+}  /* extern "C" */
+#endif
 
 #endif /* _IMPL_H_ */

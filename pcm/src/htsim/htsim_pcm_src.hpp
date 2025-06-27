@@ -10,10 +10,12 @@
 #include "eventlist.h"
 #include "fairpullqueue.h"
 #include "htsim_pcm_pacer.hpp"
-//#include "datacenter/logsim-interface.h"
-#include "network.h"
-#include "trigger.h"
+// #include "datacenter/logsim-interface.h"
 #include "htsim_pcm_packet.hpp"
+#include "htsim_pcm_device.hpp"
+#include "network.h"
+#include "pcm_network.h"
+#include "trigger.h"
 #include <functional>
 #include <list>
 #include <map>
@@ -29,17 +31,16 @@ class PcmLogger : public Logger {
     enum UecRecord { AVE_CWND = 0 };
     enum UecMemoryRecord { MEMORY = 0 };
     virtual void logUec(PcmSrc &src, PcmLogger::UecEvent ev) = 0;
-    virtual ~PcmLogger(){};
+    virtual ~PcmLogger() {};
 };
-
 
 class PcmSentPacket {
   public:
     PcmSentPacket(simtime_picosec t, uint64_t s, bool a, bool n, bool to)
-            : timer{t}, seqno{s}, acked{a}, nacked{n}, timedOut{to} {}
+        : timer{t}, seqno{s}, acked{a}, nacked{n}, timedOut{to} {}
     PcmSentPacket(const PcmSentPacket &sp)
-            : timer{sp.timer}, seqno{sp.seqno}, acked{sp.acked},
-              nacked{sp.nacked}, timedOut{sp.timedOut} {}
+        : timer{sp.timer}, seqno{sp.seqno}, acked{sp.acked}, nacked{sp.nacked},
+          timedOut{sp.timedOut} {}
     simtime_picosec timer;
     uint64_t seqno;
     bool acked;
@@ -52,7 +53,8 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
 
   public:
     PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger, EventList &eventList,
-           uint64_t rtt, uint64_t bdp, uint64_t queueDrainTime, int hops);
+           uint64_t rtt, uint64_t bdp, uint64_t queueDrainTime, int hops,
+           PcmDevice &pcmDevice);
     // PcmSrc(PcmLogger *logger, TrafficLogger* pktLogger, EventList& eventList,
     // uint64_t rtt=timeFromUs(5.25), uint64_t bdp=63000);
     ~PcmSrc();
@@ -113,6 +115,8 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
     int choose_route();
     inline simtime_picosec pacing_delay_f() const { return pacing_delay; }
     int next_route();
+
+    bool isFlowFinished() const { return _flow_finished; }
 
     void set_traffic_logger(TrafficLogger *pktlogger);
     static void set_kmax(double value) { kmax_double = value; }
@@ -263,15 +267,13 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
     bool did_qa = false;
     bool changed_once = false;
 
-
     // Gemini stuff
     bool congested_dcn = false;
     bool congested_wan = false;
     simtime_picosec last_gemini_decrease = 0;
-    double F_gemini, k_gemini, c_gemini, f_dcn_gemini, f_wan_gemini, alpha_gemini, beta_gemini = 0;
+    double F_gemini, k_gemini, c_gemini, f_dcn_gemini, f_wan_gemini,
+        alpha_gemini, beta_gemini = 0;
     double h_gemini, H_gemini = 0;
-
-
 
     // Custom Parameters
     static int adjust_packet_counts;
@@ -346,6 +348,9 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
     static bool use_pacing;
     static simtime_picosec pacing_delay;
     bool first_quick_adapt = false;
+
+  private:
+    flow_t *_pcm_flow_ptr;
 
   private:
     uint32_t _unacked;
@@ -429,12 +434,12 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
     std::function<void(const Packet &p)> f_flow_over_hook;
 
     list<std::tuple<simtime_picosec, bool, uint64_t, uint64_t>>
-            _received_ecn; // list of packets received
+        _received_ecn; // list of packets received
     vector<PcmSentPacket> _sent_packets;
     unsigned _nack_rtx_pending;
     vector<tuple<simtime_picosec, uint64_t, uint64_t, uint64_t, uint64_t,
                  uint64_t>>
-            _list_rtt;
+        _list_rtt;
     vector<pair<simtime_picosec, uint64_t>> _list_cwd;
     vector<pair<simtime_picosec, uint64_t>> _list_unacked;
     vector<pair<simtime_picosec, uint64_t>> _list_acked_bytes;

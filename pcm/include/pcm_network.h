@@ -1,6 +1,10 @@
 #ifndef _NETWORK_H_
 #define _NETWORK_H_
 
+#if defined(__cplusplus)
+extern "C" {
+#endif
+
 #include <stdbool.h>
 
 #include "pcm.h"
@@ -19,5 +23,9 @@ int flow_destroy(flow_t *flow);
 bool flow_is_ready(const flow_t *flow);
 int flow_cwnd_get(const flow_t *flow);
 void flow_signals_update(flow_t *flow, signal_t signal_type, int value);
+
+#ifdef __cplusplus
+}  /* extern "C" */
+#endif
 
 #endif /* _NETWORK_H_ */
