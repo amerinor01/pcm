@@ -30,7 +30,7 @@ PCM_CPP_SRCS := $(wildcard $(HTSIM_SUBDIR)/*.cpp)
 HTSIM_PCM_LIB_CFLAGS := -DBUILD_HTSIM_FLOW_PLUGIN -I$(HTSIM_ROOT_DIR) -I$(HTSIM_ROOT_DIR)/datacenter
 HTSIM_PCM_LIB_LDLIBS := -L$(HTSIM_ROOT_DIR) -lhtsim -lstdc++
 
-HTSIM_APP_SRCS := $(APPSDIR)/htsim/
+HTSIM_APP_SRCS := $(APPSDIR)/htsim
 HTSIM_APP_OBJS := $(HTSIM_APP_SRCS)/htsim_app.o
 HTSIM_APP_TARGET := $(BINDIR)/htsim_flow_app
 HTSIM_APP_CFLAGS := -I$(SRCDIR)/htsim/
@@ -59,6 +59,9 @@ PCM_LIB_TARGET   := $(LIBDIR)/libpcm.so
 
 ALGO_PLUGIN_NAMES := reno_accumulated reno_standard dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
+ALGO_PLUGIN_PCMC_NAMES := tcp swift dcqcn smartt
+ALGO_PLUGIN_PCMC_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix _pcmc.so,$(ALGO_PLUGIN_PCMC_NAMES)))
+ALGO_PLUGIN_PCMC_LDLIBS  := $(addprefix -l,$(addsuffix _pcmc,$(ALGO_PLUGIN_PCMC_NAMES)))
 
 TGEN_APP_SRCS     := $(APPSDIR)/traffic_gen
 TGEN_APP_OBJS     := $(TGEN_APP_SRCS)/main.o $(TGEN_APP_SRCS)/traffic_gen.o
@@ -66,7 +69,7 @@ TGEN_APP_TARGET   := $(BINDIR)/traffic_gen_app
 
 .PHONY: all clean distclean
 # Include empty HTSIM_APP_TARGET if disabled
-all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(TGEN_APP_TARGET) $(HTSIM_APP_TARGET)
+all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(ALGO_PLUGIN_PCMC_LIBS) $(TGEN_APP_TARGET) $(HTSIM_APP_TARGET)
 
 # -----------------------------------------------
 # PCM core
@@ -90,6 +93,12 @@ $(PCM_LIB_TARGET): $(PCM_LIB_OBJS)
 # Algorithm plugins
 # -----------------------------------------------
 
+# host-side PCMC init code
+$(LIBDIR)/lib%_pcmc.so: $(ALGODIR)/%_pcmc.c $(PCM_LIB_TARGET)
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) $(LDFLAGS) \
+	    -o $@ $< -L$(LIBDIR) -lpcm
+
 # DCTCP is special as it needs BUILD_ALGO_DCTCP
 $(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
@@ -110,7 +119,7 @@ $(TGEN_APP_SRCS)/%.o: $(TGEN_APP_SRCS)/%.c
 
 $(TGEN_APP_TARGET): $(TGEN_APP_OBJS)
 	@mkdir -p $(BINDIR)
-	$(CC) $^ -L$(LIBDIR) -lpcm -o $@
+	$(CC) $^ -L$(LIBDIR) $(ALGO_PLUGIN_PCMC_LDLIBS) -lpcm -o $@
 
 # -----------------------------------------------
 # HTSIM application
@@ -124,7 +133,7 @@ $(HTSIM_APP_SRCS)/%.o: $(HTSIM_APP_SRCS)/%.cpp
 
 $(HTSIM_APP_TARGET): $(HTSIM_APP_PREREQ_OBJS) $(HTSIM_APP_OBJS)
 	@mkdir -p $(BINDIR)
-	$(CXX) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) -L$(LIBDIR) -lpcm
+	$(CXX) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) -L$(LIBDIR) $(ALGO_PLUGIN_PCMC_LDLIBS) -lpcm
 
 endif
 
@@ -135,8 +144,9 @@ clean:
 	@find $(TGEN_APP_SRCS) -name '*.o' -delete
 	@rm -f $(PCM_LIB_TARGET)
 	@rm -f $(ALGO_PLUGIN_LIBS)
+	@rm -f $(ALGO_PLUGIN_PCMC_LIBS)
 	@rm -f $(TGEN_APP_TARGET)
 	@if [ -n "$(HTSIM_APP_TARGET)" ]; then rm -f $(HTSIM_APP_TARGET); fi
-
+	@if [ -n "$(HTSIM_APP_TARGET)" ]; then rm -f $(HTSIM_APP_OBJS); fi
 distclean: clean
 	rm -rf $(LIBDIR) $(BINDIR)

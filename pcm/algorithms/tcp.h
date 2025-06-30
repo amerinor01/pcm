@@ -3,6 +3,7 @@
 
 #include "algo_utils.h"
 #include "fabric_params.h"
+#include "limits.h"
 #include "pcm.h"
 
 #define TCP_SSTHRESH_INIT INT_MAX
@@ -129,6 +130,19 @@ static inline void tcp_cong_avoid(struct tcp_state_snapshot *state) {
     }
     state->num_acks = 0;
 }
+
+#else
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int tcp_pcmc_init(handle_t new_handle);
+int dctcp_pcmc_init(handle_t new_handle);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
 

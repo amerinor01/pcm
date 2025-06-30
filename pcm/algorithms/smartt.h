@@ -54,4 +54,20 @@ enum smartt_signal_idxs {
 
 enum smartt_ctrl_idxs { SMARTT_CTRL_CWND_BYTES = 0 };
 
+#ifdef HANDLER_BUILD
+int algorithm_main();
+#else
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int smartt_pcmc_init(handle_t new_handle);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
+
 #endif /* _SMARTT_H_ */

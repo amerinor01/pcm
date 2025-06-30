@@ -1,6 +1,7 @@
 #ifndef _DCQCN_H_
 #define _DCQCN_H_
 
+#include "pcm.h"
 #include "fabric_params.h"
 
 #define DCQCN_BYTE_COUNTER (4096 * 2)
@@ -44,6 +45,18 @@ enum dcqcn_ctrl_idxs {
 
 #ifdef HANDLER_BUILD
 int algorithm_main();
+#else
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int dcqcn_pcmc_init(handle_t new_handle);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
 
 #endif /* _DCQCN_H_ */
