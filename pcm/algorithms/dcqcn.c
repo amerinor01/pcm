@@ -58,13 +58,11 @@ int algorithm_main() {
     state.rtt = get_signal(DCQCN_SIG_IDX_RTT);
     state.cwnd = get_control(DCQCN_CTRL_IDX_CWND);
 
+    size_t trigger_id = get_signal_invoke_trigger_user_index();
     int num_ecns = get_signal(DCQCN_SIG_IDX_ECN);
-    size_t trigger_id;
     if (num_ecns) {
-        // ECN's are always have higher priority that any rate increase timer
-        trigger_id = num_ecns;
-    } else {
-        trigger_id = get_signal_invoke_trigger_user_index();
+        // ECN's always have higher priority that any rate increase timer
+        trigger_id = DCQCN_SIG_IDX_ECN;
     }
 
     switch (trigger_id) {
@@ -74,9 +72,8 @@ int algorithm_main() {
         // remaining ECN's can be processed immediately by this handler
         // TODO: implement reaction to all ECNs here to avoid costly handler
         // re-invocation
-        // TODO: use update call here to not lose ECNs buffered by the datapath
+        update_signal(DCQCN_SIG_IDX_ECN, -1);
         if (num_ecns - 1 > 0) {
-            update_signal(DCQCN_SIG_IDX_ECN, -1);
             // disable all timers to avoid rate increase as we didn't process
             // remaining ECNs yet
             set_signal(DCQCN_SIG_IDX_RATE_INCREASE_TIMER, 0);
