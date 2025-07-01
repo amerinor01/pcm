@@ -2,8 +2,8 @@
 ifeq ($(origin CC),default)
 CC = clang
 endif
-CFLAGS = -fPIC -Iinclude -Iapp -Ialgorithms -Wall -Wextra -O3
-LDFLAGS = -shared
+CFLAGS = -fPIC -Iinclude -Iapp -Ialgorithms -Wall -Wextra -O3 
+LDFLAGS = -shared -lm
 
 SRCDIR = src
 INCDIR = include
