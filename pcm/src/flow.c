@@ -1,5 +1,18 @@
 #include <unistd.h>
 
+#define _GNU_SOURCE
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <sys/syscall.h>
+#include <linux/perf_event.h>
+#include <asm/unistd.h>
+
+
+
 #include "impl.h"
 #include "util.h"
 
@@ -74,14 +87,99 @@ void flow_triggers_arm(flow_t *flow) {
     }
 }
 
+// Perf helper functions, should go to another file
+
+static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
+                            int cpu, int group_fd, unsigned long flags) {
+    return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
+}
+
+int cmp_uint64(const void *a, const void *b) {
+    uint64_t ua = *(const uint64_t*)a;
+    uint64_t ub = *(const uint64_t*)b;
+    return (ua > ub) - (ua < ub);
+}
+
+
+
 bool flow_handler_invoke_on_trigger(flow_t *flow) {
+
+    struct perf_event_attr pe_cycles = {0}, pe_instr = {0};
+    pe_cycles.type = PERF_TYPE_HARDWARE;
+    pe_cycles.size = sizeof(struct perf_event_attr);
+    pe_cycles.config = PERF_COUNT_HW_CPU_CYCLES;
+    pe_cycles.disabled = 1;
+    pe_cycles.exclude_kernel = 1;
+    pe_cycles.exclude_hv = 1;
+    pe_cycles.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
+
+    pe_instr = pe_cycles;
+    pe_instr.config = PERF_COUNT_HW_INSTRUCTIONS;
+
+    // Open group leader (cycles)
+    int fd_cycles = perf_event_open(&pe_cycles, 0, -1, -1, 0);
+    if (fd_cycles == -1) {
+        perror("perf_event_open (cycles)");
+        exit(EXIT_FAILURE);
+    }
+
+    // Open instructions in group
+    int fd_instr = perf_event_open(&pe_instr, 0, -1, fd_cycles, 0);
+    if (fd_instr == -1) {
+        perror("perf_event_open (instructions)");
+        exit(EXIT_FAILURE);
+    }
+
+    // Get IDs to map values later
+    uint64_t id_cycles, id_instr;
+    ioctl(fd_cycles, PERF_EVENT_IOC_ID, &id_cycles);
+    ioctl(fd_instr, PERF_EVENT_IOC_ID, &id_instr);
+
+    ioctl(fd_cycles, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
+    ioctl(fd_cycles, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
+
+    // this is the actual functionality of this function, above and below is for timing only
+    bool retval;
     if (flow_triggers_check(flow)) {
         flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
         flow->config->algorithm_fn((void *)flow);
         flow_triggers_arm(flow);
-        return true;
+        retval = true;
     }
-    return false;
+    else {
+       retval = false;
+    }
+
+    ioctl(fd_cycles, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
+
+    struct {
+        uint64_t nr;
+        struct {
+            uint64_t value;
+            uint64_t id;
+        } values[2];
+    } data;
+
+    if (read(fd_cycles, &data, sizeof(data)) != sizeof(data)) {
+        perror("read");
+        exit(EXIT_FAILURE);
+    }
+
+    uint64_t cycles, instructions;
+    for (int j = 0; j < data.nr; ++j) {
+        if (data.values[j].id == id_cycles) {
+            cycles = data.values[j].value;
+        } else if (data.values[j].id == id_instr) {
+            instructions = data.values[j].value;
+        }
+    }
+
+    close(fd_cycles);
+    close(fd_instr);
+
+   // print timing info if we actually ran the handler
+   if (retval) printf("HANDLER PERFORMANCE %lu cycles %lu instructions.\n", cycles, instructions);
+   return retval;
 }
 
 int flow_destroy(flow_t *flow) {
