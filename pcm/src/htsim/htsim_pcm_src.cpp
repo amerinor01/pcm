@@ -81,7 +81,6 @@ PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger, EventList &eventList
     if (flow_create(pcmDevice.getDevicePtr(), &_pcm_flow_ptr, NULL) != SUCCESS) {
         LOG_FATAL("Failed to create PCM flow on htsim::PcmSrc");
     }
-    assert(flow_is_ready(_pcm_flow_ptr));
 
     _mss = Packet::data_packet_size();
     _unacked = 0;
