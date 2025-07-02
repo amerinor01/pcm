@@ -86,13 +86,15 @@ PLUGIN_FLOW_TRIGGER_TIMER_CHECK_GENERIC_DEFINE(pthrd, clock_gettime_now,
                                                clock_gettime_ts_diff_us_get)
 PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_DEFINE(pthrd, clock_gettime_now,
                                                clock_gettime_ts_diff_us_get)
-
+PLUGIN_FLOW_TIME_GET_GENERIC_DEFINE(pthrd, clock_gettime_now,
+                                    clock_gettime_ts_diff_us_get)
 const char *pthrd_flow_plugin_name = "pthread";
 
 struct flow_plugin_ops pthrd_flow_ops = {
     .control.create = pthrd_flow_create,
     .control.destroy = pthrd_flow_destroy,
     .control.is_ready = pthrd_flow_is_ready,
+    .control.time_get = PLUGIN_FLOW_TIME_GET_GENERIC_FN(pthrd),
 
     .datapath.burst_check = PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_FN(pthrd),
     .datapath.burst_reset = PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_FN(pthrd),

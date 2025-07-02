@@ -80,6 +80,7 @@ struct flow_plugin_ops {
         int (*create)(flow_t *, traffic_gen_fn_t);
         int (*destroy)(flow_t *);
         bool (*is_ready)(const flow_t *);
+        int (*time_get)(const flow_t *);
     } control;
 
     struct datapath_ops {

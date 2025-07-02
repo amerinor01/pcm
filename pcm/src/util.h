@@ -253,7 +253,7 @@ static inline int clock_gettime_ts_diff_us_get(struct timespec ts_start,
 }
 
 static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
-    return (int)((double)ts_end / 1000000.0 - (double)ts_start / 1000000.0);
+    return (int)((double)(ts_end - ts_start) / 1000000.0);
 }
 
 #define PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)                         \
@@ -408,8 +408,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         return false;                                                          \
     }
 
-/* post reset state of 1 indicates that burst acts as an active
- * trigger */
+/* post reset state of 1 indicates that burst is an active trigger */
 #define PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_FN(plugin_name)                \
     plugin_name##_flow_trigger_burst_reset
 #define PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_DEFINE(plugin_name)            \
@@ -477,6 +476,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         return false;                                                          \
     }
 
+/* post reset state of 1 indicates that timer got (re-activated) */
 #define PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_FN(plugin_name)                \
     plugin_name##_flow_trigger_timer_reset
 #define PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_DEFINE(                        \
@@ -492,4 +492,13 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         }                                                                      \
     }
 
+#define PLUGIN_FLOW_TIME_GET_GENERIC_FN(plugin_name) plugin_name##_flow_time_get
+#define PLUGIN_FLOW_TIME_GET_GENERIC_DEFINE(plugin_name, time_now_fn,          \
+                                            time_diff_fn)                      \
+    static inline int PLUGIN_FLOW_TIME_GET_GENERIC_FN(plugin_name)(            \
+        const flow_t *flow) {                                                  \
+        struct plugin_name##_flow *flow_ctx =                                  \
+            (struct plugin_name##_flow *)(flow->backend_ctx);                  \
+        return time_diff_fn(flow_ctx->start_ts, time_now_fn());                \
+    }
 #endif /* _UTIL_H_ */

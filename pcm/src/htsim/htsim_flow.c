@@ -71,11 +71,13 @@ PLUGIN_FLOW_TRIGGER_TIMER_CHECK_GENERIC_DEFINE(htsim, htsim_now,
                                                picosec_ts_diff_us_get)
 PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_DEFINE(htsim, htsim_now,
                                                picosec_ts_diff_us_get)
+PLUGIN_FLOW_TIME_GET_GENERIC_DEFINE(htsim, htsim_now, picosec_ts_diff_us_get)
 
 struct flow_plugin_ops htsim_flow_ops = {
     .control.create = htsim_flow_create,
     .control.destroy = htsim_flow_destroy,
     .control.is_ready = NULL,
+    .control.time_get = PLUGIN_FLOW_TIME_GET_GENERIC_FN(htsim),
 
     .datapath.burst_check = PLUGIN_FLOW_TRIGGER_BURST_CHECK_GENERIC_FN(htsim),
     .datapath.burst_reset = PLUGIN_FLOW_TRIGGER_BURST_RESET_GENERIC_FN(htsim),

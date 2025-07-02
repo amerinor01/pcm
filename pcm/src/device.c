@@ -246,6 +246,8 @@ bool device_scheduler_progress(device_t *device) {
 
     if (device->scheduler.progress.cur_flow == device->scheduler.flow_list.tail)
         device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;
+    else
+        device->scheduler.progress.cur_flow = device->scheduler.progress.cur_flow->next;
 
     return triggered;
 }
