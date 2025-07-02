@@ -20,7 +20,7 @@ static inline int smartt_quick_adapt(struct smartt_state_snapshot *state) {
 }
 
 static inline int smartt_fast_increase(struct smartt_state_snapshot *state) {
-    if (ABS((float)state->last_rtt - FABRIC_BASE_RTT) < 1e-6 &&
+    if (ABS((float)state->last_rtt - FABRIC_BASE_RTT) < SMARTT_FI_TOL &&
         !state->num_ecns) {
         state->fast_count += FABRIC_LINK_MTU; // last_pkt_size
         if (state->fast_count > state->cwnd || state->fast_active) {

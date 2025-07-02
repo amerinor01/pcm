@@ -14,6 +14,7 @@
 #define SMARTT_K_CONST 2      /* fast increase constant */
 #define SMARTT_QA_SCALING 0.8 /* QuickAdapt scaling factor */
 #define SMARTT_QA_DEADLINE (SMARTT_TRTT_FACTOR * FABRIC_BASE_RTT)
+#define SMARTT_FI_TOL 1e-6
 
 struct smartt_state_snapshot {
     int acked_bytes;     /* bytes acked since last QA */
