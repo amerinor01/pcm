@@ -1,12 +1,19 @@
 #ifndef _IMPL_H_
 #define _IMPL_H_
 
-#include <pthread.h>
+#if defined(__cplusplus)
+#include <atomic>
+typedef std::atomic<bool> atomic_bool;
+extern "C" {
+#else
 #include <stdatomic.h>
+#endif
+
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "network.h"
+#include "pcm_network.h"
 #include "pcm.h"
 #include "slist.h"
 
@@ -73,6 +80,7 @@ struct flow_plugin_ops {
         int (*create)(flow_t *, traffic_gen_fn_t);
         int (*destroy)(flow_t *);
         bool (*is_ready)(const flow_t *);
+        int (*time_get)(const flow_t *);
     } control;
 
     struct datapath_ops {
@@ -165,5 +173,9 @@ device_flow_id_to_config_match(const device_t *device, addr_t id);
 
 void flow_triggers_arm(flow_t *flow);
 bool flow_handler_invoke_on_trigger(flow_t *flow);
+
+#ifdef __cplusplus
+}  /* extern "C" */
+#endif
 
 #endif /* _IMPL_H_ */

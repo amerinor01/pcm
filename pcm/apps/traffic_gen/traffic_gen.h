@@ -1,5 +1,5 @@
-#ifndef _APP_TRAFFIC_GEN_H_
-#define _APP_TRAFFIC_GEN_H_
+#ifndef _TRAFFIC_GEN_H_
+#define _TRAFFIC_GEN_H_
 
 #define TGEN_BANDWIDTH_BPS 100000000UL // 100 Mbps
 #define TGEN_DROP_PROB 0.01            // 1% packet drop probability
@@ -12,4 +12,4 @@
 
 void *app_flow_traffic_gen_fn(void *arg);
 
-#endif /* _APP_TRAFFIC_GEN_H_ */
+#endif /* _TRAFFIC_GEN_H_ */

@@ -22,6 +22,10 @@ int flow_cwnd_get(const flow_t *flow) {
     return flow->device->flow_ops.handler.control_get(flow, cwnd_idx);
 }
 
+int flow_time_get(const flow_t *flow) {
+    return flow->device->flow_ops.control.time_get(flow);
+}
+
 bool flow_is_ready(const flow_t *flow) {
     return flow->device->flow_ops.control.is_ready(flow);
 }
@@ -90,6 +94,8 @@ bool flow_handler_invoke_on_trigger(flow_t *flow) {
     if (flow_triggers_check(flow)) {
         flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
         flow->config->algorithm_fn((void *)flow);
+        LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
+                flow_time_get(flow), flow_cwnd_get(flow));
         flow_triggers_arm(flow);
         handler_invoked = true;
     }

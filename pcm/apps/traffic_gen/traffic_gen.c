@@ -3,8 +3,8 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "app_traffic_gen.h"
-#include "network.h"
+#include "traffic_gen.h"
+#include "pcm_network.h"
 #include "pcm.h"
 
 // Flow thread: emulate constant bandwidth, drops, NACKs, RTOs

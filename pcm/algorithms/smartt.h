@@ -14,6 +14,7 @@
 #define SMARTT_K_CONST 2      /* fast increase constant */
 #define SMARTT_QA_SCALING 0.8 /* QuickAdapt scaling factor */
 #define SMARTT_QA_DEADLINE (SMARTT_TRTT_FACTOR * FABRIC_BASE_RTT)
+#define SMARTT_FI_TOL 1e-6
 
 struct smartt_state_snapshot {
     int acked_bytes;     /* bytes acked since last QA */
@@ -53,5 +54,21 @@ enum smartt_signal_idxs {
 };
 
 enum smartt_ctrl_idxs { SMARTT_CTRL_CWND_BYTES = 0 };
+
+#ifdef HANDLER_BUILD
+int algorithm_main();
+#else
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+int smartt_pcmc_init(handle_t new_handle);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif
 
 #endif /* _SMARTT_H_ */
