@@ -1,11 +1,11 @@
 import os
 import re
+import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 
-# Optional: search in current directory or change this
-SEARCH_DIR = ".."
+SEARCH_DIR = sys.argv[1]
 
 # Regex to match the performance line
 perf_line_pattern = re.compile(r"HANDLER PERFORMANCE (\d+) cycles (\d+) instructions")
@@ -53,4 +53,5 @@ axes[1].set_xlabel("CM Algorithm")
 axes[1].set_xticklabels(file_keys, rotation=45, ha="right")
 
 plt.tight_layout()
+plt.savefig(f"{SEARCH_DIR}.out.pdf", bbox_inches='tight')
 plt.show()

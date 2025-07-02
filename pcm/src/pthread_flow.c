@@ -145,9 +145,9 @@ bool pthrd_flow_signal_trigger_timer_check(const flow_t *flow,
         }
         if (CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts) - timer >=
             threshold) {
-            LOG_INFO("TIMER EXPIRED: now=%d timer=%d threshold=%d",
-                     (int)CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts),
-                     timer, threshold);
+            LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d",
+                    (int)CLOCK_GETTIME_TS_DIFF_GET(flow_ctx->start_ts, now_ts),
+                    timer, threshold);
             return true;
         }
     }

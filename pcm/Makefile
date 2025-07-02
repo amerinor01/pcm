@@ -3,7 +3,7 @@ ifeq ($(origin CC),default)
 CC = clang
 endif
 CFLAGS = -fPIC -Iinclude -Iapp -Ialgorithms -Wall -Wextra -O3 
-LDFLAGS = -shared -lm
+LDFLAGS = -shared
 
 SRCDIR = src
 INCDIR = include
@@ -41,12 +41,12 @@ $(SRCDIR)/%.o: $(SRCDIR)/%.c
 # Build dctcp plugin (requires BUILD_ALGO_DCTCP)
 $(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
-	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) -o $@ $(ALGODIR)/dctcp.c -L$(LIBDIR) -lpcm
+	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) -o $@ $(ALGODIR)/dctcp.c -L$(LIBDIR) -lpcm -lm
 
 # Build other algorithm plugins
 $(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
-	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $(ALGODIR)/$*.c -L$(LIBDIR) -lpcm
+	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $(ALGODIR)/$*.c -L$(LIBDIR) -lpcm -lm
 
 # Compile main application objects
 $(BINDIR)/%.o: $(APPDIR)/%.c

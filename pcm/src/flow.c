@@ -1,19 +1,15 @@
 #include <unistd.h>
 
-#define _GNU_SOURCE
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdint.h>
 #include <string.h>
-#include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/syscall.h>
-#include <linux/perf_event.h>
-#include <asm/unistd.h>
-
-
+#include <unistd.h>
 
 #include "impl.h"
+#include "prof.h"
 #include "util.h"
 
 signal_trigger_arm_fn flow_signal_trigger_arm_no_op = NULL;
@@ -38,11 +34,11 @@ void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->type == signal_type &&
             attr->accumulation_op_fn != flow_signal_accumulation_no_op) {
-            LOG_INFO("[flow=%p, addr=%u] update signal_type=%s, "
-                     "accum_type=%s, index=%zu, update_val=%d",
-                     flow, flow->addr, signal_type_to_string(signal_type),
-                     signal_accum_type_to_string(attr->accum_type),
-                     attr->metadata.index, value);
+            LOG_DBG("[flow=%p, addr=%u] update signal_type=%s, "
+                    "accum_type=%s, index=%zu, update_val=%d",
+                    flow, flow->addr, signal_type_to_string(signal_type),
+                    signal_accum_type_to_string(attr->accum_type),
+                    attr->metadata.index, value);
             attr->accumulation_op_fn(flow, attr, value);
         }
     }
@@ -57,11 +53,11 @@ bool flow_triggers_check(flow_t *flow) {
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
             flow->trigger_user_index = attr->metadata.index;
-            LOG_INFO("[flow=%p, addr=%u] trigger signal_type=%s, "
-                     "accum_type=%s, index=%zu",
-                     flow, flow->addr, signal_type_to_string(attr->type),
-                     signal_accum_type_to_string(attr->accum_type),
-                     attr->metadata.index);
+            LOG_DBG("[flow=%p, addr=%u] trigger signal_type=%s, "
+                    "accum_type=%s, index=%zu",
+                    flow, flow->addr, signal_type_to_string(attr->type),
+                    signal_accum_type_to_string(attr->accum_type),
+                    attr->metadata.index);
             return true;
         }
     }
@@ -77,109 +73,28 @@ void flow_triggers_arm(flow_t *flow) {
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger &&
             attr->trigger_arm_fn != flow_signal_trigger_arm_no_op) {
-            LOG_INFO("[flow=%p, addr=%u] rearm signal_type=%s, "
-                     "accum_type=%s, index=%zu",
-                     flow, flow->addr, signal_type_to_string(attr->type),
-                     signal_accum_type_to_string(attr->accum_type),
-                     attr->metadata.index);
+            LOG_DBG("[flow=%p, addr=%u] rearm signal_type=%s, "
+                    "accum_type=%s, index=%zu",
+                    flow, flow->addr, signal_type_to_string(attr->type),
+                    signal_accum_type_to_string(attr->accum_type),
+                    attr->metadata.index);
             attr->trigger_arm_fn(flow, attr);
         }
     }
 }
 
-// Perf helper functions, should go to another file
-
-static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
-                            int cpu, int group_fd, unsigned long flags) {
-    return syscall(__NR_perf_event_open, hw_event, pid, cpu, group_fd, flags);
-}
-
-int cmp_uint64(const void *a, const void *b) {
-    uint64_t ua = *(const uint64_t*)a;
-    uint64_t ub = *(const uint64_t*)b;
-    return (ua > ub) - (ua < ub);
-}
-
-
-
 bool flow_handler_invoke_on_trigger(flow_t *flow) {
-
-    struct perf_event_attr pe_cycles = {0}, pe_instr = {0};
-    pe_cycles.type = PERF_TYPE_HARDWARE;
-    pe_cycles.size = sizeof(struct perf_event_attr);
-    pe_cycles.config = PERF_COUNT_HW_CPU_CYCLES;
-    pe_cycles.disabled = 1;
-    pe_cycles.exclude_kernel = 1;
-    pe_cycles.exclude_hv = 1;
-    pe_cycles.read_format = PERF_FORMAT_GROUP | PERF_FORMAT_ID;
-
-    pe_instr = pe_cycles;
-    pe_instr.config = PERF_COUNT_HW_INSTRUCTIONS;
-
-    // Open group leader (cycles)
-    int fd_cycles = perf_event_open(&pe_cycles, 0, -1, -1, 0);
-    if (fd_cycles == -1) {
-        perror("perf_event_open (cycles)");
-        exit(EXIT_FAILURE);
-    }
-
-    // Open instructions in group
-    int fd_instr = perf_event_open(&pe_instr, 0, -1, fd_cycles, 0);
-    if (fd_instr == -1) {
-        perror("perf_event_open (instructions)");
-        exit(EXIT_FAILURE);
-    }
-
-    // Get IDs to map values later
-    uint64_t id_cycles, id_instr;
-    ioctl(fd_cycles, PERF_EVENT_IOC_ID, &id_cycles);
-    ioctl(fd_instr, PERF_EVENT_IOC_ID, &id_instr);
-
-    ioctl(fd_cycles, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP);
-    ioctl(fd_cycles, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP);
-
-    // this is the actual functionality of this function, above and below is for timing only
-    bool retval;
+    PERF_PROF_REGION_SCOPE_INIT();
+    PERF_PROF_REGION_START();
+    bool handler_invoked = false;
     if (flow_triggers_check(flow)) {
         flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
         flow->config->algorithm_fn((void *)flow);
         flow_triggers_arm(flow);
-        retval = true;
+        handler_invoked = true;
     }
-    else {
-       retval = false;
-    }
-
-    ioctl(fd_cycles, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP);
-
-    struct {
-        uint64_t nr;
-        struct {
-            uint64_t value;
-            uint64_t id;
-        } values[2];
-    } data;
-
-    if (read(fd_cycles, &data, sizeof(data)) != sizeof(data)) {
-        perror("read");
-        exit(EXIT_FAILURE);
-    }
-
-    uint64_t cycles, instructions;
-    for (int j = 0; j < data.nr; ++j) {
-        if (data.values[j].id == id_cycles) {
-            cycles = data.values[j].value;
-        } else if (data.values[j].id == id_instr) {
-            instructions = data.values[j].value;
-        }
-    }
-
-    close(fd_cycles);
-    close(fd_instr);
-
-   // print timing info if we actually ran the handler
-   if (retval) printf("HANDLER PERFORMANCE %lu cycles %lu instructions.\n", cycles, instructions);
-   return retval;
+    PERF_PROF_REGION_END(handler_invoked, "HANDLER PERFORMANCE");
+    return handler_invoked;
 }
 
 int flow_destroy(flow_t *flow) {
