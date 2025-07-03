@@ -29,19 +29,19 @@ enum tcp_local_var_idxs {
 };
 
 struct tcp_state_snapshot {
-    int num_nacks;
-    int num_rtos;
-    int num_acks;
-    int num_acks_consumed;
-    int cwnd;
-    int ssthresh;
-    int tot_acked;
-    int in_fast_recovery;
+    pcm_uint num_nacks;
+    pcm_uint num_rtos;
+    pcm_uint num_acks;
+    pcm_uint num_acks_consumed;
+    pcm_uint cwnd;
+    pcm_uint ssthresh;
+    pcm_uint tot_acked;
+    pcm_uint in_fast_recovery;
 #ifdef BUILD_ALGO_DCTCP
-    uint32_t num_ecn;
-    uint32_t delivered;
-    uint32_t delivered_ecn;
-    uint32_t alpha;
+    pcm_uint num_ecn;
+    pcm_uint delivered;
+    pcm_uint delivered_ecn;
+    pcm_uint alpha;
 #endif
 };
 
@@ -60,7 +60,7 @@ int algorithm_main();
     static inline void algo_name##_fast_recovery(                              \
         struct tcp_state_snapshot *state) {                                    \
         if (!state->in_fast_recovery) {                                        \
-            state->ssthresh = (int)ssthresh_comp(state);                       \
+            state->ssthresh = (pcm_uint)ssthresh_comp(state);                  \
             state->cwnd = state->ssthresh + 3;                                 \
             state->in_fast_recovery = 1;                                       \
         } else {                                                               \
@@ -102,7 +102,7 @@ static inline void tcp_timeout_recovery(struct tcp_state_snapshot *state) {
  * - In slow start (cwnd < ssthresh), cwnd += 1 MSS per ACK.
  */
 static inline void tcp_slow_start(struct tcp_state_snapshot *state) {
-    int to_ssthresh = MIN(state->num_acks, state->ssthresh - state->cwnd);
+    pcm_uint to_ssthresh = MIN(state->num_acks, state->ssthresh - state->cwnd);
     state->cwnd += to_ssthresh;
     state->num_acks -= to_ssthresh;
 }
@@ -116,7 +116,6 @@ static inline void tcp_slow_start(struct tcp_state_snapshot *state) {
  * - subtract cwnd from tot_acked to preserve any “leftover” credit.
  */
 static inline void tcp_cong_avoid(struct tcp_state_snapshot *state) {
-
     if (state->tot_acked >= state->cwnd) {
         /* If credits accumulated at a higher w, apply them gently now. */
         state->tot_acked = 0;
@@ -124,7 +123,7 @@ static inline void tcp_cong_avoid(struct tcp_state_snapshot *state) {
     }
     state->tot_acked += state->num_acks;
     if (state->tot_acked >= state->cwnd) {
-        int delta = state->tot_acked / state->cwnd;
+        pcm_uint delta = state->tot_acked / state->cwnd;
         state->tot_acked -= delta * state->cwnd;
         state->cwnd += delta;
     }

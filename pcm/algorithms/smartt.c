@@ -1,30 +1,32 @@
-#include "smartt.h"
+#include <stdbool.h>
+
 #include "algo_utils.h"
 #include "pcm.h"
+#include "smartt.h"
 
-static inline int smartt_quick_adapt(struct smartt_state_snapshot *state) {
-    int adapted = 0;
+static inline bool smartt_quick_adapt(struct smartt_state_snapshot *state) {
+    bool adapted = false;
     if (state->now >= state->qa_deadline) {
         if (state->trigger_qa) {
             state->trigger_qa = 0;
-            adapted = 1;
-            state->cwnd = (int)(MAX(state->acked_bytes, FABRIC_LINK_MTU) *
-                                SMARTT_QA_SCALING);
+            adapted = true;
+            state->cwnd = (pcm_uint)(MAX(state->acked_bytes, FABRIC_LINK_MTU) *
+                                     SMARTT_QA_SCALING);
             state->bytes_to_ignore = state->cwnd;
             state->bytes_ignored = 0;
         }
-        state->qa_deadline = state->now + (int)SMARTT_QA_DEADLINE;
+        state->qa_deadline = state->now + (pcm_uint)SMARTT_QA_DEADLINE;
         state->acked_bytes = 0;
     }
     return adapted;
 }
 
-static inline int smartt_fast_increase(struct smartt_state_snapshot *state) {
-    if (ABS((float)state->last_rtt - FABRIC_BASE_RTT) < SMARTT_FI_TOL &&
+static inline bool smartt_fast_increase(struct smartt_state_snapshot *state) {
+    if (ABS((pcm_float)state->last_rtt - FABRIC_BASE_RTT) < SMARTT_FI_TOL &&
         !state->num_ecns) {
         state->fast_count += FABRIC_LINK_MTU; // last_pkt_size
         if (state->fast_count > state->cwnd || state->fast_active) {
-            state->cwnd += (int)(SMARTT_K_CONST * FABRIC_LINK_MTU);
+            state->cwnd += (pcm_uint)(SMARTT_K_CONST * FABRIC_LINK_MTU);
             state->fast_active = 1;
         }
     } else {
@@ -39,19 +41,19 @@ static inline void smartt_core_cases(struct smartt_state_snapshot *state) {
         // TBD: request LB path change
     } else if (state->num_ecns && state->last_rtt > SMARTT_TARGET_RTT) {
         /* Multiplicative Decrease */
-        float mdf = 1.0 - ((float)state->avg_rtt - SMARTT_TARGET_RTT) /
-                              (float)state->avg_rtt * SMARTT_MD_CONST;
-        state->cwnd = (int)((float)state->cwnd * MAX(0.5, mdf));
+        pcm_float mdf = 1.0 - ((pcm_float)state->avg_rtt - SMARTT_TARGET_RTT) /
+                                  (pcm_float)state->avg_rtt * SMARTT_MD_CONST;
+        state->cwnd = (pcm_uint)((pcm_float)state->cwnd * MAX(0.5, mdf));
     } else if (!state->num_ecns && state->last_rtt > SMARTT_TARGET_RTT) {
         /* Fair Increase */
-        state->cwnd += (FABRIC_LINK_MTU / (float)state->cwnd) *
-                       (float)(FABRIC_LINK_MTU * SMARTT_FI_CONST);
+        state->cwnd += (FABRIC_LINK_MTU / (pcm_float)state->cwnd) *
+                       (pcm_float)(FABRIC_LINK_MTU * SMARTT_FI_CONST);
     } else if (!state->num_ecns && state->last_rtt <= SMARTT_TARGET_RTT) {
         /* Proportional Increase */
-        int increase =
+        pcm_uint increase =
             ((SMARTT_TARGET_RTT - state->last_rtt) / state->last_rtt) *
             FABRIC_LINK_MTU / state->cwnd *
-            (int)(FABRIC_LINK_MTU * (float)SMARTT_PI_CONST);
+            (pcm_uint)(FABRIC_LINK_MTU * (pcm_float)SMARTT_PI_CONST);
         state->cwnd += MIN(FABRIC_LINK_MTU, increase);
     }
 }

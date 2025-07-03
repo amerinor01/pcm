@@ -7,7 +7,7 @@ static inline void dcqcn_rate_to_cwnd(struct dcqcn_state_snapshot *state) {
         state->rate_cur = FABRIC_LINK_RATE_GBPS;
 
     // Original DCQCN is a rate based, we use RTT to convert rate to cwnd
-    state->cwnd = state->rate_cur / (float)state->rtt * 1000000000.0;
+    state->cwnd = state->rate_cur / (pcm_float)state->rtt * 1000000000.0;
 
     if (state->cwnd < FABRIC_MIN_CWND) {
         state->cwnd = FABRIC_MIN_CWND;
@@ -21,7 +21,7 @@ static inline void dcqcn_rate_decrease(struct dcqcn_state_snapshot *state) {
     /* record old rate as target rate */
     state->rate_target = state->rate_cur;
     /* multiplicative decrease factor */
-    state->rate_cur = (float)state->rate_cur * (1.0 - 0.5 * state->alpha);
+    state->rate_cur = (pcm_float)state->rate_cur * (1.0 - 0.5 * state->alpha);
     /* update alpha */
     state->alpha = (1 - DCQCN_GAMMA) * state->alpha + DCQCN_GAMMA;
     dcqcn_rate_to_cwnd(state);
@@ -50,16 +50,16 @@ int algorithm_main() {
     struct dcqcn_state_snapshot state = {0};
     state.alpha = get_local_state_float(DCQCN_LOCAL_STATE_IDX_ALPHA);
     state.rate_increase_timer_evts =
-        get_local_state_int(DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS);
+        get_local_state_uint(DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS);
     state.byte_counter_evts =
-        get_local_state_int(DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS);
-    state.rate_cur = get_local_state_int(DCQCN_LOCAL_STATE_IDX_RATE_CUR);
-    state.rate_target = get_local_state_int(DCQCN_LOCAL_STATE_IDX_RATE_TARGET);
+        get_local_state_uint(DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS);
+    state.rate_cur = get_local_state_uint(DCQCN_LOCAL_STATE_IDX_RATE_CUR);
+    state.rate_target = get_local_state_uint(DCQCN_LOCAL_STATE_IDX_RATE_TARGET);
     state.rtt = get_signal(DCQCN_SIG_IDX_RTT);
     state.cwnd = get_control(DCQCN_CTRL_IDX_CWND);
 
     size_t trigger_id = get_signal_invoke_trigger_user_index();
-    int num_ecns = get_signal(DCQCN_SIG_IDX_ECN);
+    pcm_uint num_ecns = get_signal(DCQCN_SIG_IDX_ECN);
     if (num_ecns) {
         // ECN's always have higher priority that any rate increase timer
         trigger_id = DCQCN_SIG_IDX_ECN;
