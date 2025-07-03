@@ -359,6 +359,36 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         flow_ctx->local_state[user_index] = encode_pcm_float(val);             \
     }
 
+#define PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_FN(plugin_name)                  \
+    plugin_name##_flow_constant_uint_get
+#define PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_DEFINE(plugin_name)              \
+    static inline pcm_uint PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_FN(           \
+        plugin_name)(const void *ctx, size_t user_index) {                     \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return flow_ctx->constants[user_index];                                \
+    }
+
+#define PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_FN(plugin_name)                   \
+    plugin_name##_flow_constant_int_get
+#define PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_DEFINE(plugin_name)               \
+    static inline pcm_int PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_FN(             \
+        plugin_name)(const void *ctx, size_t user_index) {                     \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return decode_pcm_int(flow_ctx->constants[user_index]);                \
+    }
+
+#define PLUGIN_FLOW_CONSTANT_FLOAT_GET_GENERIC_FN(plugin_name)                 \
+    plugin_name##_flow_constant_float_get
+#define PLUGIN_FLOW_CONSTANT_FLOAT_GET_GENERIC_DEFINE(plugin_name)             \
+    static inline pcm_float PLUGIN_FLOW_CONSTANT_FLOAT_GET_GENERIC_FN(         \
+        plugin_name)(const void *ctx, size_t user_index) {                     \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return decode_pcm_float(flow_ctx->constants[user_index]);              \
+    }
+
 #define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(plugin_name)                \
     plugin_name##_flow_signal_accumulation_op_sum
 #define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(plugin_name)            \

@@ -54,11 +54,16 @@ struct local_state_attr {
     struct generic_metadata metadata;
 };
 
+struct constant_attr {
+    struct generic_metadata metadata;
+};
+
 typedef int (*algo_function_t)(void *);
 
 #define ALGO_CONF_MAX_NUM_SIGNALS 16
 #define ALGO_CONF_MAX_NUM_CONTROLS 2
 #define ALGO_CONF_MAX_LOCAL_STATE_VARS 16
+#define ALGO_CONF_MAX_NUM_CONSTANTS 16
 
 struct algorithm_config {
     struct device *device;
@@ -71,6 +76,8 @@ struct algorithm_config {
     size_t num_controls;
     struct slist local_state_list;
     size_t num_local_states;
+    struct slist constants_list;
+    size_t num_constants;
     void *dlopen_handle;
     algo_function_t algorithm_fn;
 };
@@ -109,6 +116,9 @@ struct flow_plugin_ops {
         void (*local_state_uint_set)(void *, size_t, pcm_uint);
         pcm_float (*local_state_float_get)(const void *, size_t);
         void (*local_state_float_set)(void *, size_t, pcm_float);
+        pcm_int (*constant_int_get)(const void *, size_t);
+        pcm_uint (*constant_uint_get)(const void *, size_t);
+        pcm_float (*constant_float_get)(const void *, size_t);
     } handler;
 };
 
@@ -171,6 +181,14 @@ int algorithm_config_local_state_uint_set(struct algorithm_config *config,
 int algorithm_config_local_state_float_set(struct algorithm_config *config,
                                            size_t user_index,
                                            pcm_float initial_value);
+int algorithm_config_constant_add(struct algorithm_config *config,
+                                  size_t user_index);
+int algorithm_config_constant_uint_set(struct algorithm_config *config,
+                                       size_t user_index, pcm_uint value);
+int algorithm_config_constant_int_set(struct algorithm_config *config,
+                                      size_t user_index, pcm_int value);
+int algorithm_config_constant_float_set(struct algorithm_config *config,
+                                        size_t user_index, pcm_float value);
 int algorithm_config_compile(struct algorithm_config *config,
                              const char *compile_path, char **err);
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);

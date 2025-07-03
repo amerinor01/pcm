@@ -92,6 +92,31 @@ err_t register_local_state_initial_value_pcmc(size_t user_index,
                                                         initial_value, handle);
 }
 
+err_t register_constant_pcmc(size_t user_index, handle_t handle) {
+    return algorithm_config_constant_add((struct algorithm_config *)handle,
+                                         user_index);
+}
+
+err_t register_constant_initial_value_float_pcmc(size_t user_index,
+                                                 pcm_float value,
+                                                 handle_t handle) {
+    return algorithm_config_constant_float_set(
+        (struct algorithm_config *)handle, user_index, value);
+}
+
+err_t register_constant_initial_value_int_pcmc(size_t user_index, pcm_int value,
+                                               handle_t handle) {
+    return algorithm_config_constant_int_set((struct algorithm_config *)handle,
+                                             user_index, value);
+}
+
+err_t register_constant_initial_value_uint_pcmc(size_t user_index,
+                                                pcm_uint value,
+                                                handle_t handle) {
+    return algorithm_config_constant_uint_set((struct algorithm_config *)handle,
+                                              user_index, value);
+}
+
 err_t register_algorithm_pcmc(const char *compile_path,
                               char **compile_output_string, handle_t handle) {
     return algorithm_config_compile((struct algorithm_config *)handle,

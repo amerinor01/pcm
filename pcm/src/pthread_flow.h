@@ -17,6 +17,7 @@ struct pthrd_flow {
     atomic_uint_fast64_t thresholds[ALGO_CONF_MAX_NUM_SIGNALS];
     atomic_uint_fast64_t controls[ALGO_CONF_MAX_NUM_CONTROLS];
     pcm_uint local_state[ALGO_CONF_MAX_LOCAL_STATE_VARS];
+    pcm_uint constants[ALGO_CONF_MAX_NUM_CONSTANTS];
     struct timespec start_ts;
     pthread_t pthread_obj;
     atomic_bool running;

@@ -244,6 +244,49 @@ err_t register_local_state_initial_value_uint_pcmc(size_t user_index,
 err_t register_local_state_initial_value_float_pcmc(size_t user_index,
                                                     pcm_float initial_value,
                                                     handle_t handle);
+
+/**
+ * @brief Register constant storage for a flow.
+ *
+ * @param[in] user_index   Index for user-defined constant mapping.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_pcmc(size_t user_index, handle_t handle);
+
+/**
+ * @brief Set constant value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] value Constant value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_value_int_pcmc(size_t user_index, pcm_int value,
+                                       handle_t handle);
+
+/**
+ * @brief Set constant value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] value Constant value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
+                                        handle_t handle);
+
+/**
+ * @brief Set constant value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] value Constant value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
+                                         handle_t handle);
+
 /**
  * @brief Compile and register an algorithm with PCMC.
  *
@@ -273,6 +316,9 @@ pcm_uint __flow_local_state_uint_get(const void *ctx, size_t user_index);
 void __flow_local_state_uint_set(void *ctx, size_t user_index, pcm_uint val);
 pcm_float __flow_local_state_float_get(const void *ctx, size_t user_index);
 void __flow_local_state_float_set(void *ctx, size_t user_index, pcm_float val);
+pcm_int __flow_constant_int_get(const void *ctx, size_t user_index);
+pcm_uint __flow_constant_uint_get(const void *ctx, size_t user_index);
+pcm_float __flow_constant_float_get(const void *ctx, size_t user_index);
 
 /**
  * @brief Get the current persistent state within a handler.
@@ -299,7 +345,7 @@ void __flow_local_state_float_set(void *ctx, size_t user_index, pcm_float val);
  * @brief Get the integer current persistent state within a handler.
  *
  * @param[in] user_index User-defined state index.
- * @return Current state unsigned integer value.
+ * @return Current state integer value.
  */
 #define get_local_state_int(user_index)                                        \
     __flow_local_state_int_get(ctx, user_index)
@@ -308,7 +354,7 @@ void __flow_local_state_float_set(void *ctx, size_t user_index, pcm_float val);
  * @brief Update the integer persistent state within a handler.
  *
  * @param[in] user_index   User-defined state index.
- * @param[in] val          New unsigned integer state value.
+ * @param[in] val          New integer state value.
  */
 #define set_local_state_int(user_index, val)                                   \
     __flow_local_state_int_set(ctx, user_index, val);
@@ -348,6 +394,31 @@ void __flow_local_state_float_set(void *ctx, size_t user_index, pcm_float val);
  */
 #define set_local_state_float(user_index, val)                                 \
     __flow_local_state_float_set(ctx, user_index, val);
+
+/**
+ * @brief Get the integer constant.
+ *
+ * @param[in] user_index User-defined constant index.
+ * @return Constant integer value.
+ */
+#define get_constant_int(user_index) __flow_constant_int_get(ctx, user_index)
+
+/**
+ * @brief Get the unsigned integer constant.
+ *
+ * @param[in] user_index User-defined constant index.
+ * @return Constant integer value.
+ */
+#define get_constant_uint(user_index) __flow_constant_uint_get(ctx, user_index)
+
+/**
+ * @brief Get the float constant.
+ *
+ * @param[in] user_index User-defined constant index.
+ * @return Constant integer value.
+ */
+#define get_constant_float(user_index)                                         \
+    __flow_constant_float_get(ctx, user_index)
 
 /**
  * @brief Read the latest signal value within a handler.
