@@ -19,6 +19,12 @@ APPSDIR          := apps
 PCM_C_SRCS       := $(wildcard $(SRCDIR)/*.c) $(wildcard $(HTSIM_SUBDIR)/*.c)
 PCM_CPP_SRCS     :=
 
+# Optionally Linux perf-based profiling
+ENABLE_PROFILING ?= 0
+ifeq ($(ENABLE_PROFILING),1)
+PROFILING_PCM_LIB_CFLAGS := -DENABLE_PROFILING
+endif
+
 # Optionally include HTSIM plugin sources and application
 BUILD_HTSIM_FLOW_PLUGIN ?= 0
 ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
@@ -76,12 +82,12 @@ all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(ALGO_PLUGIN_PCMC_LIBS) $(TGEN_APP_T
 # -----------------------------------------------
 
 $(SRCDIR)/%.o: $(SRCDIR)/%.c
-	$(CC) $(CFLAGS) $(HTSIM_PCM_LIB_CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(HTSIM_PCM_LIB_CFLAGS) $(PROFILING_PCM_LIB_CFLAGS) -c $< -o $@
 
 # htsim plugin C++ sources
 ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
 $(HTSIM_SUBDIR)/%.o: $(HTSIM_SUBDIR)/%.cpp
-	$(CXX) $(CXXFLAGS) $(HTSIM_PCM_LIB_CFLAGS) -c $< -o $@
+	$(CXX) $(CXXFLAGS) $(HTSIM_PCM_LIB_CFLAGS) $(PROFILING_PCM_LIB_CFLAGS) -c $< -o $@
 endif
 
 # Link into libpcm.so
