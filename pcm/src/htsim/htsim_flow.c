@@ -16,6 +16,10 @@ int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
 
 #else
 
+size_t htsim_flow_max_regfile_size_get() {
+    return HTSIM_MAX_REGFILE_SIZE;
+}
+
 int htsim_flow_destroy(flow_t *flow) {
     free(flow->backend_ctx);
     return SUCCESS;
@@ -74,6 +78,7 @@ PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_DEFINE(htsim, htsim_now,
 PLUGIN_FLOW_TIME_GET_GENERIC_DEFINE(htsim, htsim_now, picosec_ts_diff_us_get)
 
 struct flow_plugin_ops htsim_flow_ops = {
+    .control.max_regfile_size_get = htsim_flow_max_regfile_size_get,
     .control.create = htsim_flow_create,
     .control.destroy = htsim_flow_destroy,
     .control.is_ready = NULL,
