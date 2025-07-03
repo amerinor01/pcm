@@ -16,9 +16,7 @@ int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
 
 #else
 
-size_t htsim_flow_max_regfile_size_get() {
-    return HTSIM_MAX_REGFILE_SIZE;
-}
+size_t htsim_flow_max_regfile_size_get() { return HTSIM_MAX_REGFILE_SIZE; }
 
 int htsim_flow_destroy(flow_t *flow) {
     free(flow->backend_ctx);
@@ -41,6 +39,9 @@ int htsim_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
                               flow_ctx->controls);
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->local_state_list,
                               struct local_state_attr, flow_ctx->local_state);
+    ATTR_LIST_FLOW_STATE_INIT(&flow->config->constants_list,
+                              struct constant_attr, flow_ctx->constants);
+
     LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d", flow->config,
             flow, flow->addr);
 
@@ -60,8 +61,13 @@ PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_DEFINE(htsim)
+PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_DEFINE(htsim)
+PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_DEFINE(htsim)
+PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_DEFINE(htsim)
+PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_DEFINE(htsim)
+PLUGIN_FLOW_CONSTANT_FLOAT_GET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_DEFINE(htsim)
@@ -106,10 +112,21 @@ struct flow_plugin_ops htsim_flow_ops = {
         PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(htsim),
     .handler.local_state_int_set =
         PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(htsim),
+    .handler.local_state_uint_get =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_FN(htsim),
+    .handler.local_state_uint_set =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_FN(htsim),
     .handler.local_state_float_get =
         PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(htsim),
     .handler.local_state_float_set =
-        PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(htsim)};
+        PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(htsim)
+            .handler.constant_int_get =
+            PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_FN(htsim),
+    .handler.constant_uint_get =
+        PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_FN(htsim),
+    .handler.constant_float_get =
+        PLUGIN_FLOW_CONSTANT_FLOAT_GET_GENERIC_FN(htsim),
+};
 
 int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     *flow_ops = htsim_flow_ops;

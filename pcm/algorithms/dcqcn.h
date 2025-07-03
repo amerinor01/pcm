@@ -14,13 +14,13 @@
 #define DCQCN_FR_STEPS 5
 
 struct dcqcn_state_snapshot {
-    float alpha;
-    float rate_cur;
-    float rate_target;
-    int rate_increase_timer_evts;
-    int byte_counter_evts;
-    int rtt;
-    int cwnd;
+    pcm_float alpha;
+    pcm_float rate_cur;
+    pcm_float rate_target;
+    pcm_uint rate_increase_timer_evts;
+    pcm_uint byte_counter_evts;
+    pcm_uint rtt;
+    pcm_uint cwnd;
 };
 
 enum dcqcn_signal_idxs {

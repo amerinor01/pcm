@@ -52,14 +52,11 @@ int algorithm_main() {
      *
      * https://github.com/torvalds/linux/blob/aef17cb3d3c43854002956f24c24ec8e1a0e3546/net/ipv4/tcp_dctcp.c#L132
      */
-    if ((int)state.delivered >= state.cwnd) {
+    if (state.delivered >= state.cwnd) {
         /* TODO: support LB path change */
         /* alpha = (1 - g) * alpha + g * F */
         state.alpha -= MIN_NOT_ZERO(state.alpha, state.alpha >> DCTCP_SHIFT_G);
         if (state.delivered_ecn) {
-            /* If dctcp_shift_g == 1, a 32bit value would overflow
-             * after 8 M packets.
-             */
             state.delivered_ecn <<= (10 - DCTCP_SHIFT_G);
             state.delivered_ecn /= MAX(1U, state.delivered);
 

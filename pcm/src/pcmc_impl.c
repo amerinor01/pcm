@@ -35,12 +35,12 @@ err_t deactivate_pcmc(handle_t handle) {
 }
 
 err_t register_signal_pcmc(signal_t signal, signal_accum_t accum_type,
-                           int user_index, handle_t handle) {
+                           size_t user_index, handle_t handle) {
     return algorithm_config_signal_add((struct algorithm_config *)handle,
                                        signal, accum_type, user_index);
 }
 
-err_t register_signal_invoke_trigger_pcmc(size_t user_index, int threshold,
+err_t register_signal_invoke_trigger_pcmc(size_t user_index, pcm_uint threshold,
                                           handle_t handle) {
     return algorithm_config_signal_trigger_set(
         (struct algorithm_config *)handle, user_index, threshold);
@@ -52,7 +52,8 @@ err_t register_control_pcmc(control_t control, size_t user_index,
                                         control, user_index);
 }
 
-err_t register_control_initial_value_pcmc(size_t user_index, int initial_value,
+err_t register_control_initial_value_pcmc(size_t user_index,
+                                          pcm_uint initial_value,
                                           handle_t handle) {
     return algorithm_config_control_initial_value_set(
         (struct algorithm_config *)handle, user_index, initial_value);
@@ -64,24 +65,56 @@ err_t register_local_state_pcmc(size_t user_index, handle_t handle) {
 }
 
 err_t register_local_state_initial_value_float_pcmc(size_t user_index,
-                                                    float initial_value,
+                                                    pcm_float initial_value,
                                                     handle_t handle) {
     return algorithm_config_local_state_float_set(
         (struct algorithm_config *)handle, user_index, initial_value);
 }
 
 err_t register_local_state_initial_value_int_pcmc(size_t user_index,
-                                                  int initial_value,
+                                                  pcm_int initial_value,
                                                   handle_t handle) {
     return algorithm_config_local_state_int_set(
         (struct algorithm_config *)handle, user_index, initial_value);
 }
 
+err_t register_local_state_initial_value_uint_pcmc(size_t user_index,
+                                                   pcm_uint initial_value,
+                                                   handle_t handle) {
+    return algorithm_config_local_state_uint_set(
+        (struct algorithm_config *)handle, user_index, initial_value);
+}
+
 err_t register_local_state_initial_value_pcmc(size_t user_index,
-                                              int initial_value,
+                                              pcm_uint initial_value,
                                               handle_t handle) {
-    return register_local_state_initial_value_int_pcmc(user_index,
-                                                       initial_value, handle);
+    return register_local_state_initial_value_uint_pcmc(user_index,
+                                                        initial_value, handle);
+}
+
+err_t register_constant_pcmc(size_t user_index, handle_t handle) {
+    return algorithm_config_constant_add((struct algorithm_config *)handle,
+                                         user_index);
+}
+
+err_t register_constant_initial_value_float_pcmc(size_t user_index,
+                                                 pcm_float value,
+                                                 handle_t handle) {
+    return algorithm_config_constant_float_set(
+        (struct algorithm_config *)handle, user_index, value);
+}
+
+err_t register_constant_initial_value_int_pcmc(size_t user_index, pcm_int value,
+                                               handle_t handle) {
+    return algorithm_config_constant_int_set((struct algorithm_config *)handle,
+                                             user_index, value);
+}
+
+err_t register_constant_initial_value_uint_pcmc(size_t user_index,
+                                                pcm_uint value,
+                                                handle_t handle) {
+    return algorithm_config_constant_uint_set((struct algorithm_config *)handle,
+                                              user_index, value);
 }
 
 err_t register_algorithm_pcmc(const char *compile_path,

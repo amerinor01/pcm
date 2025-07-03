@@ -13,10 +13,11 @@ extern const char *pthrd_flow_plugin_name;
 
 struct pthrd_flow {
     flow_t *flow;
-    atomic_int signals[ALGO_CONF_MAX_NUM_SIGNALS];
-    atomic_int thresholds[ALGO_CONF_MAX_NUM_SIGNALS];
-    atomic_int controls[ALGO_CONF_MAX_NUM_CONTROLS];
-    uint64_t local_state[ALGO_CONF_MAX_LOCAL_STATE_VARS];
+    atomic_uint_fast64_t signals[ALGO_CONF_MAX_NUM_SIGNALS];
+    atomic_uint_fast64_t thresholds[ALGO_CONF_MAX_NUM_SIGNALS];
+    atomic_uint_fast64_t controls[ALGO_CONF_MAX_NUM_CONTROLS];
+    pcm_uint local_state[ALGO_CONF_MAX_LOCAL_STATE_VARS];
+    pcm_uint constants[ALGO_CONF_MAX_NUM_CONSTANTS];
     struct timespec start_ts;
     pthread_t pthread_obj;
     atomic_bool running;

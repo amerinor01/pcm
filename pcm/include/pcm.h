@@ -8,6 +8,14 @@
 extern "C" {
 #endif
 
+#define STATIC_ASSERT _Static_assert
+STATIC_ASSERT(sizeof(double) == sizeof(uint64_t),
+              "sizeof(double) must be equal to sizeof(uint64_t)");
+
+typedef int64_t pcm_int;
+typedef uint64_t pcm_uint;
+typedef double pcm_float;
+
 /**
  * @file pcm.h
  * @brief Public API for Programmable Congestion Management (PCM) library.
@@ -127,7 +135,7 @@ typedef enum signal_accum {
  * @return SUCCESS on success, ERROR on failure.
  */
 err_t register_signal_pcmc(signal_t signal, signal_accum_t accum_type,
-                           int user_index, handle_t handle);
+                           size_t user_index, handle_t handle);
 
 /**
  * @brief Set a threshold to trigger algorithm callback.
@@ -141,7 +149,7 @@ err_t register_signal_pcmc(signal_t signal, signal_accum_t accum_type,
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, ERROR on failure.
  */
-err_t register_signal_invoke_trigger_pcmc(size_t user_index, int threshold,
+err_t register_signal_invoke_trigger_pcmc(size_t user_index, pcm_uint threshold,
                                           handle_t handle);
 
 /**
@@ -175,7 +183,8 @@ err_t register_control_pcmc(control_t control, size_t user_index,
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, ERROR on failure.
  */
-err_t register_control_initial_value_pcmc(size_t user_index, int initial_value,
+err_t register_control_initial_value_pcmc(size_t user_index,
+                                          pcm_uint initial_value,
                                           handle_t handle);
 
 /**
@@ -197,7 +206,7 @@ err_t register_local_state_pcmc(size_t user_index, handle_t handle);
  * @return SUCCESS on success, ERROR on failure.
  */
 err_t register_local_state_initial_value_pcmc(size_t user_index,
-                                              int initial_value,
+                                              pcm_uint initial_value,
                                               handle_t handle);
 
 /**
@@ -209,8 +218,20 @@ err_t register_local_state_initial_value_pcmc(size_t user_index,
  * @return SUCCESS on success, ERROR on failure.
  */
 err_t register_local_state_initial_value_int_pcmc(size_t user_index,
-                                                  int initial_value,
+                                                  pcm_int initial_value,
                                                   handle_t handle);
+
+/**
+ * @brief Set the initial persistent uint state value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] initial_value Initial state value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_local_state_initial_value_uint_pcmc(size_t user_index,
+                                                   pcm_uint initial_value,
+                                                   handle_t handle);
 
 /**
  * @brief Set the initial persistent float state value for a flow.
@@ -221,8 +242,51 @@ err_t register_local_state_initial_value_int_pcmc(size_t user_index,
  * @return SUCCESS on success, ERROR on failure.
  */
 err_t register_local_state_initial_value_float_pcmc(size_t user_index,
-                                                    float initial_value,
+                                                    pcm_float initial_value,
                                                     handle_t handle);
+
+/**
+ * @brief Register constant storage for a flow.
+ *
+ * @param[in] user_index   Index for user-defined constant mapping.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_pcmc(size_t user_index, handle_t handle);
+
+/**
+ * @brief Set constant value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] value Constant value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_value_int_pcmc(size_t user_index, pcm_int value,
+                                       handle_t handle);
+
+/**
+ * @brief Set constant value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] value Constant value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
+                                        handle_t handle);
+
+/**
+ * @brief Set constant value for a flow.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] value Constant value.
+ * @param[in] handle       PCM handle.
+ * @return SUCCESS on success, ERROR on failure.
+ */
+err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
+                                         handle_t handle);
+
 /**
  * @brief Compile and register an algorithm with PCMC.
  *
@@ -240,26 +304,31 @@ err_t register_algorithm_pcmc(const char *compile_path,
 
 #define __algorithm_entry_point __algorithm_main(void *ctx)
 #define __algorithm_entry_point_symbol "__algorithm_main"
-int __flow_control_get(const void *ctx, size_t user_index);
-void __flow_control_set(void *ctx, size_t user_index, int val);
-int __flow_signal_get(const void *ctx, size_t user_index);
-void __flow_signal_set(void *ctx, size_t user_index, int val);
-void __flow_signal_update(void *ctx, size_t user_index, int val);
+pcm_uint __flow_control_get(const void *ctx, size_t user_index);
+void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);
+pcm_uint __flow_signal_get(const void *ctx, size_t user_index);
+void __flow_signal_set(void *ctx, size_t user_index, pcm_uint val);
+void __flow_signal_update(void *ctx, size_t user_index, pcm_uint val);
 size_t __flow_signal_trigger_user_index_get(void *ctx);
-int __flow_local_state_int_get(const void *ctx, size_t user_index);
-void __flow_local_state_int_set(void *ctx, size_t user_index, int val);
-float __flow_local_state_float_get(const void *ctx, size_t user_index);
-void __flow_local_state_float_set(void *ctx, size_t user_index, float val);
+pcm_int __flow_local_state_int_get(const void *ctx, size_t user_index);
+void __flow_local_state_int_set(void *ctx, size_t user_index, pcm_int val);
+pcm_uint __flow_local_state_uint_get(const void *ctx, size_t user_index);
+void __flow_local_state_uint_set(void *ctx, size_t user_index, pcm_uint val);
+pcm_float __flow_local_state_float_get(const void *ctx, size_t user_index);
+void __flow_local_state_float_set(void *ctx, size_t user_index, pcm_float val);
+pcm_int __flow_constant_int_get(const void *ctx, size_t user_index);
+pcm_uint __flow_constant_uint_get(const void *ctx, size_t user_index);
+pcm_float __flow_constant_float_get(const void *ctx, size_t user_index);
 
 /**
  * @brief Get the current persistent state within a handler.
  *
- * Similar to get_local_state_int.
+ * Similar to get_local_state_uint.
  *
  * @param[in] user_index   User-defined state index.
  * @return Current state value.
  */
-#define get_local_state(user_index) __flow_local_state_int_get(ctx, user_index)
+#define get_local_state(user_index) __flow_local_state_uint_get(ctx, user_index)
 
 /**
  * @brief Update the persistent state within a handler.
@@ -270,7 +339,7 @@ void __flow_local_state_float_set(void *ctx, size_t user_index, float val);
  * @param[in] val          New state value.
  */
 #define set_local_state(user_index, val)                                       \
-    __flow_local_state_int_set(ctx, user_index, val);
+    __flow_local_state_uint_set(ctx, user_index, val);
 
 /**
  * @brief Get the integer current persistent state within a handler.
@@ -291,6 +360,24 @@ void __flow_local_state_float_set(void *ctx, size_t user_index, float val);
     __flow_local_state_int_set(ctx, user_index, val);
 
 /**
+ * @brief Get the unsigned integer current persistent state within a handler.
+ *
+ * @param[in] user_index User-defined state index.
+ * @return Current state unsigned integer value.
+ */
+#define get_local_state_uint(user_index)                                       \
+    __flow_local_state_uint_get(ctx, user_index)
+
+/**
+ * @brief Update the unsigned integer persistent state within a handler.
+ *
+ * @param[in] user_index   User-defined state index.
+ * @param[in] val          New unsigned integer state value.
+ */
+#define set_local_state_uint(user_index, val)                                  \
+    __flow_local_state_uint_set(ctx, user_index, val);
+
+/**
  * @brief Get the float current persistent state within a handler.
  *
  * @param[in] user_index User-defined state index.
@@ -307,6 +394,31 @@ void __flow_local_state_float_set(void *ctx, size_t user_index, float val);
  */
 #define set_local_state_float(user_index, val)                                 \
     __flow_local_state_float_set(ctx, user_index, val);
+
+/**
+ * @brief Get the integer constant.
+ *
+ * @param[in] user_index User-defined constant index.
+ * @return Constant integer value.
+ */
+#define get_constant_int(user_index) __flow_constant_int_get(ctx, user_index)
+
+/**
+ * @brief Get the unsigned integer constant.
+ *
+ * @param[in] user_index User-defined constant index.
+ * @return Constant integer value.
+ */
+#define get_constant_uint(user_index) __flow_constant_uint_get(ctx, user_index)
+
+/**
+ * @brief Get the float constant.
+ *
+ * @param[in] user_index User-defined constant index.
+ * @return Constant integer value.
+ */
+#define get_constant_float(user_index)                                         \
+    __flow_constant_float_get(ctx, user_index)
 
 /**
  * @brief Read the latest signal value within a handler.

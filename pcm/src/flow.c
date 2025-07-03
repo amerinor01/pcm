@@ -15,14 +15,14 @@
 signal_trigger_arm_fn flow_signal_trigger_arm_no_op = NULL;
 signal_accumulation_op_fn flow_signal_accumulation_no_op = NULL;
 
-int flow_cwnd_get(const flow_t *flow) {
+pcm_uint flow_cwnd_get(const flow_t *flow) {
     size_t cwnd_idx;
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
         &flow->config->controls_list, struct control_attr, CTRL_CWND, cwnd_idx);
     return flow->device->flow_ops.handler.control_get(flow, cwnd_idx);
 }
 
-int flow_time_get(const flow_t *flow) {
+pcm_uint flow_time_get(const flow_t *flow) {
     return flow->device->flow_ops.control.time_get(flow);
 }
 
@@ -30,7 +30,7 @@ bool flow_is_ready(const flow_t *flow) {
     return flow->device->flow_ops.control.is_ready(flow);
 }
 
-void flow_signals_update(flow_t *flow, signal_t signal_type, int value) {
+void flow_signals_update(flow_t *flow, signal_t signal_type, pcm_uint value) {
     struct slist_entry *item, *prev;
     slist_foreach(&flow->config->signals_list, item, prev) {
         (void)prev; /* suppress compiler warnings */

@@ -1,9 +1,7 @@
 #include "pthread_flow.h"
 #include "util.h"
 
-size_t pthrd_flow_max_regfile_size_get() {
-    return PTHRD_MAX_REGFILE_SIZE;
-}
+size_t pthrd_flow_max_regfile_size_get() { return PTHRD_MAX_REGFILE_SIZE; }
 
 bool pthrd_flow_is_ready(const flow_t *flow) {
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
@@ -40,6 +38,8 @@ int pthrd_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
                               flow_ctx->controls);
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->local_state_list,
                               struct local_state_attr, flow_ctx->local_state);
+    ATTR_LIST_FLOW_STATE_INIT(&flow->config->constants_list,
+                              struct constant_attr, flow_ctx->constants);
     LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d", flow->config,
             flow, flow->addr);
 
@@ -75,8 +75,13 @@ PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_CONSTANT_FLOAT_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_DEFINE(pthrd)
@@ -123,10 +128,20 @@ struct flow_plugin_ops pthrd_flow_ops = {
         PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(pthrd),
     .handler.local_state_int_set =
         PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(pthrd),
+    .handler.local_state_uint_get =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_FN(pthrd),
+    .handler.local_state_uint_set =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_FN(pthrd),
     .handler.local_state_float_get =
         PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(pthrd),
     .handler.local_state_float_set =
-        PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(pthrd)};
+        PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(pthrd),
+    .handler.constant_int_get = PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_FN(pthrd),
+    .handler.constant_uint_get =
+        PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_FN(pthrd),
+    .handler.constant_float_get =
+        PLUGIN_FLOW_CONSTANT_FLOAT_GET_GENERIC_FN(pthrd),
+};
 
 int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     *flow_ops = pthrd_flow_ops;

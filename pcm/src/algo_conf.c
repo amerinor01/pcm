@@ -18,6 +18,7 @@ int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
     slist_init(&new_config->signals_list);
     slist_init(&new_config->controls_list);
     slist_init(&new_config->local_state_list);
+    slist_init(&new_config->constants_list);
     new_config->active = false;
 
     LOG_DBG("[dev=%p] allocated new config=%p", device, new_config);
@@ -49,6 +50,8 @@ int algorithm_config_destroy(struct algorithm_config *config) {
                    config->num_controls);
     ATTR_LIST_FREE(&config->local_state_list, struct local_state_attr,
                    config->num_local_states);
+    ATTR_LIST_FREE(&config->constants_list, struct constant_attr,
+                   config->num_constants);
 
     if (dlclose(config->dlopen_handle)) {
         LOG_CRIT("[dev=%p conf=%p] dlclose() failed with %s", config->device,
@@ -87,8 +90,10 @@ int algorithm_config_activate(struct algorithm_config *config) {
         return ERROR;
     }
     config->active = true;
-    LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu",
-            config->device, config, config->num_signals, config->num_controls);
+    LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu "
+            "num_constants=%zu",
+            config->device, config, config->num_signals, config->num_controls,
+            config->num_constants);
     return SUCCESS;
 }
 
@@ -150,7 +155,7 @@ int algorithm_config_signal_add(struct algorithm_config *config,
 }
 
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
-                                        size_t user_index, int threshold) {
+                                        size_t user_index, pcm_uint threshold) {
     struct signal_attr *attr;
     ATTR_LIST_ITEM_SET(&config->signals_list, struct signal_attr, user_index,
                        threshold, attr);
@@ -190,7 +195,7 @@ int algorithm_config_control_add(struct algorithm_config *config,
 
 int algorithm_config_control_initial_value_set(struct algorithm_config *config,
                                                size_t user_index,
-                                               int initial_value) {
+                                               pcm_uint initial_value) {
     struct control_attr *attr;
     ATTR_LIST_ITEM_SET(&config->controls_list, struct control_attr, user_index,
                        initial_value, attr);
@@ -208,10 +213,20 @@ int algorithm_config_local_state_add(struct algorithm_config *config,
     return SUCCESS;
 }
 
-int algorithm_config_local_state_int_set(struct algorithm_config *config,
-                                         size_t user_index, int initial_value) {
+int algorithm_config_local_state_uint_set(struct algorithm_config *config,
+                                          size_t user_index,
+                                          pcm_uint initial_value) {
     struct local_state_attr *attr;
-    uint64_t encoded_val = encode_int(initial_value);
+    ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
+                       user_index, initial_value, attr);
+    return SUCCESS;
+}
+
+int algorithm_config_local_state_int_set(struct algorithm_config *config,
+                                         size_t user_index,
+                                         pcm_int initial_value) {
+    struct local_state_attr *attr;
+    pcm_uint encoded_val = encode_pcm_int(initial_value);
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
                        user_index, encoded_val, attr);
     return SUCCESS;
@@ -219,10 +234,47 @@ int algorithm_config_local_state_int_set(struct algorithm_config *config,
 
 int algorithm_config_local_state_float_set(struct algorithm_config *config,
                                            size_t user_index,
-                                           float initial_value) {
+                                           pcm_float initial_value) {
     struct local_state_attr *attr;
-    uint64_t encoded_val = encode_float(initial_value);
+    pcm_uint encoded_val = encode_pcm_float(initial_value);
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
+                       user_index, encoded_val, attr);
+    return SUCCESS;
+}
+
+int algorithm_config_constant_add(struct algorithm_config *config,
+                                  size_t user_index) {
+    ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->constants_list,
+                                       struct constant_attr, user_index);
+    struct constant_attr *attr;
+    ATTR_LIST_ITEM_ALLOC(&config->constants_list, user_index,
+                         config->num_constants, ALGO_CONF_MAX_NUM_CONSTANTS,
+                         attr);
+    return SUCCESS;
+}
+
+int algorithm_config_constant_uint_set(struct algorithm_config *config,
+                                       size_t user_index, pcm_uint value) {
+    struct constant_attr *attr;
+    ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
+                       user_index, value, attr);
+    return SUCCESS;
+}
+
+int algorithm_config_constant_int_set(struct algorithm_config *config,
+                                      size_t user_index, pcm_int value) {
+    struct constant_attr *attr;
+    pcm_uint encoded_val = encode_pcm_int(value);
+    ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
+                       user_index, encoded_val, attr);
+    return SUCCESS;
+}
+
+int algorithm_config_constant_float_set(struct algorithm_config *config,
+                                        size_t user_index, pcm_float value) {
+    struct constant_attr *attr;
+    pcm_uint encoded_val = encode_pcm_float(value);
+    ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
                        user_index, encoded_val, attr);
     return SUCCESS;
 }

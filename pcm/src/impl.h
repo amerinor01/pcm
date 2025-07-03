@@ -13,21 +13,21 @@ extern "C" {
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "pcm_network.h"
 #include "pcm.h"
+#include "pcm_network.h"
 #include "slist.h"
 
 struct generic_metadata {
     struct slist_entry list_entry;
     size_t index;
-    int value;
+    pcm_uint value;
 };
 
 // Forward declaration
 struct signal_attr;
 
 typedef void (*signal_accumulation_op_fn)(flow_t *, const struct signal_attr *,
-                                          int);
+                                          pcm_uint);
 typedef bool (*signal_trigger_check_fn)(const flow_t *,
                                         const struct signal_attr *);
 typedef void (*signal_trigger_arm_fn)(flow_t *, const struct signal_attr *);
@@ -54,11 +54,16 @@ struct local_state_attr {
     struct generic_metadata metadata;
 };
 
+struct constant_attr {
+    struct generic_metadata metadata;
+};
+
 typedef int (*algo_function_t)(void *);
 
 #define ALGO_CONF_MAX_NUM_SIGNALS 16
 #define ALGO_CONF_MAX_NUM_CONTROLS 2
 #define ALGO_CONF_MAX_LOCAL_STATE_VARS 16
+#define ALGO_CONF_MAX_NUM_CONSTANTS 16
 
 struct algorithm_config {
     struct device *device;
@@ -71,6 +76,8 @@ struct algorithm_config {
     size_t num_controls;
     struct slist local_state_list;
     size_t num_local_states;
+    struct slist constants_list;
+    size_t num_constants;
     void *dlopen_handle;
     algo_function_t algorithm_fn;
 };
@@ -81,7 +88,7 @@ struct flow_plugin_ops {
         int (*create)(flow_t *, traffic_gen_fn_t);
         int (*destroy)(flow_t *);
         bool (*is_ready)(const flow_t *);
-        int (*time_get)(const flow_t *);
+        pcm_uint (*time_get)(const flow_t *);
     } control;
 
     struct datapath_ops {
@@ -98,15 +105,20 @@ struct flow_plugin_ops {
     } datapath;
 
     struct handler_ops {
-        void (*control_set)(void *, size_t, int);
-        int (*control_get)(const void *, size_t);
-        void (*signal_set)(void *, size_t, int);
-        int (*signal_get)(const void *, size_t);
-        void (*signal_update)(void *, size_t, int);
-        int (*local_state_int_get)(const void *, size_t);
-        void (*local_state_int_set)(void *, size_t, int);
-        float (*local_state_float_get)(const void *, size_t);
-        void (*local_state_float_set)(void *, size_t, float);
+        void (*control_set)(void *, size_t, pcm_uint);
+        pcm_uint (*control_get)(const void *, size_t);
+        void (*signal_set)(void *, size_t, pcm_uint);
+        pcm_uint (*signal_get)(const void *, size_t);
+        void (*signal_update)(void *, size_t, pcm_uint);
+        pcm_int (*local_state_int_get)(const void *, size_t);
+        void (*local_state_int_set)(void *, size_t, pcm_int);
+        pcm_uint (*local_state_uint_get)(const void *, size_t);
+        void (*local_state_uint_set)(void *, size_t, pcm_uint);
+        pcm_float (*local_state_float_get)(const void *, size_t);
+        void (*local_state_float_set)(void *, size_t, pcm_float);
+        pcm_int (*constant_int_get)(const void *, size_t);
+        pcm_uint (*constant_uint_get)(const void *, size_t);
+        pcm_float (*constant_float_get)(const void *, size_t);
     } handler;
 };
 
@@ -152,19 +164,31 @@ int algorithm_config_signal_add(struct algorithm_config *config,
                                 signal_t signal, signal_accum_t accum_type,
                                 size_t user_index);
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
-                                        size_t user_index, int threshold);
+                                        size_t user_index, pcm_uint threshold);
 int algorithm_config_control_add(struct algorithm_config *config,
                                  control_t control, size_t user_index);
 int algorithm_config_control_initial_value_set(struct algorithm_config *config,
                                                size_t user_index,
-                                               int initial_value);
+                                               pcm_uint initial_value);
 int algorithm_config_local_state_add(struct algorithm_config *config,
                                      size_t user_index);
 int algorithm_config_local_state_int_set(struct algorithm_config *config,
-                                         size_t user_index, int initial_value);
+                                         size_t user_index,
+                                         pcm_int initial_value);
+int algorithm_config_local_state_uint_set(struct algorithm_config *config,
+                                          size_t user_index,
+                                          pcm_uint initial_value);
 int algorithm_config_local_state_float_set(struct algorithm_config *config,
                                            size_t user_index,
-                                           float initial_value);
+                                           pcm_float initial_value);
+int algorithm_config_constant_add(struct algorithm_config *config,
+                                  size_t user_index);
+int algorithm_config_constant_uint_set(struct algorithm_config *config,
+                                       size_t user_index, pcm_uint value);
+int algorithm_config_constant_int_set(struct algorithm_config *config,
+                                      size_t user_index, pcm_int value);
+int algorithm_config_constant_float_set(struct algorithm_config *config,
+                                        size_t user_index, pcm_float value);
 int algorithm_config_compile(struct algorithm_config *config,
                              const char *compile_path, char **err);
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
@@ -176,7 +200,7 @@ void flow_triggers_arm(flow_t *flow);
 bool flow_handler_invoke_on_trigger(flow_t *flow);
 
 #ifdef __cplusplus
-}  /* extern "C" */
+} /* extern "C" */
 #endif
 
 #endif /* _IMPL_H_ */

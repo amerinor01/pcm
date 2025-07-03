@@ -37,17 +37,17 @@ enum swift_local_var_idxs {
 };
 
 struct swift_state_shapshot {
-    int num_nacks;
-    int num_rtos;
-    int tot_acked;
-    int num_acks;
-    int now;
-    int rtt_estim;
-    int delay;
-    int t_last_decrease;
-    int cwnd;
-    int cwnd_prev;
-    int retransmit_cnt;
+    pcm_uint num_nacks;
+    pcm_uint num_rtos;
+    pcm_uint tot_acked;
+    pcm_uint num_acks;
+    pcm_uint now;
+    pcm_uint rtt_estim;
+    pcm_uint delay;
+    pcm_uint t_last_decrease;
+    pcm_uint cwnd;
+    pcm_uint cwnd_prev;
+    pcm_uint retransmit_cnt;
     bool can_decrease;
 };
 

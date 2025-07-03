@@ -17,21 +17,21 @@
 #define SMARTT_FI_TOL 1e-6
 
 struct smartt_state_snapshot {
-    int acked_bytes;     /* bytes acked since last QA */
-    int bytes_ignored;   /* QA-ignore counter */
-    int bytes_to_ignore; /* QA-ignore threshold */
-    int trigger_qa;      /* QA active */
-    int qa_deadline;     /* timestamp to limit QA frequency */
-    int fast_count;      /* accumulator for fast increase */
-    int fast_active;     /* fast increase mode active */
-    int last_rtt;        /* last measured RTT in us */
-    int avg_rtt;         /* average RTT in us */
-    int now;             /* current timestamp */
-    int cwnd;            /* congestion window in bytes */
-    int num_acks;
-    int num_nacks;
-    int num_rtos;
-    int num_ecns; // instead of last_pkt_ecn
+    pcm_uint acked_bytes;     /* bytes acked since last QA */
+    pcm_uint bytes_ignored;   /* QA-ignore counter */
+    pcm_uint bytes_to_ignore; /* QA-ignore threshold */
+    pcm_uint trigger_qa;      /* QA active */
+    pcm_uint qa_deadline;     /* timestamp to limit QA frequency */
+    pcm_uint fast_count;      /* accumulator for fast increase */
+    pcm_uint fast_active;     /* fast increase mode active */
+    pcm_uint last_rtt;        /* last measured RTT in us */
+    pcm_uint avg_rtt;         /* average RTT in us */
+    pcm_uint now;             /* current timestamp */
+    pcm_uint cwnd;            /* congestion window in bytes */
+    pcm_uint num_acks;
+    pcm_uint num_nacks;
+    pcm_uint num_rtos;
+    pcm_uint num_ecns; // instead of last_pkt_ecn
 };
 
 enum smartt_local_state_idxs {
