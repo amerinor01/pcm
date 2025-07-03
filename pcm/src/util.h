@@ -468,8 +468,8 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         if (timer) {                                                           \
             int diff = time_diff_fn(flow_ctx->start_ts, time_now_fn());        \
             if (diff - timer >= threshold) {                                   \
-                LOG_INFO("TIMER EXPIRED: now=%d timer=%d threshold=%d", diff,  \
-                         timer, threshold);                                    \
+                LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d", diff,   \
+                        timer, threshold);                                     \
                 return true;                                                   \
             }                                                                  \
         }                                                                      \
