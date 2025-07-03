@@ -200,6 +200,8 @@ static void *device_scheduler_thread_fn(void *arg) {
     LOG_DBG("scheduler thread started");
 
     size_t num_triggers = 0;
+    (void)num_triggers; // make compiler happy in non-debug case
+
     while (scheduler->progress.thread.running) {
         if (pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock)) {
             scheduler->progress.thread.err = ERROR;
@@ -247,7 +249,8 @@ bool device_scheduler_progress(device_t *device) {
     if (device->scheduler.progress.cur_flow == device->scheduler.flow_list.tail)
         device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;
     else
-        device->scheduler.progress.cur_flow = device->scheduler.progress.cur_flow->next;
+        device->scheduler.progress.cur_flow =
+            device->scheduler.progress.cur_flow->next;
 
     return triggered;
 }

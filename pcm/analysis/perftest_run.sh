@@ -24,13 +24,13 @@ set -x
 
 # run all but newreno in a loop
 for proto in dctcp dcqcn swift smartt; do
-  ./bin/app_main 1 10000000 "$proto" "$SO_DIR/lib${proto}.so" \
+  traffic_gen_app 1 10000000 "$proto" "$SO_DIR/lib${proto}.so" \
     &> "$OUT_DIR/${proto}.prof.log"
 done
 
 # handle newreno’s two variants
-./bin/app_main 1 10000000 newreno "$SO_DIR/libreno_accumulated.so" \
+traffic_gen_app 1 10000000 newreno "$SO_DIR/libreno_accumulated.so" \
   &> "$OUT_DIR/reno_accum.prof.log"
 
-./bin/app_main 1 10000000 newreno "$SO_DIR/libreno_standard.so" \
+traffic_gen_app 1 10000000 newreno "$SO_DIR/libreno_standard.so" \
   &> "$OUT_DIR/reno_standard.prof.log"

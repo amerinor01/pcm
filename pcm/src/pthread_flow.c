@@ -1,6 +1,10 @@
 #include "pthread_flow.h"
 #include "util.h"
 
+size_t pthrd_flow_max_regfile_size_get() {
+    return PTHRD_MAX_REGFILE_SIZE;
+}
+
 bool pthrd_flow_is_ready(const flow_t *flow) {
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
     return flow_ctx->running;
@@ -91,6 +95,7 @@ PLUGIN_FLOW_TIME_GET_GENERIC_DEFINE(pthrd, clock_gettime_now,
 const char *pthrd_flow_plugin_name = "pthread";
 
 struct flow_plugin_ops pthrd_flow_ops = {
+    .control.max_regfile_size_get = pthrd_flow_max_regfile_size_get,
     .control.create = pthrd_flow_create,
     .control.destroy = pthrd_flow_destroy,
     .control.is_ready = pthrd_flow_is_ready,

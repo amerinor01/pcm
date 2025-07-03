@@ -7,6 +7,8 @@
 
 #include "../impl.h"
 
+#define HTSIM_MAX_REGFILE_SIZE (sizeof(uint64_t) * 64);
+
 extern const char *htsim_flow_plugin_name;
 
 struct htsim_flow {

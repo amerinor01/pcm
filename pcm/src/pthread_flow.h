@@ -7,6 +7,8 @@
 
 #include "impl.h"
 
+#define PTHRD_MAX_REGFILE_SIZE (sizeof(uint64_t) * 64);
+
 extern const char *pthrd_flow_plugin_name;
 
 struct pthrd_flow {
