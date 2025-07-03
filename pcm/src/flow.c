@@ -128,7 +128,8 @@ int flow_create(device_t *device, flow_t **flow,
     if (!device)
         return ERROR;
 
-    flow_t *new_flow = calloc(1, sizeof(*new_flow));
+    flow_t *new_flow = (flow_t *)calloc(
+        1, sizeof(*new_flow) + device->flow_ops.control.max_regfile_size_get());
     if (!new_flow) {
         LOG_CRIT("[dev=%p] failed to allocate new flow", device);
         return ERROR;
