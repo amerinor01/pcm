@@ -21,11 +21,11 @@ int flow_create(device_t *device, flow_t **flow,
                 traffic_gen_fn_t traffic_gen_fn);
 int flow_destroy(flow_t *flow);
 bool flow_is_ready(const flow_t *flow);
-int flow_cwnd_get(const flow_t *flow);
-void flow_signals_update(flow_t *flow, signal_t signal_type, int value);
+pcm_uint flow_cwnd_get(const flow_t *flow);
+void flow_signals_update(flow_t *flow, signal_t signal_type, pcm_uint value);
 
 #ifdef __cplusplus
-}  /* extern "C" */
+} /* extern "C" */
 #endif
 
 #endif /* _NETWORK_H_ */

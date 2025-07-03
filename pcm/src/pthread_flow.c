@@ -1,9 +1,7 @@
 #include "pthread_flow.h"
 #include "util.h"
 
-size_t pthrd_flow_max_regfile_size_get() {
-    return PTHRD_MAX_REGFILE_SIZE;
-}
+size_t pthrd_flow_max_regfile_size_get() { return PTHRD_MAX_REGFILE_SIZE; }
 
 bool pthrd_flow_is_ready(const flow_t *flow) {
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
@@ -75,6 +73,8 @@ PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(pthrd)
@@ -123,6 +123,10 @@ struct flow_plugin_ops pthrd_flow_ops = {
         PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(pthrd),
     .handler.local_state_int_set =
         PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(pthrd),
+    .handler.local_state_uint_get =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_FN(pthrd),
+    .handler.local_state_uint_set =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_FN(pthrd),
     .handler.local_state_float_get =
         PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(pthrd),
     .handler.local_state_float_set =

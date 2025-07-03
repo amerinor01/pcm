@@ -194,43 +194,37 @@ static inline const char *signal_accum_type_to_string(signal_accum_t type) {
     return "SIG_ACCUM_UNKNOWN";
 }
 
-#define STATIC_ASSERT _Static_assert
-
-STATIC_ASSERT(sizeof(float) <= sizeof(uint64_t),
-              "float datatype must fit into 64 bits");
-STATIC_ASSERT(sizeof(int) <= sizeof(uint64_t),
-              "int datatype must fit into 64 bits");
-
-/* encode any value T into 64-bit representation */
-static inline uint64_t encode_u64(const void *val, size_t val_size) {
-    uint64_t u;
+/* encode any value T into pcm_uint representation */
+static inline pcm_uint encode_to_pcm_uint(const void *val, size_t val_size) {
+    pcm_uint u;
     memcpy(&u, val, val_size);
     return u;
 }
 
-/* decode a 64-bit raw into a value T */
-static inline void decode_u64(uint64_t u, void *out, size_t out_size) {
+/* decode a pcm_uint raw into a value T */
+static inline void decode_from_pcm_uint(pcm_uint u, void *out,
+                                        size_t out_size) {
     memcpy(out, &u, out_size);
 }
 
-static inline float decode_float(uint64_t u) {
-    float f;
-    decode_u64(u, &f, sizeof(f));
+static inline pcm_float decode_pcm_float(pcm_uint u) {
+    pcm_float f;
+    decode_from_pcm_uint(u, &f, sizeof(f));
     return f;
 }
 
-static inline int decode_int(uint64_t u) {
-    int x;
-    decode_u64(u, &x, sizeof(x));
+static inline pcm_int decode_pcm_int(pcm_uint u) {
+    pcm_int x;
+    decode_from_pcm_uint(u, &x, sizeof(x));
     return x;
 }
 
-static inline uint64_t encode_float(float f) {
-    return encode_u64(&f, sizeof(f));
+static inline pcm_uint encode_pcm_float(pcm_float f) {
+    return encode_to_pcm_uint(&f, sizeof(f));
 }
 
-static inline uint64_t encode_int(uint32_t x) {
-    return encode_u64(&x, sizeof(x));
+static inline pcm_uint encode_pcm_int(pcm_int x) {
+    return encode_to_pcm_uint(&x, sizeof(x));
 }
 
 static inline struct timespec clock_gettime_now() {
@@ -241,25 +235,24 @@ static inline struct timespec clock_gettime_now() {
     return now_ts;
 }
 
-static inline int clock_gettime_ts_diff_us_get(struct timespec ts_start,
-                                               struct timespec ts_end) {
-    // casting this to int is mostly likely dangerous, but we do this for now
-    // just get the whole thing work
-    // TODO 1: use uint - need to support uint signals
-    // TODO 2: use UEC uses 128 ns as a unit of time
-    return (int)((((double)ts_end.tv_sec * 1e9 + (double)ts_end.tv_nsec) -
-                  ((double)ts_start.tv_sec * 1e9 + (double)ts_start.tv_nsec)) /
-                 1e3); // to microseconds
+static inline pcm_uint clock_gettime_ts_diff_us_get(struct timespec ts_start,
+                                                    struct timespec ts_end) {
+    // TODO: use UEC uses 128 ns as a unit of time
+    return (
+        pcm_uint)((((double)ts_end.tv_sec * 1e9 + (double)ts_end.tv_nsec) -
+                   ((double)ts_start.tv_sec * 1e9 + (double)ts_start.tv_nsec)) /
+                  1e3); // to microseconds
 }
 
-static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
-    return (int)((double)(ts_end - ts_start) / 1000000.0);
+static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
+                                              uint64_t ts_end) {
+    return (pcm_uint)((double)(ts_end - ts_start) / 1000000.0);
 }
 
 #define PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)                         \
     plugin_name##_flow_signal_get
 #define PLUGIN_FLOW_SIGNAL_GET_GENERIC_DEFINE(plugin_name)                     \
-    static inline int PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)(          \
+    static inline pcm_uint PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)(     \
         const void *ctx, size_t user_index) {                                  \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
@@ -270,7 +263,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
     plugin_name##_flow_signal_set
 #define PLUGIN_FLOW_SIGNAL_SET_GENERIC_DEFINE(plugin_name)                     \
     static inline void PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(plugin_name)(         \
-        void *ctx, size_t user_index, int val) {                               \
+        void *ctx, size_t user_index, pcm_uint val) {                          \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
         flow_ctx->signals[user_index] = val;                                   \
@@ -280,7 +273,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
     plugin_name##_flow_signal_update
 #define PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_DEFINE(plugin_name)                  \
     static inline void PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(plugin_name)(      \
-        void *ctx, size_t user_index, int val) {                               \
+        void *ctx, size_t user_index, pcm_uint val) {                          \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
         flow_ctx->signals[user_index] += val;                                  \
@@ -289,7 +282,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
 #define PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)                        \
     plugin_name##_flow_control_get
 #define PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(plugin_name)                    \
-    static inline int PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)(         \
+    static inline pcm_uint PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)(    \
         const void *ctx, size_t user_index) {                                  \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
@@ -300,50 +293,70 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
     plugin_name##_flow_control_set
 #define PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(plugin_name)                    \
     static inline void PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(plugin_name)(        \
-        void *ctx, size_t user_index, int val) {                               \
+        void *ctx, size_t user_index, pcm_uint val) {                          \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
         flow_ctx->controls[user_index] = val;                                  \
     }
 
+#define PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_FN(plugin_name)               \
+    plugin_name##_flow_local_state_uint_get
+#define PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_DEFINE(plugin_name)           \
+    static inline pcm_uint PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_FN(        \
+        plugin_name)(const void *ctx, size_t user_index) {                     \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        return flow_ctx->local_state[user_index];                              \
+    }
+
+#define PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_FN(plugin_name)               \
+    plugin_name##_flow_local_state_uint_set
+#define PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_DEFINE(plugin_name)           \
+    static inline void PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_FN(            \
+        plugin_name)(void *ctx, size_t user_index, pcm_uint val) {             \
+        struct plugin_name##_flow *flow_ctx = ((                               \
+            struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
+        flow_ctx->local_state[user_index] = val;                               \
+    }
+
 #define PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(plugin_name)                \
     plugin_name##_flow_local_state_int_get
 #define PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_DEFINE(plugin_name)            \
-    static inline int PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(plugin_name)( \
-        const void *ctx, size_t user_index) {                                  \
+    static inline pcm_int PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(          \
+        plugin_name)(const void *ctx, size_t user_index) {                     \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
-        return decode_int(flow_ctx->local_state[user_index]);                  \
+        return decode_pcm_int(flow_ctx->local_state[user_index]);              \
     }
 
 #define PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(plugin_name)                \
     plugin_name##_flow_local_state_int_set
 #define PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_DEFINE(plugin_name)            \
     static inline void PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(             \
-        plugin_name)(void *ctx, size_t user_index, int val) {                  \
+        plugin_name)(void *ctx, size_t user_index, pcm_int val) {              \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
-        flow_ctx->local_state[user_index] = encode_int(val);                   \
+        flow_ctx->local_state[user_index] = encode_pcm_int(val);               \
     }
 
 #define PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(plugin_name)              \
     plugin_name##_flow_local_state_float_get
 #define PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_DEFINE(plugin_name)          \
-    static inline float PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(          \
+    static inline pcm_float PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(      \
         plugin_name)(const void *ctx, size_t user_index) {                     \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
-        return decode_float(flow_ctx->local_state[user_index]);                \
+        return decode_pcm_float(flow_ctx->local_state[user_index]);            \
     }
 
 #define PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(plugin_name)              \
     plugin_name##_flow_local_state_float_set
 #define PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_DEFINE(plugin_name)          \
     static inline void PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(           \
-        plugin_name)(void *ctx, size_t user_index, float val) {                \
+        plugin_name)(void *ctx, size_t user_index, pcm_float val) {            \
         struct plugin_name##_flow *flow_ctx = ((                               \
             struct plugin_name##_flow *)(((struct flow *)ctx)->backend_ctx));  \
-        flow_ctx->local_state[user_index] = encode_float(val);                 \
+        flow_ctx->local_state[user_index] = encode_pcm_float(val);             \
     }
 
 #define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(plugin_name)                \
@@ -351,7 +364,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
 #define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(plugin_name)            \
     static inline void PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(             \
         plugin_name)(flow_t * flow, const struct signal_attr *attr,            \
-                     int signal) {                                             \
+                     pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
         flow_ctx->signals[attr->metadata.index] += signal;                     \
@@ -362,7 +375,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
 #define PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_DEFINE(plugin_name)           \
     static inline void PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_FN(            \
         plugin_name)(flow_t * flow, const struct signal_attr *attr,            \
-                     int signal) {                                             \
+                     pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
         flow_ctx->signals[attr->metadata.index] = signal;                      \
@@ -373,7 +386,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
 #define PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_DEFINE(plugin_name)            \
     static inline void PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_FN(             \
         plugin_name)(flow_t * flow, const struct signal_attr *attr,            \
-                     int signal) {                                             \
+                     pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
         if (signal < flow_ctx->signals[attr->metadata.index]) {                \
@@ -386,7 +399,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
 #define PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_DEFINE(plugin_name)            \
     static inline void PLUGIN_FLOW_ACCUMULATION_OP_MAX_GENERIC_FN(             \
         plugin_name)(flow_t * flow, const struct signal_attr *attr,            \
-                     int signal) {                                             \
+                     pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
         if (signal > flow_ctx->signals[attr->metadata.index]) {                \
@@ -401,8 +414,8 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         plugin_name)(const flow_t *flow, const struct signal_attr *attr) {     \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        int value = flow_ctx->signals[attr->metadata.index];                   \
-        int threshold = flow_ctx->thresholds[attr->metadata.index];            \
+        pcm_uint value = flow_ctx->signals[attr->metadata.index];              \
+        pcm_uint threshold = flow_ctx->thresholds[attr->metadata.index];       \
         if (value >= threshold)                                                \
             return true;                                                       \
         return false;                                                          \
@@ -416,7 +429,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         plugin_name)(flow_t * flow, const struct signal_attr *attr) {          \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        int burst = flow_ctx->signals[attr->metadata.index];                   \
+        pcm_uint burst = flow_ctx->signals[attr->metadata.index];              \
         if (burst) {                                                           \
             flow_ctx->signals[attr->metadata.index] = 1;                       \
         }                                                                      \
@@ -430,8 +443,8 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         plugin_name)(const flow_t *flow, const struct signal_attr *attr) {     \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        int burst = flow_ctx->signals[attr->metadata.index];                   \
-        int threshold = flow_ctx->thresholds[attr->metadata.index];            \
+        pcm_uint burst = flow_ctx->signals[attr->metadata.index];              \
+        pcm_uint threshold = flow_ctx->thresholds[attr->metadata.index];       \
         if (burst) {                                                           \
             if ((burst - 1) >= threshold) {                                    \
                 return true;                                                   \
@@ -447,7 +460,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
     plugin_name, time_now_fn, time_diff_fn)                                    \
     static inline void                                                         \
     PLUGIN_FLOW_SIGNAL_ELAPSED_TIME_ACCUMULATION_OP_GENERIC_FN(plugin_name)(   \
-        flow_t * flow, const struct signal_attr *attr, int signal) {           \
+        flow_t * flow, const struct signal_attr *attr, pcm_uint signal) {      \
         (void)signal;                                                          \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
@@ -463,10 +476,10 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         plugin_name)(const flow_t *flow, const struct signal_attr *attr) {     \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        int timer = flow_ctx->signals[attr->metadata.index];                   \
-        int threshold = flow_ctx->thresholds[attr->metadata.index];            \
+        pcm_uint timer = flow_ctx->signals[attr->metadata.index];              \
+        pcm_uint threshold = flow_ctx->thresholds[attr->metadata.index];       \
         if (timer) {                                                           \
-            int diff = time_diff_fn(flow_ctx->start_ts, time_now_fn());        \
+            pcm_uint diff = time_diff_fn(flow_ctx->start_ts, time_now_fn());   \
             if (diff - timer >= threshold) {                                   \
                 LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d", diff,   \
                         timer, threshold);                                     \
@@ -485,7 +498,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
         plugin_name)(flow_t * flow, const struct signal_attr *attr) {          \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        int timer = flow_ctx->signals[attr->metadata.index];                   \
+        pcm_uint timer = flow_ctx->signals[attr->metadata.index];              \
         if (timer) {                                                           \
             flow_ctx->signals[attr->metadata.index] =                          \
                 time_diff_fn(flow_ctx->start_ts, time_now_fn());               \
@@ -495,7 +508,7 @@ static inline int picosec_ts_diff_us_get(uint64_t ts_start, uint64_t ts_end) {
 #define PLUGIN_FLOW_TIME_GET_GENERIC_FN(plugin_name) plugin_name##_flow_time_get
 #define PLUGIN_FLOW_TIME_GET_GENERIC_DEFINE(plugin_name, time_now_fn,          \
                                             time_diff_fn)                      \
-    static inline int PLUGIN_FLOW_TIME_GET_GENERIC_FN(plugin_name)(            \
+    static inline pcm_uint PLUGIN_FLOW_TIME_GET_GENERIC_FN(plugin_name)(       \
         const flow_t *flow) {                                                  \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \

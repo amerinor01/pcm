@@ -16,9 +16,7 @@ int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
 
 #else
 
-size_t htsim_flow_max_regfile_size_get() {
-    return HTSIM_MAX_REGFILE_SIZE;
-}
+size_t htsim_flow_max_regfile_size_get() { return HTSIM_MAX_REGFILE_SIZE; }
 
 int htsim_flow_destroy(flow_t *flow) {
     free(flow->backend_ctx);
@@ -60,6 +58,8 @@ PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_DEFINE(htsim)
+PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_DEFINE(htsim)
+PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_DEFINE(htsim)
 PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(htsim)
@@ -106,6 +106,10 @@ struct flow_plugin_ops htsim_flow_ops = {
         PLUGIN_FLOW_LOCAL_STATE_INT_GET_GENERIC_FN(htsim),
     .handler.local_state_int_set =
         PLUGIN_FLOW_LOCAL_STATE_INT_SET_GENERIC_FN(htsim),
+    .handler.local_state_uint_get =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_GET_GENERIC_FN(htsim),
+    .handler.local_state_uint_set =
+        PLUGIN_FLOW_LOCAL_STATE_UINT_SET_GENERIC_FN(htsim),
     .handler.local_state_float_get =
         PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(htsim),
     .handler.local_state_float_set =

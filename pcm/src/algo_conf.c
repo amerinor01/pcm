@@ -150,7 +150,7 @@ int algorithm_config_signal_add(struct algorithm_config *config,
 }
 
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
-                                        size_t user_index, int threshold) {
+                                        size_t user_index, pcm_uint threshold) {
     struct signal_attr *attr;
     ATTR_LIST_ITEM_SET(&config->signals_list, struct signal_attr, user_index,
                        threshold, attr);
@@ -190,7 +190,7 @@ int algorithm_config_control_add(struct algorithm_config *config,
 
 int algorithm_config_control_initial_value_set(struct algorithm_config *config,
                                                size_t user_index,
-                                               int initial_value) {
+                                               pcm_uint initial_value) {
     struct control_attr *attr;
     ATTR_LIST_ITEM_SET(&config->controls_list, struct control_attr, user_index,
                        initial_value, attr);
@@ -208,10 +208,19 @@ int algorithm_config_local_state_add(struct algorithm_config *config,
     return SUCCESS;
 }
 
-int algorithm_config_local_state_int_set(struct algorithm_config *config,
-                                         size_t user_index, int initial_value) {
+int algorithm_config_local_state_uint_set(struct algorithm_config *config,
+                                          size_t user_index,
+                                          pcm_uint initial_value) {
     struct local_state_attr *attr;
-    uint64_t encoded_val = encode_int(initial_value);
+    ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
+                       user_index, initial_value, attr);
+    return SUCCESS;
+}
+
+int algorithm_config_local_state_int_set(struct algorithm_config *config,
+                                         size_t user_index, pcm_int initial_value) {
+    struct local_state_attr *attr;
+    pcm_uint encoded_val = encode_pcm_int(initial_value);
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
                        user_index, encoded_val, attr);
     return SUCCESS;
@@ -219,9 +228,9 @@ int algorithm_config_local_state_int_set(struct algorithm_config *config,
 
 int algorithm_config_local_state_float_set(struct algorithm_config *config,
                                            size_t user_index,
-                                           float initial_value) {
+                                           pcm_float initial_value) {
     struct local_state_attr *attr;
-    uint64_t encoded_val = encode_float(initial_value);
+    pcm_uint encoded_val = encode_pcm_float(initial_value);
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
                        user_index, encoded_val, attr);
     return SUCCESS;
