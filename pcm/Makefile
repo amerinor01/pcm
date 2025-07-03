@@ -59,6 +59,7 @@ PCM_LIB_TARGET   := $(LIBDIR)/libpcm.so
 
 ALGO_PLUGIN_NAMES := reno_accumulated reno_standard dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
+ALGO_PLUGIN_LIBS_LL  := $(addprefix $(LIBDIR)/lib,$(addsuffix .ll,$(ALGO_PLUGIN_NAMES)))
 ALGO_PLUGIN_PCMC_NAMES := tcp swift dcqcn smartt
 ALGO_PLUGIN_PCMC_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix _pcmc.so,$(ALGO_PLUGIN_PCMC_NAMES)))
 ALGO_PLUGIN_PCMC_LDLIBS  := $(addprefix -l,$(addsuffix _pcmc,$(ALGO_PLUGIN_PCMC_NAMES)))
@@ -69,7 +70,7 @@ TGEN_APP_TARGET   := $(BINDIR)/traffic_gen_app
 
 .PHONY: all clean distclean
 # Include empty HTSIM_APP_TARGET if disabled
-all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(ALGO_PLUGIN_PCMC_LIBS) $(TGEN_APP_TARGET) $(HTSIM_APP_TARGET)
+all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(ALGO_PLUGIN_PCMC_LIBS) $(ALGO_PLUGIN_LIBS_LL) $(TGEN_APP_TARGET) $(HTSIM_APP_TARGET)
 
 # -----------------------------------------------
 # PCM core
@@ -109,6 +110,23 @@ $(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
 $(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
 	@mkdir -p $(LIBDIR)
 	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lpcm -lm
+
+
+#-----------------------------------------------
+# LLVM IR of the handlers
+#-----------------------------------------------
+
+# DCTCP is special as it needs BUILD_ALGO_DCTCP  (why? looks ugly)
+$(LIBDIR)/libdctcp.ll: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
+	@mkdir -p $(LIBDIR)
+	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP -o $@ $<
+
+# other algos
+$(LIBDIR)/lib%.ll: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
+	@mkdir -p $(LIBDIR)
+	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -o $@ $< 
+
+
 
 # -----------------------------------------------
 # Traffic generator app
