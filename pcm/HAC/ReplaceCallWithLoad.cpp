@@ -52,6 +52,22 @@ using namespace llvm;
 
 namespace {
 
+void doReplacementRead(CallInst* Call, Argument* Arg, int offset_arg_pos) {
+    IRBuilder<> Builder(Call);
+    Type *RetType = Call->getType(); //we are inferring the type of the value
+	Type *RetTypePtr = RetType->getPointerTo();
+    
+    //cast void* to int32* or int64*
+    Value *CastPtr = Builder.CreateBitCast(Arg, RetTypePtr);
+    //0th arg is the ctx, 1st is the offset we need for most funcs 
+    Value *Offset = Call->getArgOperand(offset_arg_pos); 
+    //get *signals[offset]
+    Value *S = Builder.CreateInBoundsGEP(RetType, CastPtr, Offset); 
+    Value *LoadedVal = Builder.CreateLoad(RetType, S);
+    Call->replaceAllUsesWith(LoadedVal);
+    Call->eraseFromParent();
+}
+
 struct ReplaceCallWithLoadPass : public PassInfoMixin<ReplaceCallWithLoadPass> {
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &) {
         LLVMContext &Ctx = F.getContext();
@@ -65,18 +81,15 @@ struct ReplaceCallWithLoadPass : public PassInfoMixin<ReplaceCallWithLoadPass> {
                     Function *Callee = Call->getCalledFunction();
                     if (!Callee) continue;
 
-                    // Check if the called function is the one we want to replace
                     if (Callee->getName().endswith("flow_signal_get")) {
-                        IRBuilder<> Builder(Call);
-                        Type *RetType = Call->getType(); //we are inferring here the type of a signal - if the original code was wrong we will be fucked
-			Type *RetTypePtr = RetType->getPointerTo();
-                        Argument* Signals = std::next(F.arg_begin(), signals_pos); //the signals void* we need to cast and offset
-                        Value *CastPtr = Builder.CreateBitCast(Signals, RetTypePtr); //cast signals to int32* or int64*
-                        Value *Offset = Call->getArgOperand(1); //0th arg is the ctx, 1st the offset we need
-                        Value *S = Builder.CreateInBoundsGEP(RetType, CastPtr, Offset); //get *signals[offset]
-                        Value *LoadedVal = Builder.CreateLoad(RetType, S);
-                        Call->replaceAllUsesWith(LoadedVal);
-                        Call->eraseFromParent();
+                        Argument* Signals = std::next(F.arg_begin(), signals_pos);
+                        doReplacementRead(Call, Signals, 1); //offset is 2nd arg
+                        Changed = true;
+                    }
+
+                    if (Callee->getName().endswith("flow_local_state_uint_get")) {
+                        Argument* State = std::next(F.arg_begin(), local_state_pos);
+                        doReplacementRead(Call, State, 1); //offset is 2nd arg
                         Changed = true;
                     }
 
