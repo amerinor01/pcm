@@ -93,7 +93,9 @@ bool flow_handler_invoke_on_trigger(flow_t *flow) {
     bool handler_invoked = false;
     if (flow_triggers_check(flow)) {
         flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
-        flow->config->algorithm_fn((void *)flow);
+        flow->config->algorithm_fn((void *)flow, flow->signals,
+                                   flow->thresholds, flow->controls,
+                                   flow->local_state, flow->constants);
         LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
                 flow_time_get(flow), flow_cwnd_get(flow));
         flow_triggers_arm(flow);

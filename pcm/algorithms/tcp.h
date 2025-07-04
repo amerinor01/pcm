@@ -5,6 +5,7 @@
 #include "fabric_params.h"
 #include "limits.h"
 #include "pcm.h"
+#include "pcm_network.h"
 
 #define TCP_SSTHRESH_INIT INT_MAX
 #define DCTCP_MAX_ALPHA 1024U

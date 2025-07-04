@@ -58,7 +58,7 @@ struct constant_attr {
     struct generic_metadata metadata;
 };
 
-typedef int (*algo_function_t)(void *);
+typedef int (*algo_function_t)(void *, void *, void *, void *, void *, void *);
 
 #define ALGO_CONF_MAX_NUM_SIGNALS 16
 #define ALGO_CONF_MAX_NUM_CONTROLS 2
@@ -129,6 +129,13 @@ struct flow {
     const struct algorithm_config *config;
     size_t trigger_user_index;
     void *backend_ctx;
+    // Note: this is a hacky way to get signals/ctrls/etc to get exposed
+    // directly to the handler
+    void *signals;
+    void *thresholds;
+    void *controls;
+    void *local_state;
+    void *constants;
 };
 
 #define SCHEDULER_SLEEP_US 1000 // 10 ms

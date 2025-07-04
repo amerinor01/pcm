@@ -302,7 +302,9 @@ err_t register_algorithm_pcmc(const char *compile_path,
 
 /* Handler-side API */
 
-#define __algorithm_entry_point __algorithm_main(void *ctx)
+#define __algorithm_entry_point                                                \
+    __algorithm_main(void *ctx, void *signals, void *thresholds,               \
+                     void *controls, void *local_state, void *constants)
 #define __algorithm_entry_point_symbol "__algorithm_main"
 pcm_uint __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);
@@ -360,7 +362,8 @@ pcm_float __flow_constant_float_get(const void *ctx, size_t user_index);
     __flow_local_state_int_set(ctx, user_index, val);
 
 /**
- * @brief Get the unsigned integer current persistent state within a handler.
+ * @brief Get the unsigned integer current persistent state within a
+ * handler.
  *
  * @param[in] user_index User-defined state index.
  * @return Current state unsigned integer value.

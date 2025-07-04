@@ -40,6 +40,13 @@ int pthrd_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
                               struct local_state_attr, flow_ctx->local_state);
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->constants_list,
                               struct constant_attr, flow_ctx->constants);
+
+    flow->signals = (void *)flow_ctx->signals;
+    flow->thresholds = (void *)flow_ctx->thresholds;
+    flow->controls = (void *)flow_ctx->controls;
+    flow->local_state = (void *)flow_ctx->local_state;
+    flow->constants = (void *)flow_ctx->constants;
+
     LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d", flow->config,
             flow, flow->addr);
 

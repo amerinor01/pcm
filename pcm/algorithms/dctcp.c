@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 
 #include "tcp.h"
@@ -73,6 +74,11 @@ int algorithm_main() {
         tcp_fast_recovery_exit(&state);
 
     if (!state.in_fast_recovery && state.num_acks > 0) {
+        assert(get_signal(TCP_SIG_IDX_ACK) ==
+               ((pcm_uint *)signals)[TCP_SIG_IDX_ACK]);
+        printf("TEST OF POINTER: YO YO YO: %d %d\n",
+               get_signal(TCP_SIG_IDX_ACK),
+               ((pcm_uint *)signals)[TCP_SIG_IDX_ACK]);
         if (state.cwnd < state.ssthresh) {
             tcp_slow_start(&state);
         }
