@@ -21,7 +21,7 @@ add_library(ReplaceCallWithLoad MODULE ReplaceCallWithLoad.cpp)
 # LLVM target
 llvm_map_components_to_libnames(llvm_libs support core irreader passes)
 
-target_link_libraries(ReplaceCallWithLoad PRIVATE ${llvm_libs})
+target_link_libraries(ReplaceCallWithLoad PRIVATE LLVM)
 
 # Optional: give the .so a clean name
 set_target_properties(ReplaceCallWithLoad PROPERTIES
