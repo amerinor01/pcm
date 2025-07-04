@@ -302,9 +302,15 @@ err_t register_algorithm_pcmc(const char *compile_path,
 
 /* Handler-side API */
 
-#define __algorithm_entry_point                                                \
-    __algorithm_main(void *ctx, void *signals, void *thresholds,               \
-                     void *controls, void *local_state, void *constants)
+//timos: the unoptimized handlers only use ctx, only when we use the
+//optimizing compiler passes will we make use of the other args, so
+//we mark them as unused here.
+#define __algorithm_entry_point  __algorithm_main(void *ctx,               \
+		                 __attribute__((unused)) void *signals,    \
+                                 __attribute__((unused)) void *thresholds, \
+		                 __attribute__((unused)) void *controls,   \
+				 __attribute__((unused)) void *local_state,\
+		                 __attribute__((unused)) void *constants)
 #define __algorithm_entry_point_symbol "__algorithm_main"
 pcm_uint __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);
