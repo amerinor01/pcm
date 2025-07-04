@@ -119,9 +119,8 @@ struct flow_plugin_ops htsim_flow_ops = {
     .handler.local_state_float_get =
         PLUGIN_FLOW_LOCAL_STATE_FLOAT_GET_GENERIC_FN(htsim),
     .handler.local_state_float_set =
-        PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(htsim)
-            .handler.constant_int_get =
-            PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_FN(htsim),
+        PLUGIN_FLOW_LOCAL_STATE_FLOAT_SET_GENERIC_FN(htsim),
+    .handler.constant_int_get = PLUGIN_FLOW_CONSTANT_INT_GET_GENERIC_FN(htsim),
     .handler.constant_uint_get =
         PLUGIN_FLOW_CONSTANT_UINT_GET_GENERIC_FN(htsim),
     .handler.constant_float_get =
