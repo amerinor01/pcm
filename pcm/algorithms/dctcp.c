@@ -77,8 +77,8 @@ int algorithm_main() {
         assert(get_signal(TCP_SIG_IDX_ACK) ==
                ((pcm_uint *)signals)[TCP_SIG_IDX_ACK]);
         printf("TEST OF POINTER: YO YO YO: %d %d\n",
-               get_signal(TCP_SIG_IDX_ACK),
-               ((pcm_uint *)signals)[TCP_SIG_IDX_ACK]);
+               (int) get_signal(TCP_SIG_IDX_ACK),
+               (int) ((pcm_uint *)signals)[TCP_SIG_IDX_ACK]);
         if (state.cwnd < state.ssthresh) {
             tcp_slow_start(&state);
         }
