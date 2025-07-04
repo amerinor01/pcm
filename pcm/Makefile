@@ -74,6 +74,8 @@ TGEN_APP_SRCS     := $(APPSDIR)/traffic_gen
 TGEN_APP_OBJS     := $(TGEN_APP_SRCS)/main.o $(TGEN_APP_SRCS)/traffic_gen.o
 TGEN_APP_TARGET   := $(BINDIR)/traffic_gen_app
 
+HAC_PASS := HAC/build/ReplaceCallWithLoad.so
+
 .PHONY: all clean distclean
 # Include empty HTSIM_APP_TARGET if disabled
 all: $(PCM_LIB_TARGET) $(ALGO_PLUGIN_LIBS) $(ALGO_PLUGIN_PCMC_LIBS) $(ALGO_PLUGIN_LIBS_LL) $(TGEN_APP_TARGET) $(HTSIM_APP_TARGET)
@@ -119,20 +121,39 @@ $(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
 
 
 #-----------------------------------------------
-# LLVM IR of the handlers
+# Optimized handlers (dirty, make an actual HAC script and clean up)
 #-----------------------------------------------
 
-# DCTCP is special as it needs BUILD_ALGO_DCTCP  (why? looks ugly)
-$(LIBDIR)/libdctcp.ll: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
+# DCTCP is special as it needs BUILD_ALGO_DCTCP  (why? looks ugly):
+$(LIBDIR)/libdctcp.ll: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	@mkdir -p $(LIBDIR)
 	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP -o $@ $<
+	opt -load-pass-plugin $(HAC_PASS) -passes=replace-call-with-load -S $@ -o $@_opt.ll
+	opt -O3 $@_opt.ll -o $@
+	@rm $@_opt.ll
+	llc -filetype=obj -relocation-model=pic $@ -o $@.o
+	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@.so $@.o -L$(LIBDIR) -lpcm -lm
+	@rm $@.o
+
 
 # other algos
-$(LIBDIR)/lib%.ll: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
+$(LIBDIR)/lib%.ll: $(ALGODIR)/%.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	@mkdir -p $(LIBDIR)
-	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -o $@ $< 
+	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -o $@ $<
+	opt -load-pass-plugin $(HAC_PASS) -passes=replace-call-with-load -S $@ -o $@_opt.ll
+	opt -O3 $@_opt.ll -o $@
+	@rm $@_opt.ll
+	llc -filetype=obj -relocation-model=pic $@ -o $@.o
+	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@.so $@.o -L$(LIBDIR) -lpcm -lm
+	@rm $@.o
+ 
 
 
+# -----------------------------------------------
+# Build the HAC pass
+# -----------------------------------------------
+$(HAC_PASS):
+	cd HAC; rm -rf build; mkdir build; cd build; cmake ..; make; 
 
 # -----------------------------------------------
 # Traffic generator app
@@ -172,5 +193,6 @@ clean:
 	@rm -f $(TGEN_APP_TARGET)
 	@if [ -n "$(HTSIM_APP_TARGET)" ]; then rm -f $(HTSIM_APP_TARGET); fi
 	@if [ -n "$(HTSIM_APP_TARGET)" ]; then rm -f $(HTSIM_APP_OBJS); fi
+	@rm -rf HAC/build
 distclean: clean
 	rm -rf $(LIBDIR) $(BINDIR)
