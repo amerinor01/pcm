@@ -5,7 +5,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import defaultdict
 
+if (len(sys.argv) < 3):
+    print(f"Usage: {sys.argv[0]} logdir outfile")
+    sys.exit(1)
+
 SEARCH_DIR = sys.argv[1]
+OUTFILE = sys.argv[2]
 
 # Regex to match the performance line
 perf_line_pattern = re.compile(r"HANDLER PERFORMANCE (\d+) cycles (\d+) instructions")
@@ -53,5 +58,6 @@ axes[1].set_xlabel("CM Algorithm")
 axes[1].set_xticklabels(file_keys, rotation=45, ha="right")
 
 plt.tight_layout()
-plt.savefig(f"{SEARCH_DIR}.out.pdf", bbox_inches='tight')
+plt.savefig(OUTFILE, bbox_inches='tight')
+#print(f"Plot saved in {OUTFILE}")
 plt.show()
