@@ -32,6 +32,18 @@ struct smartt_state_snapshot {
     pcm_uint num_nacks;
     pcm_uint num_rtos;
     pcm_uint num_ecns; // instead of last_pkt_ecn
+    struct constants {
+        pcm_uint bdp;
+        pcm_uint brtt;
+        pcm_uint trtt;
+        pcm_uint mss;
+        pcm_uint reaction_delay;
+        pcm_float y_gain;
+        pcm_float x_gain;
+        pcm_float z_gain;
+        pcm_float w_gain;
+        pcm_float qa_scaling;
+    } consts;
 };
 
 enum smartt_local_state_idxs {

@@ -10,7 +10,7 @@ PcmDevice::PcmDevice(EventList &event_list, simtime_picosec handlerDelay,
         LOG_FATAL("Failed to init PCM device\n");
     }
     _next_sched = eventlist().now() + _poll_delay;
-    //eventlist().sourceIsPending(*this, _next_sched);
+    eventlist().sourceIsPending(*this, _next_sched);
 }
 
 PcmDevice::~PcmDevice() {

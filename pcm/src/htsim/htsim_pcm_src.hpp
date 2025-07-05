@@ -54,7 +54,7 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
   public:
     PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger, EventList &eventList,
            uint64_t rtt, uint64_t bdp, uint64_t queueDrainTime, int hops,
-           PcmDevice &pcmDevice);
+           PcmDevice &pcmDevice, bool pcm_ignore);
     // PcmSrc(PcmLogger *logger, TrafficLogger* pktLogger, EventList& eventList,
     // uint64_t rtt=timeFromUs(5.25), uint64_t bdp=63000);
     ~PcmSrc();
@@ -351,6 +351,7 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
 
   private:
     flow_t *_pcm_flow_ptr;
+    bool _pcm_ignore;
 
   private:
     uint32_t _unacked;
