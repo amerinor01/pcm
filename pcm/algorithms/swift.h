@@ -49,6 +49,20 @@ struct swift_state_shapshot {
     pcm_uint cwnd_prev;
     pcm_uint retransmit_cnt;
     bool can_decrease;
+    struct constants {
+        pcm_uint brtt;
+        pcm_uint bdp;
+        pcm_uint mss;
+        pcm_uint hop_count;
+        pcm_uint rtx_thresh;
+        pcm_float ai;
+        pcm_float max_mdf;
+        pcm_float fs_alpha;
+        pcm_float fs_beta;
+        pcm_float fs_range;
+        pcm_float h;
+        pcm_float beta;
+    } consts;
 };
 
 #ifdef HANDLER_BUILD
