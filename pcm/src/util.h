@@ -246,7 +246,8 @@ static inline pcm_uint clock_gettime_ts_diff_us_get(struct timespec ts_start,
 
 static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
                                               uint64_t ts_end) {
-    return (pcm_uint)((double)(ts_end - ts_start) / 1000000.0);
+    // return (pcm_uint)((double)(ts_end - ts_start) / 1000000.0);
+    return (pcm_uint)(ts_end - ts_start);
 }
 
 #define PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)                         \
