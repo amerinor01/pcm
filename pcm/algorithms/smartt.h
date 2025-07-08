@@ -32,7 +32,7 @@ struct smartt_state_snapshot {
     pcm_uint num_nacks;
     pcm_uint num_rtos;
     pcm_uint num_ecns; // instead of last_pkt_ecn
-    struct constants {
+    struct smartt_constants {
         pcm_uint bdp;
         pcm_uint brtt;
         pcm_uint trtt;

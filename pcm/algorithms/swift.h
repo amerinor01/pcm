@@ -49,7 +49,7 @@ struct swift_state_shapshot {
     pcm_uint cwnd_prev;
     pcm_uint retransmit_cnt;
     bool can_decrease;
-    struct constants {
+    struct swift_constants {
         pcm_uint brtt;
         pcm_uint bdp;
         pcm_uint mss;
