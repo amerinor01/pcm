@@ -55,8 +55,23 @@ int algorithm_main();
  * @brief Fast Recovery
  *
  * Upon entering set cwnd=ssthresh+3 and inflate cwnd by 1 MSS per extra
- * dup‐ACK
+ * dup‐ACK.
  */
+#define FAST_RECOVERY_DEFINE(algo_name, ssthresh_comp)                         \
+    static inline void algo_name##_fast_recovery(                              \
+        struct tcp_state_snapshot *state) {                                    \
+        if (!state->in_fast_recovery) {                                        \
+            state->ssthresh = (pcm_uint)ssthresh_comp(state);                  \
+            state->cwnd = state->ssthresh + 3;                                 \
+            state->in_fast_recovery = 1;                                       \
+        }                                                                      \
+    }
+
+/*
+// In the classical NewReno, NACK data is part of SACK, therefore, each SACK still ACKs
+// some data, in our current htsim setup, NACKs == trimmed packets, therefore
+// we can only decrease window upon entering FR during the first NACK
+// and then wait for the first ACK to exit FR
 #define FAST_RECOVERY_DEFINE(algo_name, ssthresh_comp)                         \
     static inline void algo_name##_fast_recovery(                              \
         struct tcp_state_snapshot *state) {                                    \
@@ -68,6 +83,7 @@ int algorithm_main();
             state->cwnd += state->num_nacks;                                   \
         }                                                                      \
     }
+*/
 
 /**
  * @brief Exit from Fast Recovery
