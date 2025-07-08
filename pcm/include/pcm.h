@@ -445,6 +445,8 @@ pcm_float __flow_constant_float_get(const void *ctx, size_t user_index);
  */
 #define set_signal(user_index, val) __flow_signal_set(ctx, user_index, val)
 
+#define PCM_SIG_REARM (UINT64_MAX - 1)
+
 /**
  * @brief Update the signal value within a handler.
  *

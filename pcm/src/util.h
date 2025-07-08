@@ -510,8 +510,9 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         pcm_uint timer = flow_ctx->signals[attr->metadata.index];              \
         pcm_uint threshold = flow_ctx->thresholds[attr->metadata.index];       \
         if (timer) {                                                           \
-            pcm_uint diff = time_diff_fn(flow_ctx->start_ts, time_now_fn());   \
-            if (diff - timer >= threshold) {                                   \
+            pcm_uint now = time_diff_fn(flow_ctx->start_ts, time_now_fn());    \
+            /* we assume that now is always larger than timer value */         \
+            if (now - timer >= threshold) {                                    \
                 LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d", diff,   \
                         timer, threshold);                                     \
                 return true;                                                   \
@@ -530,7 +531,7 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
         pcm_uint timer = flow_ctx->signals[attr->metadata.index];              \
-        if (timer) {                                                           \
+        if (timer == PCM_SIG_REARM) {                                          \
             flow_ctx->signals[attr->metadata.index] =                          \
                 time_diff_fn(flow_ctx->start_ts, time_now_fn());               \
         }                                                                      \
