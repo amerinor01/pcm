@@ -127,6 +127,7 @@ struct flow {
     addr_t addr;
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
+    struct slist_entry *cur_trigger;
     size_t trigger_user_index;
     void *backend_ctx;
     // Note: this is a hacky way to get signals/ctrls/etc to get exposed

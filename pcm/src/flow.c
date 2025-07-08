@@ -50,21 +50,31 @@ void flow_signals_update(flow_t *flow, signal_t signal_type, pcm_uint value) {
 
 bool flow_triggers_check(flow_t *flow) {
     const struct algorithm_config *config = flow->config;
-    struct slist_entry *item, *prev;
-    slist_foreach(&config->signals_list, item, prev) {
-        (void)prev; /* suppress compiler warnings */
-        struct signal_attr *attr =
-            container_of(item, struct signal_attr, metadata.list_entry);
+
+    for (size_t idx = 0; idx < config->num_signals; idx++) {
+        bool trigger = false;
+        struct signal_attr *attr = container_of(
+            flow->cur_trigger, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
             flow->trigger_user_index = attr->metadata.index;
-            LOG_DBG("[flow=%p, addr=%u] trigger signal_type=%s, "
-                    "accum_type=%s, index=%zu",
-                    flow, flow->addr, signal_type_to_string(attr->type),
-                    signal_accum_type_to_string(attr->accum_type),
-                    attr->metadata.index);
-            return true;
+            LOG_INFO("[flow=%p, addr=%u] trigger signal_type=%s, "
+                     "accum_type=%s, index=%zu",
+                     flow, flow->addr, signal_type_to_string(attr->type),
+                     signal_accum_type_to_string(attr->accum_type),
+                     attr->metadata.index);
+            trigger = true;
+        }
+
+        if (flow->cur_trigger == config->signals_list.tail)
+            flow->cur_trigger = config->signals_list.head;
+        else
+            flow->cur_trigger = flow->cur_trigger->next;
+
+        if (trigger) {
+            return trigger;
         }
     }
+
     return false;
 }
 
@@ -154,6 +164,8 @@ int flow_create(device_t *device, flow_t **flow,
                 device, new_flow->addr);
         goto err_free_flow;
     }
+
+    new_flow->cur_trigger = new_flow->config->signals_list.head;
 
     if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
         LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler", device,
