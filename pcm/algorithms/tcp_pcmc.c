@@ -56,6 +56,7 @@ int dctcp_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(register_signal_pcmc(SIG_ECN, SIG_ACCUM_SUM, TCP_SIG_IDX_ECN,
                                      new_handle),
                 SUCCESS);
+
     EXIT_ON_ERR(register_local_state_pcmc(TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED,
                                           new_handle),
                 SUCCESS);
@@ -68,11 +69,23 @@ int dctcp_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(register_local_state_initial_value_pcmc(
                     TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED, 0, new_handle),
                 SUCCESS);
+    EXIT_ON_ERR(register_local_state_pcmc(TCP_LOCAL_STATE_IDX_EPOCH_TO_DELIVER,
+                                          new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(
+        register_local_state_initial_value_pcmc(
+            TCP_LOCAL_STATE_IDX_EPOCH_TO_DELIVER, FABRIC_MIN_CWND, new_handle),
+        SUCCESS);
+
     EXIT_ON_ERR(
         register_local_state_pcmc(TCP_LOCAL_STATE_IDX_ALPHA, new_handle),
         SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+    // EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+    //                 TCP_LOCAL_STATE_IDX_ALPHA, DCTCP_MAX_ALPHA, new_handle),
+    //             SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_float_pcmc(
                     TCP_LOCAL_STATE_IDX_ALPHA, DCTCP_MAX_ALPHA, new_handle),
                 SUCCESS);
+
     return SUCCESS;
 }

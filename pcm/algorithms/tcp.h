@@ -8,8 +8,10 @@
 #include "pcm_network.h"
 
 #define TCP_SSTHRESH_INIT INT_MAX
-#define DCTCP_MAX_ALPHA 1024U
-#define DCTCP_SHIFT_G 4 /* g = 1/2^4 EWMA weight */
+// #define DCTCP_MAX_ALPHA 1024U
+#define DCTCP_MAX_ALPHA 1.0
+//#define DCTCP_SHIFT_G 4 /* g = 1/2^4 EWMA weight */
+#define DCTCP_GAMMA 0.00390625 /* 1/256 */
 
 enum tcp_signal_idxs {
     TCP_SIG_IDX_NACK = 0,
@@ -26,7 +28,8 @@ enum tcp_local_var_idxs {
     TCP_LOCAL_STATE_IDX_IN_FAST_RECOV = 2,
     TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED = 3,
     TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED = 4,
-    TCP_LOCAL_STATE_IDX_ALPHA = 5
+    TCP_LOCAL_STATE_IDX_EPOCH_TO_DELIVER = 5,
+    TCP_LOCAL_STATE_IDX_ALPHA = 6
 };
 
 struct tcp_state_snapshot {
@@ -40,9 +43,11 @@ struct tcp_state_snapshot {
     pcm_uint in_fast_recovery;
 #ifdef BUILD_ALGO_DCTCP
     pcm_uint num_ecn;
+    pcm_uint to_deliver;
     pcm_uint delivered;
     pcm_uint delivered_ecn;
-    pcm_uint alpha;
+    // pcm_uint alpha;
+    pcm_float alpha;
 #endif
 };
 
@@ -68,7 +73,8 @@ int algorithm_main();
     }
 
 /*
-// In the classical NewReno, NACK data is part of SACK, therefore, each SACK still ACKs
+// In the classical NewReno, NACK data is part of SACK, therefore, each SACK
+still ACKs
 // some data, in our current htsim setup, NACKs == trimmed packets, therefore
 // we can only decrease window upon entering FR during the first NACK
 // and then wait for the first ACK to exit FR

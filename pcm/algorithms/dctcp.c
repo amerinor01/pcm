@@ -3,10 +3,14 @@
 
 #include "tcp.h"
 
+//#define DCTCP_SSTHRESH(state)                                                  \
+//    (MAX((uint32_t)state->cwnd -                                               \
+//             (((uint32_t)state->cwnd * state->alpha) >> 11U),                  \
+//         2U))
+
 #define DCTCP_SSTHRESH(state)                                                  \
-    (MAX((uint32_t)state->cwnd -                                               \
-             (((uint32_t)state->cwnd * state->alpha) >> 11U),                  \
-         2U))
+    (MAX(state->cwnd * (1.0 - state->alpha / 2.0), 2U))
+
 FAST_RECOVERY_DEFINE(dctcp, DCTCP_SSTHRESH);
 
 int algorithm_main() {
@@ -23,7 +27,10 @@ int algorithm_main() {
         (uint32_t)get_local_state(TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED);
     state.delivered_ecn =
         (uint32_t)get_local_state(TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED);
-    state.alpha = get_local_state(TCP_LOCAL_STATE_IDX_ALPHA);
+    state.to_deliver =
+        (uint32_t)get_local_state(TCP_LOCAL_STATE_IDX_EPOCH_TO_DELIVER);
+    // state.alpha = get_local_state(TCP_LOCAL_STATE_IDX_ALPHA);
+    state.alpha = get_local_state_float(TCP_LOCAL_STATE_IDX_ALPHA);
 
     if (state.num_nacks > 0) {
         dctcp_fast_recovery(&state);
@@ -53,18 +60,24 @@ int algorithm_main() {
      *
      * https://github.com/torvalds/linux/blob/aef17cb3d3c43854002956f24c24ec8e1a0e3546/net/ipv4/tcp_dctcp.c#L132
      */
-    if (state.delivered >= state.cwnd) {
+    if (state.delivered >= state.to_deliver) {
         /* TODO: support LB path change */
-        /* alpha = (1 - g) * alpha + g * F */
-        state.alpha -= MIN_NOT_ZERO(state.alpha, state.alpha >> DCTCP_SHIFT_G);
-        if (state.delivered_ecn) {
-            state.delivered_ecn <<= (10 - DCTCP_SHIFT_G);
-            state.delivered_ecn /= MAX(1U, state.delivered);
 
-            state.alpha =
-                MIN(state.alpha + state.delivered_ecn, DCTCP_MAX_ALPHA);
-        }
+        /* alpha = (1 - g) * alpha + g * F */
+        // state.alpha -= MIN_NOT_ZERO(state.alpha, state.alpha >>
+        // DCTCP_SHIFT_G); if (state.delivered_ecn) {
+        //     state.delivered_ecn <<= (10 - DCTCP_SHIFT_G);
+        //     state.delivered_ecn /= MAX(1U, state.delivered);
+        //     state.alpha =
+        //         MIN(state.alpha + state.delivered_ecn, DCTCP_MAX_ALPHA);
+        // }
+
+        pcm_float F =
+            (pcm_float)state.delivered_ecn / (pcm_float)state.delivered;
+        state.alpha = (1 - DCTCP_GAMMA) * state.alpha + DCTCP_GAMMA * F;
+
         set_local_state(TCP_LOCAL_STATE_IDX_ALPHA, state.alpha);
+        set_local_state(TCP_LOCAL_STATE_IDX_EPOCH_TO_DELIVER, state.cwnd);
         set_local_state(TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED, 0);
         set_local_state(TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED, 0);
         update_signal(TCP_SIG_IDX_ECN, -state.num_ecn);
