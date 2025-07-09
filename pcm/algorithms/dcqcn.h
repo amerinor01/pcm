@@ -4,7 +4,7 @@
 #include "fabric_params.h"
 #include "pcm.h"
 
-#define DCQCN_BYTE_COUNTER (2048 * 32)
+#define DCQCN_BYTE_COUNTER (2048 * 128)
 #define DCQCN_RATE_INCREASE_TIMER (5000 * 1000)
 #define DCQCN_GAMMA 0.00390625 /* 1/256 */
 #define DCQCN_ALPHA_INIT 1.0

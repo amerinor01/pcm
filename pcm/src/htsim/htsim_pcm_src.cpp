@@ -1903,7 +1903,7 @@ void PcmSrc::send_packets() {
         _sent_packets.push_back(
             PcmSentPacket(eventlist().now() + service_time + _rto, p->seqno(),
                           false, false, false));
-
+        flow_signals_update(_pcm_flow_ptr, SIG_DATA_TX, _mss);
         if (generic_pacer != NULL && use_pacing) {
             generic_pacer->just_sent();
             _paced_packet = false;
@@ -2120,6 +2120,7 @@ bool PcmSrc::resend_packet(std::size_t idx) {
         --_nack_rtx_pending;
         _sent_packets[idx].nacked = false;
     }
+    flow_signals_update(_pcm_flow_ptr, SIG_DATA_TX, _mss);
     _sent_packets[idx].timer = eventlist().now() + service_time + _rto;
     _sent_packets[idx].timedOut = false;
     update_rtx_time();
