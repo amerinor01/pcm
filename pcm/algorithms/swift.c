@@ -1,6 +1,6 @@
 #include "swift.h"
 
-static inline pcm_float swift_target_delay(struct swift_state_shapshot *state,
+static inline pcm_float swift_target_delay(struct swift_state_snapshot *state,
                                            pcm_uint cwnd) {
     pcm_uint fs_delay =
         state->consts.fs_alpha / sqrtf((pcm_float)cwnd / state->consts.mss) +
@@ -19,7 +19,7 @@ static inline pcm_float swift_target_delay(struct swift_state_shapshot *state,
     return state->consts.brtt + fs_delay + hop_delay;
 }
 
-static inline void swift_rtt_estimate(struct swift_state_shapshot *state) {
+static inline void swift_rtt_estimate(struct swift_state_snapshot *state) {
     if (state->rtt_estim > 0) {
         state->rtt_estim = 7 * state->rtt_estim / 8 + state->delay / 8;
     } else {
@@ -27,14 +27,14 @@ static inline void swift_rtt_estimate(struct swift_state_shapshot *state) {
     }
 }
 
-static inline void swift_nack_recovery(struct swift_state_shapshot *state) {
+static inline void swift_nack_recovery(struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
     if (state->can_decrease) {
         state->cwnd = (pcm_float)state->cwnd * (1.0 - state->consts.max_mdf);
     }
 }
 
-static inline void swift_timeout_recovery(struct swift_state_shapshot *state) {
+static inline void swift_timeout_recovery(struct swift_state_snapshot *state) {
     state->retransmit_cnt++;
     if (state->retransmit_cnt >= state->consts.rtx_thresh) {
         state->cwnd = state->consts.mss; // min_cwnd
@@ -43,7 +43,7 @@ static inline void swift_timeout_recovery(struct swift_state_shapshot *state) {
     }
 }
 
-static inline void swift_ack_reaction(struct swift_state_shapshot *state) {
+static inline void swift_ack_reaction(struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
     pcm_float target_delay = swift_target_delay(state, state->cwnd);
 
@@ -78,24 +78,20 @@ static inline void swift_ack_reaction(struct swift_state_shapshot *state) {
  *
  */
 int algorithm_main() {
-    struct swift_state_shapshot state;
+    struct swift_state_snapshot state;
 
-    state.consts.brtt = 5058000;
-    state.consts.bdp = 252300;
-    state.consts.hop_count = 6;
-    state.consts.mss = 2048;
-    state.consts.rtx_thresh = 4;
-    state.consts.h = (pcm_float)state.consts.brtt / 6.55;
-    state.consts.fs_range = 5 * state.consts.brtt;
-    state.consts.rtx_thresh = 5;
-    state.consts.max_mdf = 0.5;
-    state.consts.fs_alpha =
-        state.consts.fs_range /
-        ((1.0 / sqrt(0.1) - (1.0 / sqrt(state.consts.bdp / state.consts.mss))));
-    state.consts.fs_beta =
-        -(state.consts.fs_alpha / sqrt(state.consts.bdp / state.consts.mss));
-    state.consts.beta = 0.8;
-    state.consts.ai = 1.0;
+    state.consts.brtt = get_constant_uint(SWIFT_CONST_BRTT);
+    state.consts.bdp = get_constant_uint(SWIFT_CONST_BDP);
+    state.consts.mss = get_constant_uint(SWIFT_CONST_MSS);
+    state.consts.hop_count = get_constant_uint(SWIFT_CONST_HOP_COUNT);
+    state.consts.rtx_thresh = get_constant_uint(SWIFT_CONST_RTX_THRESH);
+    state.consts.ai = get_constant_float(SWIFT_CONST_AI);
+    state.consts.max_mdf = get_constant_float(SWIFT_CONST_MAX_MDF);
+    state.consts.fs_range = get_constant_float(SWIFT_CONST_FS_RANGE);
+    state.consts.fs_alpha = get_constant_float(SWIFT_CONST_FS_ALPHA);
+    state.consts.fs_beta = get_constant_float(SWIFT_CONST_FS_BETA);
+    state.consts.beta = get_constant_float(SWIFT_CONST_BETA);
+    state.consts.h = get_constant_float(SWIFT_CONST_H);
 
     state.num_nacks = get_signal(SWIFT_SIG_IDX_NACK);
     state.num_rtos = get_signal(SWIFT_SIG_IDX_RTO);
@@ -104,11 +100,13 @@ int algorithm_main() {
                       state.num_acks * state.consts.mss;
     state.delay = get_signal(SWIFT_SIG_IDX_RTT);
     state.now = get_signal(SIWFT_SIG_IDX_ELAPSED_TIME);
+
     state.t_last_decrease =
         get_local_state(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE);
     state.retransmit_cnt =
         get_local_state(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT);
     state.rtt_estim = get_local_state(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM);
+
     state.cwnd = get_control(SWIFT_CTRL_IDX_CWND);
 
     state.can_decrease = (state.now - state.t_last_decrease) >= state.rtt_estim;
@@ -131,12 +129,6 @@ int algorithm_main() {
     } else {
         return ERROR;
     }
-
-    /* Enforce bounds */
-    // if (state.cwnd < state->consts.mss)
-    //     state.cwnd = state->consts.mss;
-    // if (state.cwnd > FABRIC_MAX_CWND)
-    //     state.cwnd = FABRIC_MAX_CWND;
 
     /*
      * update last‐decrease timestamp if we actually shrank

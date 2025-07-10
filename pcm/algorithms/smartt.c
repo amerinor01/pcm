@@ -40,10 +40,10 @@ smartt_handle_loss_signal(struct smartt_state_snapshot *state) {
 }
 
 static inline bool smartt_fast_increase(struct smartt_state_snapshot *state) {
-    printf("FI state last_rtt=%d brtt=%d num_ecns=%d fast_count=%d cwnd=%d "
-           "fast_active=%d\n",
-           state->last_rtt, state->consts.brtt, state->num_ecns,
-           state->fast_count, state->cwnd, state->fast_active);
+    // printf("FI state last_rtt=%d brtt=%d num_ecns=%d fast_count=%d cwnd=%d "
+    //        "fast_active=%d\n",
+    //        state->last_rtt, state->consts.brtt, state->num_ecns,
+    //        state->fast_count, state->cwnd, state->fast_active);
     if ((ABS((pcm_float)state->last_rtt - state->consts.brtt) <
          (0.75 * (pcm_float)state->consts.brtt)) &&
         !state->num_ecns) {
@@ -111,6 +111,20 @@ static inline void smartt_handle_ack(struct smartt_state_snapshot *state) {
 
 int algorithm_main() {
     struct smartt_state_snapshot state = {0};
+
+    state.consts.bdp = get_constant_uint(SMARTT_CONST_BDP);
+    state.consts.brtt = get_constant_uint(SMARTT_CONST_BRTT);
+    state.consts.trtt = get_constant_uint(SMARTT_CONST_TRTT);
+    state.consts.mss = get_constant_uint(SMARTT_CONST_MSS);
+    state.consts.x_gain = get_constant_float(SMARTT_CONST_X_GAIN);
+    state.consts.y_gain = get_constant_float(SMARTT_CONST_Y_GAIN);
+    state.consts.z_gain = get_constant_float(SMARTT_CONST_Z_GAIN);
+    state.consts.w_gain = get_constant_float(SMARTT_CONST_W_GAIN);
+    state.consts.reaction_delay =
+        get_constant_float(SMARTT_CONST_REACTION_DELAY);
+    state.consts.qa_scaling = get_constant_float(SMARTT_CONST_QA_SCALING);
+
+    // we don't use/support avg RTT (yet)
     state.num_acks = get_signal(SMARTT_SIG_NUM_ACK);
     state.num_rtos = get_signal(SMARTT_SIG_NUM_RTO);
     state.num_nacks = get_signal(SMARTT_SIG_NUM_NACK);
@@ -127,21 +141,6 @@ int algorithm_main() {
     state.fast_active = get_local_state(SMARTT_LOCAL_STATE_FAST_ACTIVE);
 
     state.cwnd = get_control(SMARTT_CTRL_CWND_BYTES);
-
-    state.consts.bdp = 252300;
-    state.consts.brtt = 5058000;
-    state.consts.trtt = 7637580;
-    state.consts.mss = 2048;
-    state.consts.x_gain = 2.0;
-    state.consts.y_gain = 2.5;
-    state.consts.z_gain = 2;
-    state.consts.w_gain = 0.8;
-    state.consts.reaction_delay = 1.0;
-    state.consts.qa_scaling = 1;
-
-    // state.last_rtt = state.last_rtt; // we don't support avg RTT (yet)
-    printf("num_nacks=%d num_rtos=%d num_acks=%d, cwnd=%d\n", state.num_nacks,
-           state.num_rtos, state.num_acks, state.cwnd);
 
     if (state.num_nacks > 0) {
         smartt_handle_loss_signal(&state);
@@ -164,6 +163,9 @@ int algorithm_main() {
     }
 
 save_state:
+
+    // printf("SMaRTT: num_nacks=%d num_rtos=%d num_acks=%d, cwnd=%d\n",
+    //        state.num_nacks, state.num_rtos, state.num_acks, state.cwnd);
 
     set_control(SMARTT_CTRL_CWND_BYTES, state.cwnd);
 
