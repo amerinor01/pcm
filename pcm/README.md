@@ -28,3 +28,11 @@
     - first argument is path to the `.so` libraries of algorithms
     - each algorithm is logged in `$(pwd)/perf.out` directory which is created if doesn't exist
 4. `python3 ./analysis/plot_cyc_and_inst.py $(pwd)/perf.out` - generate violin plots for cycles and instructions inside the `$(pwd)/perf.out`
+
+## Running htsim
+
+For now, the supported htsim version is `spcl/HTSIM`.
+1. Edit root `Makefile` to supply the path to the htsim directory that contains `libhtsim.a` and all related htsim sources
+2. `BUILD_HTSIM_FLOW_PLUGIN=1 make` - Note: all warnings are coming from the htsim side
+3. `/bin/htsim_flow_app -o uec_entry -k 1 -algorithm smartt -nodes 1024 -q 4452000 -strat ecmp_host_random2_ecn -number_entropies 256 -kmin 20 -kmax 80 -target_rtt_percentage_over_base 50 -use_fast_increase 1 -use_super_fast_increase 1 -fast_drop 1 -seed 919 -queue_type composite -reuse_entropy 1 -tm ../../HTSIM/sim/datacenter/connection_matrices/incast_8_1MB.cm -x_gain 2 -y_gain 2.5 -w_gain 2 -z_gain 0.8  -collect_data 1 -pcm_algorithm smartt -pcm_algorithm_handler $(pwd)/lib/libsmartt.so &> pcm.log`
+4. `python3 apps/htsim/htsim_pcm_cwnd_parser.py pcm.log`
