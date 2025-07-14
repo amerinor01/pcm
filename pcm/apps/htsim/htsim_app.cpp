@@ -99,23 +99,23 @@ int pcmc_init(const char *algo_name, device_t *dev_ctx,
                 SUCCESS);
 
     if (!strcmp(algo_name, "newreno")) {
-        fprintf(stdout, "Algorithm requested: NewReno\n");
+        cout << "Algorithm requested: NewReno" << endl;
         EXIT_ON_ERR(tcp_pcmc_init(new_handle), SUCCESS);
     } else if (!strcmp(algo_name, "dctcp")) {
-        fprintf(stdout, "Algorithm requested: DCTCP\n");
+        cout << "Algorithm requested: DCTCP" << endl;
         EXIT_ON_ERR(tcp_pcmc_init(new_handle), SUCCESS);
         EXIT_ON_ERR(dctcp_pcmc_init(new_handle), SUCCESS);
     } else if (!strcmp(algo_name, "swift")) {
-        fprintf(stdout, "Algorithm requested: Swift\n");
+        cout << "Algorithm requested: Swift" << endl;
         EXIT_ON_ERR(swift_pcmc_init(new_handle), SUCCESS);
     } else if (!strcmp(algo_name, "dcqcn")) {
-        fprintf(stdout, "Algorithm requested: DCQCN\n");
+        cout << "Algorithm requested: DCQCN" << endl;
         EXIT_ON_ERR(dcqcn_pcmc_init(new_handle), SUCCESS);
     } else if (!strcmp(algo_name, "smartt")) {
-        fprintf(stdout, "Algorithm requested: SMaRTT\n");
+        cout << "Algorithm requested: SMaRTT" << endl;
         EXIT_ON_ERR(smartt_pcmc_init(new_handle), SUCCESS);
     } else {
-        fprintf(stderr, "Unknown algorithm name %s\n", algo_name);
+        cerr << "Unknown algorithm name " << algo_name << endl;
         exit(EXIT_FAILURE);
     }
 
@@ -254,12 +254,12 @@ int main(int argc, char **argv) {
             use_mixed = atoi(argv[i + 1]);
             // PcmSrc::set_use_mixed(use_mixed);
             CompositeQueue::set_use_mixed(use_mixed);
-            printf("UseMixed: %d\n", use_mixed);
+            cout << "UseMixed: " << use_mixed << endl;
             i++;
         } else if (!strcmp(argv[i], "-once_per_rtt")) {
             once_per_rtt = atoi(argv[i + 1]);
             PcmSrc::set_once_per_rtt(once_per_rtt);
-            printf("OnceRTTDecrease: %d\n", once_per_rtt);
+            cout << "OnceRTTDecrease: " << once_per_rtt << endl;
             i++;
         } else if (!strcmp(argv[i], "-stop_pacing_after_rtt")) {
             stop_pacing_after_rtt = atoi(argv[i + 1]);
@@ -269,14 +269,14 @@ int main(int argc, char **argv) {
             // linkspeed specified is in Mbps
             linkspeed = speedFromMbps(atof(argv[i + 1]));
             LINK_SPEED_MODERN = atoi(argv[i + 1]);
-            printf("Speed is %lu\n", LINK_SPEED_MODERN);
+            cout << "Speed is " << LINK_SPEED_MODERN << endl;
             LINK_SPEED_MODERN = LINK_SPEED_MODERN / 1000;
             // Saving this for UEC reference, Gbps
             i++;
         } else if (!strcmp(argv[i], "-kmin")) {
             // kmin as percentage of queue size (0..100)
             kmin = atoi(argv[i + 1]);
-            printf("KMin: %d\n", atoi(argv[i + 1]));
+            cout << "KMin: " << atoi(argv[i + 1]) << endl;
             CompositeQueue::set_kMin(kmin);
             PcmSrc::set_kmin(kmin / 100.0);
             i++;
@@ -290,7 +290,7 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-kmax")) {
             // kmin as percentage of queue size (0..100)
             kmax = atoi(argv[i + 1]);
-            printf("KMax: %d\n", atoi(argv[i + 1]));
+            cout << "KMax: " << atoi(argv[i + 1]) << endl;
             CompositeQueue::set_kMax(kmax);
             PcmSrc::set_kmax(kmax / 100.0);
             i++;
@@ -477,21 +477,22 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-explicit_starting_cwnd")) {
             explicit_starting_cwnd = atoi(argv[i + 1]);
-            printf("StartingWindowForced: %d\n", explicit_starting_cwnd);
+            cout << "StartingWindowForced: " << explicit_starting_cwnd << endl;
             i++;
         } else if (!strcmp(argv[i], "-explicit_starting_buffer")) {
             explicit_starting_buffer = atoi(argv[i + 1]);
-            printf("StartingBufferForced: %d\n", explicit_starting_buffer);
+            cout << "StartingBufferForced: " << explicit_starting_buffer
+                 << endl;
             explicit_bdp = explicit_starting_buffer;
             i++;
         } else if (!strcmp(argv[i], "-explicit_base_rtt")) {
             explicit_base_rtt = ((uint64_t)atoi(argv[i + 1])) * 1000;
-            printf("BaseRTTForced: %d\n", explicit_base_rtt);
+            cout << "BaseRTTForced: " << explicit_base_rtt << endl;
             PcmSrc::set_explicit_rtt(explicit_base_rtt);
             i++;
         } else if (!strcmp(argv[i], "-explicit_target_rtt")) {
             explicit_target_rtt = ((uint64_t)atoi(argv[i + 1])) * 1000;
-            printf("TargetRTTForced: %lu\n", explicit_target_rtt);
+            cout << "TargetRTTForced: " << explicit_target_rtt << endl;
             PcmSrc::set_explicit_target_rtt(explicit_target_rtt);
             i++;
         } else if (!strcmp(argv[i], "-queue_size_ratio")) {
@@ -528,17 +529,17 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-exp_avg_rtt_value")) {
             exp_avg_rtt_value = std::stod(argv[i + 1]);
-            printf("UseExpAvgRttValue: %d\n", exp_avg_rtt_value);
+            cout << "UseExpAvgRttValue: " << exp_avg_rtt_value << endl;
             PcmSrc::set_exp_avg_rtt_value(exp_avg_rtt_value);
             i++;
         } else if (!strcmp(argv[i], "-exp_avg_ecn_value")) {
             exp_avg_ecn_value = std::stod(argv[i + 1]);
-            printf("UseExpAvgecn_value: %d\n", exp_avg_ecn_value);
+            cout << "UseExpAvgecn_value: " << exp_avg_ecn_value << endl;
             PcmSrc::set_exp_avg_ecn_value(exp_avg_ecn_value);
             i++;
         } else if (!strcmp(argv[i], "-exp_avg_alpha")) {
             exp_avg_alpha = std::stod(argv[i + 1]);
-            printf("UseExpAvgalpha: %d\n", exp_avg_alpha);
+            cout << "UseExpAvgalpha: " << exp_avg_alpha << endl;
             PcmSrc::set_exp_avg_alpha(exp_avg_alpha);
             i++;
         } else if (!strcmp(argv[i], "-phantom_size")) {
@@ -737,10 +738,9 @@ int main(int argc, char **argv) {
         PcmSrc::set_switch_queue_size(max_queue_size);
     }
 
-    printf("Using BDP of %lu - Queue is %lld - Starting Window is %lu - RTT "
-           "%lu - Bandwidth %lu\n",
-           bdp_local, queuesize, actual_starting_cwnd, base_rtt_max_hops,
-           LINK_SPEED_MODERN);
+    cout << "Using BDP of " << bdp_local << " - Queue is " << queuesize
+         << " - Starting Window is " << actual_starting_cwnd << " - RTT "
+         << base_rtt_max_hops << " - Bandwidth " << LINK_SPEED_MODERN << endl;
 
     cout << "Using subflow count " << subflow_count << endl;
 
@@ -931,14 +931,13 @@ int main(int argc, char **argv) {
             }
 
             PcmSrc::set_starting_cwnd(actual_starting_cwnd * 2);
-            printf("Setting CWND to %lu\n", actual_starting_cwnd);
+            cout << "Setting CWND to " << actual_starting_cwnd << endl;
 
-            printf(
-                "Using BDP of %lu - Queue is %lld - Starting Window is %lu\n",
-                bdp_local, queuesize, actual_starting_cwnd);
+            cout << "Using BDP of " << bdp_local << " - Queue is " << queuesize
+                 << " - Starting Window is " << actual_starting_cwnd << endl;
 
-            uecSrc =
-                new PcmSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6, pcm_device, pcm_ignore);
+            uecSrc = new PcmSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6,
+                                pcm_device, pcm_ignore);
 
             uecSrc->setNumberEntropies(256);
             uec_srcs.push_back(uecSrc);

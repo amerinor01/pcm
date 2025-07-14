@@ -156,11 +156,11 @@ PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger,
     target_window = _cwnd;
     _target_based_received = true;
 
-    printf("Link Delay %d - Link Speed %lu - Pkt Size %d - Base RTT %lu - "
-           "Target RTT is %lu - BDP %lu - CWND %u - Hops %d - Stop Pacing "
-           "%lu\n",
-           LINK_DELAY_MODERN, LINK_SPEED_MODERN, PKT_SIZE_MODERN, _base_rtt,
-           _target_rtt, _bdp, _cwnd, _hop_count, stop_pacing_after_rtt);
+    cout << "Link Delay " << LINK_DELAY_MODERN << " - Link Speed "
+         << LINK_SPEED_MODERN << " - Pkt Size " << PKT_SIZE_MODERN
+         << " - Base RTT " << _base_rtt << " - Target RTT is " << _target_rtt
+         << " - BDP " << _bdp << " - CWND " << _cwnd << " - Hops " << _hop_count
+         << " - Stop Pacing " << stop_pacing_after_rtt << endl;
 
     _max_good_entropies = 10; // TODO: experimental value
     _enableDistanceBasedRtx = false;
@@ -171,11 +171,11 @@ PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger,
         generic_pacer = new PcmPacer(eventlist(), *this);
         pacer_start_time = eventlist().now();
         pacing_delay = ((4160 * 8) / ((_cwnd * 8) / (_base_rtt / 1000)));
-        printf("Setting the pacing delay1 %d %lu to %lu at %lu\n", _cwnd,
-               (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
+        // printf("Setting the pacing delay1 %d %lu to %lu at %lu\n", _cwnd,
+        //       (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
         // pacing_delay -= (4160 * 8 / LINK_SPEED_MODERN);
-        printf("Setting the pacing delay2 %d %lu to %lu at %lu\n", _cwnd,
-               (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
+        // printf("Setting the pacing delay2 %d %lu to %lu at %lu\n", _cwnd,
+        //       (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
         pacing_delay *= 1000; // ps
     }
 
@@ -504,11 +504,13 @@ void PcmSrc::updateParams() {
         generic_pacer = new PcmPacer(eventlist(), *this);
         pacer_start_time = eventlist().now();
         pacing_delay = ((4160 * 8) / ((_cwnd * 8) / (_base_rtt / 1000)));
-        printf("Setting the pacing delay1 %d %lu to %lu at %lu\n", _cwnd,
-               (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
+        cout << "Setting the pacing delay1 " << _cwnd << " "
+             << (_base_rtt / 1000) << " to " << pacing_delay << " at "
+             << GLOBAL_TIME / 1000 << endl;
         // pacing_delay -= (4160 * 8 / LINK_SPEED_MODERN);
-        printf("Setting the pacing delay2 %d %lu to %lu at %lu\n", _cwnd,
-               (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
+        cout << "Setting the pacing delay2 " << _cwnd << " "
+             << (_base_rtt / 1000) << " to " << pacing_delay << " at "
+             << GLOBAL_TIME / 1000 << endl;
         pacing_delay *= 1000; // ps
     }
 }
@@ -677,19 +679,20 @@ void PcmSrc::quick_adapt(bool trimmed) {
                      (eventlist().now() - previous_window_end + _base_rtt));*/
 
             // Update window and ignore count
-            printf("Before Update Saved CWD is %lu \n", saved_acked_bytes);
+            cout << "Before Update Saved CWD is " << saved_acked_bytes << " "
+                 << endl;
             if (send_size <= _bdp) {
                 // saved_acked_bytes =
                 //         saved_acked_bytes * (_bdp / (double)send_size);
-                printf("BDP %lu - Send Size %lu - Ratio %f\n", _bdp, send_size,
-                       (_bdp / (double)send_size));
+                cout << "BDP " << _bdp << " - Send Size " << send_size
+                     << " - Ratio " << (_bdp / (double)send_size) << endl;
             }
 
             _cwnd = max((double)(saved_acked_bytes * bonus_drop),
                         (double)_mss); // 1.5 is the amount of target_rtt over
                                        // base_rtt. Simplified here for this
                                        // code share.
-            printf("After Update Saved CWD is %lu \n", _cwnd);
+            cout << "After Update Saved CWD is " << _cwnd << " " << endl;
 
             if (eventlist().now() < _base_rtt * 5 && jump_to != 0) {
                 int coin = rand() % 2;
@@ -741,8 +744,9 @@ void PcmSrc::quick_adapt(bool trimmed) {
                 pacing_delay =
                     ((4160 * 8) / ((_cwnd * 8) / (_base_rtt / 1000)));
                 // pacing_delay -= (4160 * 8 / LINK_SPEED_MODERN);
-                printf("Setting the pacing delay %d %lu to %lu at %lu\n", _cwnd,
-                       (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
+                cout << "Setting the pacing delay " << _cwnd << " "
+                     << (_base_rtt / 1000) << " to " << pacing_delay << " at "
+                     << GLOBAL_TIME / 1000 << endl;
                 pacing_delay *= 1000; // ps
             }
 
@@ -750,22 +754,17 @@ void PcmSrc::quick_adapt(bool trimmed) {
 
             total_pkt = 0;
             total_nack = 0;
-            printf("Using Fast Drop2 - Flow %d@%d@%d, Ecn %d, CWND %d, "
-                   "Saved "
-                   "Acked %d (dropping to %f - bonus1  %f -> %f and "
-                   "%f) - "
-                   "Previous "
-                   "Window %lu - Next "
-                   "Window %lu// "
-                   "Time "
-                   "%lu\n",
-                   from, to, tag, 1, _cwnd, saved_acked_bytes,
-                   max((double)(saved_acked_bytes * bonus_drop),
-                       saved_acked_bytes * bonus_drop + _mss),
-                   bonus_drop, (saved_acked_bytes * bonus_drop),
-                   (saved_acked_bytes * bonus_drop + _mss),
-                   previous_window_end / 1000, next_window_end / 1000,
-                   eventlist().now() / 1000);
+            cout << "Using Fast Drop2 - Flow " << from << "@" << to << "@"
+                 << tag << ", Ecn " << 1 << ", CWND " << _cwnd
+                 << ", Saved Acked " << saved_acked_bytes << " (dropping to "
+                 << max((double)(saved_acked_bytes * bonus_drop),
+                        saved_acked_bytes * bonus_drop + _mss)
+                 << " - bonus1 " << bonus_drop << " -> "
+                 << (saved_acked_bytes * bonus_drop) << " and "
+                 << (saved_acked_bytes * bonus_drop + _mss)
+                 << ") - Previous Window " << previous_window_end / 1000
+                 << " - Next Window " << next_window_end / 1000 << "// Time "
+                 << eventlist().now() / 1000 << endl;
         }
     }
 }
@@ -779,8 +778,8 @@ void PcmSrc::processNack(PcmNack &pkt) {
     acked_bytes += 64;
     saved_trimmed_bytes += 64;
 
-    printf("Just NA CK from %d at %lu - %d\n", from, eventlist().now() / 1000,
-           pkt.is_failed);
+    cout << "Just NA CK from " << from << " at " << eventlist().now() / 1000
+         << " - " << pkt.is_failed << endl;
 
     // Reduce Window Or Do Fast Drop
     if (algorithm_type != "mprdma") {
@@ -884,7 +883,7 @@ int PcmSrc::choose_route() {
         _avoid_score[path_id] = _avoid_ratio[path_id];
         int ctr = 0;
         while (_avoid_score[path_id] > 0 /* && ctr < 2*/) {
-            printf("as[%d]: %d\n", path_id, _avoid_score[path_id]);
+            cout << "as[" << path_id << "]: " << _avoid_score[path_id] << endl;
             _avoid_score[path_id]--;
             ctr++;
             // re-choosing path
@@ -1034,13 +1033,14 @@ void PcmSrc::processBts(PcmPacket *pkt) {
                   ECN_CE; // ECN was marked on data packet and echoed on ACK
 
     if (pkt->_queue_full) {
-        printf("BTS %d - Queue is full - Level %d - %ld - Name %s\n", from,
-               pkt->queue_status, eventlist().now() / 1000,
-               pkt->switch_name.c_str());
+        cout << "BTS " << from << " - Queue is full - Level "
+             << pkt->queue_status << " - " << eventlist().now() / 1000
+             << " - Name " << pkt->switch_name.c_str() << endl;
         double reduce_by = exp_avg_bts / 64.0 * _mss;
         // reduce_by = 0;
         if (marked) {
-            printf("Using ExpAvg %f and %d\n", reduce_by, exp_avg_bts);
+            cout << "Using ExpAvg " << reduce_by << " and " << exp_avg_bts
+                 << endl;
             reduce_cwnd(uint64_t((_mss - reduce_by)));
         } else {
             reduce_cwnd(uint64_t(_mss));
@@ -1051,13 +1051,13 @@ void PcmSrc::processBts(PcmPacket *pkt) {
 
         _list_bts.push_back(std::make_pair(eventlist().now() / 1000, 1));
     } else {
-        printf("BTS %d - Warning - Level %d - Reduce %lu (%f) - %lu - Name "
-               "%s\n",
-               from, pkt->queue_status,
-               (uint64_t)(_mss * (pkt->queue_status / 64.0) *
-                          ((double)_cwnd / _bdp)),
-               (double)_cwnd / _bdp, eventlist().now() / 1000,
-               pkt->switch_name.c_str());
+        cout << "BTS " << from << " - Warning - Level " << pkt->queue_status
+             << " - Reduce "
+             << (uint64_t)(_mss * (pkt->queue_status / 64.0) *
+                           ((double)_cwnd / _bdp))
+             << " (" << (double)_cwnd / _bdp << ") - "
+             << eventlist().now() / 1000 << " - Name "
+             << pkt->switch_name.c_str() << endl;
 
         _list_bts.push_back(std::make_pair(eventlist().now() / 1000, 1));
 
@@ -1141,8 +1141,9 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
         ((eventlist().now() - last_pac_change) > _base_rtt / 20)) {
         pacing_delay = (4160 * 8) / ((_cwnd * 8.0) / (_base_rtt / 1000.0));
         //  pacing_delay -= (4160 * 8 / 80);
-        printf("Setting the pacing delay update %d %lu to %lu at %lu\n", _cwnd,
-               (_base_rtt / 1000), pacing_delay, GLOBAL_TIME / 1000);
+        cout << "Setting the pacing delay update " << _cwnd << " "
+             << (_base_rtt / 1000) << " to " << pacing_delay << " at "
+             << GLOBAL_TIME / 1000 << endl;
         pacing_delay *= 1000; // ps
         generic_pacer->cancel();
         // generic_pacer->schedule_send(pacing_delay);
@@ -1159,7 +1160,7 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
     }
 
     if (from == 0 && count_total_ack % 10 == 0) {
-        printf("Currently at Pkt %d\n", count_total_ack);
+        cout << "Currently at Pkt " << count_total_ack << endl;
     }
 
     if (!marked) {
@@ -1255,7 +1256,7 @@ void PcmSrc::receivePacket(Packet &pkt) {
         reduce_unacked(_mss);
     } else {
         exit(0);
-        printf("Never here\n");
+        cout << "Never here" << endl;
     }
 
     // TODO: receive window?
@@ -1284,13 +1285,13 @@ void PcmSrc::receivePacket(Packet &pkt) {
         pkt.free();
         break;
     case ETH_PAUSE:
-        printf("Src received a Pause\n");
+        cout << "Src received a Pause" << endl;
         // processPause((const EthPausePacket &)pkt);
         pkt.free();
         return;
     case UECNACK:
-        printf("\nNACK at %lu %d@%d@%d - %d\n", GLOBAL_TIME / 1000, from, to,
-               tag, pkt.is_failed);
+        cout << "\nNACK at " << GLOBAL_TIME / 1000 << " " << from << "@" << to
+             << "@" << tag << " - " << pkt.is_failed << endl;
         // fflush(stdout);
         total_nack++;
         if (_trimming_enabled) {
@@ -1363,7 +1364,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
     else if (use_exp_avg_rtt) {
         if (exp_avg_rtt > exp_avg_rtt_value) {
             can_decrease_exp_avg = true;
-            printf("I am in here\n");
+            cout << "I am in here" << endl;
         }
     } else {
         can_decrease_exp_avg = true;
@@ -1408,7 +1409,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
     // BTS Logic
     if (_bts_enabled) {
         if (ecn && _ignore_ecn_ack) {
-            printf("BTS Case with ECN, ignore.");
+            cout << "BTS Case with ECN, ignore." << endl;
             _cwnd += ((double)_mss / _cwnd) * 0.1 * _mss;
         } else if (counter_consecutive_good_bytes > _cwnd) {
             _cwnd = _maxcwnd;
@@ -1512,9 +1513,11 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
 
             x_gain = (_bdp / 100 * initial_x_gain) / _mss;
             z_gain = initial_z_gain;
-            printf("X Gain updated is %f - z gain is %f\n", x_gain, z_gain);
-            printf("Flow3 %d - Time %lu vs End %lu - First ECN %d \n", from,
-                   GLOBAL_TIME / 1000, ecn_rtt_end / 1000, is_first_ecn);
+            cout << "X Gain updated is " << x_gain << " - z gain is " << z_gain
+                 << endl;
+            cout << "Flow3 " << from << " - Time " << GLOBAL_TIME / 1000
+                 << " vs End " << ecn_rtt_end / 1000 << " - First ECN "
+                 << is_first_ecn << " " << endl;
 
             if (current_ecn_rate > previous_ecn_rate) {
                 last_phantom_increase = eventlist().now();
@@ -1525,8 +1528,8 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 current_ecn_rate =
                     ((double)pkt_with_ecn_rtt) / total_pkt_seen_rtt * 100;
                 ecn_rtt_end = eventlist().now() + ecn_rate_period;
-                printf("Flow %d - ECN vs TOT %d %d\n", from, pkt_with_ecn_rtt,
-                       total_pkt_seen_rtt);
+                cout << "Flow " << from << " - ECN vs TOT " << pkt_with_ecn_rtt
+                     << " " << total_pkt_seen_rtt << endl;
                 pkt_with_ecn_rtt = 0;
                 total_pkt_seen_rtt = 0;
                 count_add_from_zero_ecn = 0;
@@ -1549,27 +1552,27 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 // 4 cases
                 if (current_ecn_rate >= 30) {
                     if (current_ecn_rate >= previous_ecn_rate) {
-                        printf("Flow2 %d %u - Above 30 - Decrease - Current "
-                               "Rate %f vs %f - Scaling %f\n",
-                               from, GLOBAL_TIME / 1000, current_ecn_rate,
-                               previous_ecn_rate, scaling_factor);
+                        cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
+                             << " - Above 30 - Decrease - Current Rate "
+                             << current_ecn_rate << " vs " << previous_ecn_rate
+                             << " - Scaling " << scaling_factor << endl;
                     } else {
-                        printf("Flow2 %d %u - Above 30 - Increase - Current "
-                               "Rate %f vs %f - Scaling %f\n",
-                               from, GLOBAL_TIME / 1000, current_ecn_rate,
-                               previous_ecn_rate, scaling_factor);
+                        cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
+                             << " - Above 30 - Increase - Current Rate "
+                             << current_ecn_rate << " vs " << previous_ecn_rate
+                             << " - Scaling " << scaling_factor << endl;
                     }
                 } else {
                     if (current_ecn_rate >= previous_ecn_rate) {
-                        printf("Flow2 %d %u - Below 30 - Decrease - Current "
-                               "Rate %f vs %f - Scaling %f\n",
-                               from, GLOBAL_TIME / 1000, current_ecn_rate,
-                               previous_ecn_rate, scaling_factor);
+                        cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
+                             << " - Below 30 - Decrease - Current Rate "
+                             << current_ecn_rate << " vs " << previous_ecn_rate
+                             << " - Scaling " << scaling_factor << endl;
                     } else {
-                        printf("Flow2 %d %u - Below 30 - Increase - Current "
-                               "Rate %f vs %f - Scaling %f\n",
-                               from, GLOBAL_TIME / 1000, current_ecn_rate,
-                               previous_ecn_rate, scaling_factor);
+                        cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
+                             << " - Below 30 - Increase - Current Rate "
+                             << current_ecn_rate << " vs " << previous_ecn_rate
+                             << " - Scaling " << scaling_factor << endl;
                     }
                 }
             }
@@ -1578,8 +1581,8 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 // Quick Adapt if the ECN rate is above a certain %
                 if (current_ecn_rate > 65 ||
                     (_hop_count < 9 && rtt > _base_rtt * 2.2)) {
-                    printf("ECN Rate HIGH %f - Time %lu\n", current_ecn_rate,
-                           GLOBAL_TIME / 1000);
+                    cout << "ECN Rate HIGH " << current_ecn_rate << " - Time "
+                         << GLOBAL_TIME / 1000 << endl;
                     if (eventlist().now() > next_qa) {
                         need_quick_adapt = true;
                         quick_adapt(true);
@@ -1599,24 +1602,22 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 if (eventlist().now() > last_qa_event + _base_rtt) {
                     if (current_ecn_rate > 30 &&
                         current_ecn_rate >= previous_ecn_rate) {
-                        printf("From2 %d - Time %lu - Current Rate %f vs %f - "
-                               "Phantom "
-                               "Queue Size %f "
-                               "- Pkts %d\n",
-                               from, GLOBAL_TIME / 1000, current_ecn_rate,
-                               previous_ecn_rate, phantom_size_calc,
-                               count_add_from_zero_ecn);
+                        cout << "From2 " << from << " - Time "
+                             << GLOBAL_TIME / 1000 << " - Current Rate "
+                             << current_ecn_rate << " vs " << previous_ecn_rate
+                             << " - Phantom Queue Size " << phantom_size_calc
+                             << " - Pkts " << count_add_from_zero_ecn << endl;
                         _cwnd -= 4160 * initial_z_gain / 100;
                         //_cwnd -= ((x_gain / 1) * _mss * ((double)_mss /
                         //_cwnd)) * scaling_factor;
-                        printf("Decrease above %d 30 at %lu\n", from,
-                               GLOBAL_TIME / 1000);
+                        cout << "Decrease above " << from << " 30 at "
+                             << GLOBAL_TIME / 1000 << endl;
                     } else if (current_ecn_rate > 30 &&
                                current_ecn_rate <= previous_ecn_rate) {
                         _cwnd += (((double)_mss / _cwnd) * (x_gain)*_mss) *
                                  scaling_factor;
-                        printf("Increase above %d 30 at %lu\n", from,
-                               GLOBAL_TIME / 1000);
+                        cout << "Increase above " << from << " 30 at "
+                             << GLOBAL_TIME / 1000 << endl;
                     }
                 }
                 last_ecn_seen = eventlist().now();
@@ -1629,12 +1630,12 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                     // current_ecn_rate = 0;
                 }
 
-                printf(
-                    "%d Doing fast Increase - %d - %d - %d - %d - %lu\n", from,
-                    eventlist().now() > last_ecn_seen + (_base_rtt * 1.5),
-                    eventlist().now() > last_phantom_increase + (_base_rtt * 2),
-                    (eventlist().now() > (_base_rtt * 3)), rtt < near_base_rtt,
-                    last_phantom_increase);
+                // printf(
+                //     "%d Doing fast Increase - %d - %d - %d - %d - %lu\n",
+                //     from, eventlist().now() > last_ecn_seen + (_base_rtt
+                //     * 1.5), eventlist().now() > last_phantom_increase +
+                //     (_base_rtt * 2), (eventlist().now() > (_base_rtt * 3)),
+                //     rtt < near_base_rtt, last_phantom_increase);
 
                 if (use_fast_increase &&
                     eventlist().now() > last_ecn_seen + (_base_rtt * 10.5) &&
@@ -1671,11 +1672,11 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                                 ((double)_mss) *
                                 (((double)_cwnd) / _bdp * (z_gain / 1)); */
                         _cwnd -= gent_dec_amount * scaling_factor;
-                        printf("Decrease below %d 30 at %lu\n", from,
-                               GLOBAL_TIME / 1000);
+                        // printf("Decrease below %d 30 at %lu\n", from,
+                        //        GLOBAL_TIME / 1000);
                     } else {
-                        printf("Increase below %d 30 at %lu\n", from,
-                               GLOBAL_TIME / 1000);
+                        // printf("Increase below %d 30 at %lu\n", from,
+                        //        GLOBAL_TIME / 1000);
                         _cwnd +=
                             (((double)_mss / _cwnd) * (x_gain / 1) * _mss) *
                             scaling_factor;
@@ -1792,10 +1793,9 @@ void PcmSrc::startflow() {
     ideal_x = x_gain;
     _flow_start_time = eventlist().now();
 
-    printf("Starting Flow from %d to %d tag %d - RTT %lu - Target %lu - "
-           "Time "
-           "%lu\n",
-           from, to, tag, _base_rtt, _target_rtt, GLOBAL_TIME / 1000);
+    cout << "Starting Flow from " << from << " to " << to << " tag " << tag
+         << " - RTT " << _base_rtt << " - Target " << _target_rtt << " - Time "
+         << GLOBAL_TIME / 1000 << endl;
     send_packets();
 }
 
@@ -1825,11 +1825,11 @@ void PcmSrc::map_entropies() {
     for (int i = 0; i < _num_entropies; i++) {
         _entropy_array.push_back(random() % _paths.size());
     }
-    printf("Printing my Paths: ");
+    cout << "Printing my Paths: ";
     for (int i = 0; i < _num_entropies; i++) {
-        printf("%d - ", _entropy_array[i]);
+        cout << _entropy_array[i] << " - ";
     }
-    printf("\n");
+    cout << endl;
 }
 
 void PcmSrc::pacedSend() {
@@ -1861,7 +1861,7 @@ void PcmSrc::send_packets() {
         // Check pacer and set timeout
         if (!_paced_packet && use_pacing) {
             if (generic_pacer != NULL && !generic_pacer->is_pending()) {
-                printf("scheduling send\n");
+                cout << "scheduling send" << endl;
                 generic_pacer->schedule_send(pacing_delay);
                 return;
             } else if (generic_pacer != NULL) {
@@ -2225,7 +2225,7 @@ void PcmSink::receivePacket(Packet &pkt) {
     case UEC:
         // do what comes after the switch
         if (pkt.bounced()) {
-            printf("Bounced at Sink, no sense\n");
+            cout << "Bounced at Sink, no sense" << endl;
         }
         break;
     default:

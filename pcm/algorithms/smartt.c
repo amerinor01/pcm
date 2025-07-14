@@ -5,11 +5,11 @@
 #include "smartt.h"
 
 static inline bool smartt_quick_adapt(struct smartt_state_snapshot *state) {
-    printf(
-        "QA state: now=%d qa_deadline=%d bytes_to_ignore=%d bytes_ignored=%d "
-        "acked_bytes=%d trigger_qa=%d\n",
-        state->now, state->qa_deadline, state->bytes_to_ignore,
-        state->bytes_ignored, state->acked_bytes, state->trigger_qa);
+    //printf("SMaRTT QA state: now=%llu qa_deadline=%llu bytes_to_ignore=%llu "
+    //       "bytes_ignored=%llu "
+    //       "acked_bytes=%llu trigger_qa=%llu\n",
+    //       state->now, state->qa_deadline, state->bytes_to_ignore,
+    //       state->bytes_ignored, state->acked_bytes, state->trigger_qa);
     bool adapted = false;
     if (state->now >= state->qa_deadline) {
         if (state->qa_deadline != 0 && state->trigger_qa) {
@@ -40,10 +40,11 @@ smartt_handle_loss_signal(struct smartt_state_snapshot *state) {
 }
 
 static inline bool smartt_fast_increase(struct smartt_state_snapshot *state) {
-    // printf("FI state last_rtt=%d brtt=%d num_ecns=%d fast_count=%d cwnd=%d "
-    //        "fast_active=%d\n",
-    //        state->last_rtt, state->consts.brtt, state->num_ecns,
-    //        state->fast_count, state->cwnd, state->fast_active);
+    // printf(
+    //     "SMaRTT FI state last_rtt=%llu brtt=%llu num_ecns=%llu fast_count=%llu cwnd=%llu "
+    //     "fast_active=%llu\n",
+    //     state->last_rtt, state->consts.brtt, state->num_ecns, state->fast_count,
+    //     state->cwnd, state->fast_active);
     if ((ABS((pcm_float)state->last_rtt - state->consts.brtt) <
          (0.75 * (pcm_float)state->consts.brtt)) &&
         !state->num_ecns) {
@@ -164,8 +165,8 @@ int algorithm_main() {
 
 save_state:
 
-    // printf("SMaRTT: num_nacks=%d num_rtos=%d num_acks=%d, cwnd=%d\n",
-    //        state.num_nacks, state.num_rtos, state.num_acks, state.cwnd);
+    //printf("SMaRTT: num_nacks=%llu num_rtos=%llu num_acks=%llu, cwnd=%llu\n",
+    //       state.num_nacks, state.num_rtos, state.num_acks, state.cwnd);
 
     set_control(SMARTT_CTRL_CWND_BYTES, state.cwnd);
 
