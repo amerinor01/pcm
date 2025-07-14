@@ -8,7 +8,11 @@
 extern "C" {
 #endif
 
+#ifdef __cplusplus
+#define STATIC_ASSERT static_assert
+#else
 #define STATIC_ASSERT _Static_assert
+#endif
 STATIC_ASSERT(sizeof(double) == sizeof(uint64_t),
               "sizeof(double) must be equal to sizeof(uint64_t)");
 

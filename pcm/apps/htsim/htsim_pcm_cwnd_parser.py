@@ -25,7 +25,7 @@ def parse_log(file_path):
     return flow_data
 
 
-def plot_cwnd(flow_data):
+def plot_cwnd(flow_data, out_file):
     """
     Plot absolute value of cwnd over PCM TIME for each flow using matplotlib.
     """
@@ -39,14 +39,16 @@ def plot_cwnd(flow_data):
     plt.title('Congestion Window Evolution per Flow (Absolute Value)')
     plt.legend()
     plt.tight_layout()
+    plt.savefig(out_file, bbox_inches='tight')
     plt.show()
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python cwnd_parser.py <log_file>")
+    if len(sys.argv) < 3:
+        print("Usage: python cwnd_parser.py <log_file> <out_file>")
         sys.exit(1)
     
     log_file = sys.argv[1]
+    out_file = sys.argv[2]
     flow_data = parse_log(log_file)
-    plot_cwnd(flow_data)
+    plot_cwnd(flow_data, out_file)
