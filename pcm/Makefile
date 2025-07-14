@@ -65,10 +65,14 @@ PCM_LIB_TARGET   := $(LIBDIR)/libpcm.so
 
 ALGO_PLUGIN_NAMES := reno_accumulated reno_standard dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
-ALGO_PLUGIN_LIBS_LL  := $(addprefix $(LIBDIR)/lib,$(addsuffix .ll,$(ALGO_PLUGIN_NAMES)))
 ALGO_PLUGIN_PCMC_NAMES := tcp swift dcqcn smartt
 ALGO_PLUGIN_PCMC_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix _pcmc.so,$(ALGO_PLUGIN_PCMC_NAMES)))
 ALGO_PLUGIN_PCMC_LDLIBS  := $(addprefix -l,$(addsuffix _pcmc,$(ALGO_PLUGIN_PCMC_NAMES)))
+
+# compile HAC-related optimizaitons if enabled
+ifeq ($(BUILD_HAC_PASS),1)
+ALGO_PLUGIN_LIBS_LL  := $(addprefix $(LIBDIR)/lib,$(addsuffix .ll,$(ALGO_PLUGIN_NAMES)))
+endif
 
 TGEN_APP_SRCS     := $(APPSDIR)/traffic_gen
 TGEN_APP_OBJS     := $(TGEN_APP_SRCS)/main.o $(TGEN_APP_SRCS)/traffic_gen.o
@@ -121,7 +125,7 @@ $(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
 
 
 #-----------------------------------------------
-# Optimized handlers (dirty, make an actual HAC script and clean up)
+# HAC-optimized handlers (dirty, make an actual HAC script and clean up)
 #-----------------------------------------------
 
 # DCTCP is special as it needs BUILD_ALGO_DCTCP  (why? looks ugly):
@@ -135,7 +139,6 @@ $(LIBDIR)/libdctcp.ll: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@.so $@.o -L$(LIBDIR) -lpcm -lm
 	@rm $@.o
 
-
 # other algos
 $(LIBDIR)/lib%.ll: $(ALGODIR)/%.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	@mkdir -p $(LIBDIR)
@@ -146,11 +149,9 @@ $(LIBDIR)/lib%.ll: $(ALGODIR)/%.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	llc -filetype=obj -relocation-model=pic $@ -o $@.o
 	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@.so $@.o -L$(LIBDIR) -lpcm -lm
 	@rm $@.o
- 
-
 
 # -----------------------------------------------
-# Build the HAC pass
+# Build the HAC LLVM pass
 # -----------------------------------------------
 $(HAC_PASS):
 	cd HAC; rm -rf build; mkdir build; cd build; cmake ..; make; 
