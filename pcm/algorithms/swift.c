@@ -1,12 +1,13 @@
 #include "swift.h"
 
-static inline pcm_float swift_target_delay(pcm_uint cwnd) {
+static inline pcm_float swift_target_delay(struct swift_state_snapshot *state,
+                                           pcm_uint cwnd) {
     pcm_uint fs_delay =
-        SWIFT_FS_ALPHA / sqrtf((pcm_float)cwnd / FABRIC_LINK_MTU) +
-        SWIFT_FS_BETA;
+        state->consts.fs_alpha / sqrtf((pcm_float)cwnd / state->consts.mss) +
+        state->consts.fs_beta;
 
-    if (fs_delay > SWIFT_FS_RANGE)
-        fs_delay = SWIFT_FS_RANGE;
+    if (fs_delay > state->consts.fs_range)
+        fs_delay = state->consts.fs_range;
 
     if (fs_delay < 0.0)
         fs_delay = 0.0;
@@ -14,11 +15,11 @@ static inline pcm_float swift_target_delay(pcm_uint cwnd) {
     if (cwnd == 0)
         fs_delay = 0.0;
 
-    pcm_uint hop_delay = FABRIC_HOP_COUNT * SWIFT_H;
-    return FABRIC_BASE_RTT + fs_delay + hop_delay;
+    pcm_uint hop_delay = state->consts.hop_count * state->consts.h;
+    return state->consts.brtt + fs_delay + hop_delay;
 }
 
-static inline void swift_rtt_estimate(struct swift_state_shapshot *state) {
+static inline void swift_rtt_estimate(struct swift_state_snapshot *state) {
     if (state->rtt_estim > 0) {
         state->rtt_estim = 7 * state->rtt_estim / 8 + state->delay / 8;
     } else {
@@ -26,44 +27,44 @@ static inline void swift_rtt_estimate(struct swift_state_shapshot *state) {
     }
 }
 
-static inline void swift_nack_recovery(struct swift_state_shapshot *state) {
+static inline void swift_nack_recovery(struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
     if (state->can_decrease) {
-        state->cwnd = (pcm_float)state->cwnd * (1.0 - SWIFT_MAX_MDF);
+        state->cwnd = (pcm_float)state->cwnd * (1.0 - state->consts.max_mdf);
     }
 }
 
-static inline void swift_timeout_recovery(struct swift_state_shapshot *state) {
+static inline void swift_timeout_recovery(struct swift_state_snapshot *state) {
     state->retransmit_cnt++;
-    if (state->retransmit_cnt >= SWIFT_RETX_RESET_THRESHOLD) {
-        state->cwnd = FABRIC_MIN_CWND;
+    if (state->retransmit_cnt >= state->consts.rtx_thresh) {
+        state->cwnd = state->consts.mss; // min_cwnd
     } else if (state->can_decrease) {
-        state->cwnd = (pcm_float)state->cwnd * (1.0 - SWIFT_MAX_MDF);
+        state->cwnd = (pcm_float)state->cwnd * (1.0 - state->consts.max_mdf);
     }
 }
 
-static inline void swift_ack_reaction(struct swift_state_shapshot *state) {
+static inline void swift_ack_reaction(struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
-    pcm_float target_delay = swift_target_delay(state->cwnd);
+    pcm_float target_delay = swift_target_delay(state, state->cwnd);
 
     if (state->delay < target_delay) {
         /* Additive Increase */
-        state->cwnd +=
-            FABRIC_LINK_MTU * SWIFT_AI * (state->tot_acked / state->cwnd);
+        state->cwnd += state->consts.mss * state->consts.ai *
+                       (state->tot_acked / state->cwnd);
         // Note: we DO NOT support FP fractional cwnd (yet)
         // if (state->cwnd >= 1) {
-        //    state->cwnd += SWIFT_AI * state->tot_acked / state->cwnd;
+        //    state->cwnd += state->consts.ai * state->tot_acked / state->cwnd;
         //} else {
-        //    state->cwnd += SWIFT_AI * state->tot_acked;
+        //    state->cwnd += state->consts.ai * state->tot_acked;
         //}
     } else {
         /* Multiplicative Decrease */
         if (state->can_decrease) {
             pcm_float mdf =
-                SWIFT_BETA * ((pcm_float)(state->delay - target_delay) /
-                              (pcm_float)state->delay);
-            state->cwnd =
-                (pcm_float)state->cwnd * MAX(1.0 - mdf, 1.0 - SWIFT_MAX_MDF);
+                state->consts.beta * ((pcm_float)(state->delay - target_delay) /
+                                      (pcm_float)state->delay);
+            state->cwnd = (pcm_float)state->cwnd *
+                          MAX(1.0 - mdf, 1.0 - state->consts.max_mdf);
         }
     }
 }
@@ -77,19 +78,35 @@ static inline void swift_ack_reaction(struct swift_state_shapshot *state) {
  *
  */
 int algorithm_main() {
-    struct swift_state_shapshot state;
+    struct swift_state_snapshot state;
+
+    state.consts.brtt = get_constant_uint(SWIFT_CONST_BRTT);
+    state.consts.bdp = get_constant_uint(SWIFT_CONST_BDP);
+    state.consts.mss = get_constant_uint(SWIFT_CONST_MSS);
+    state.consts.hop_count = get_constant_uint(SWIFT_CONST_HOP_COUNT);
+    state.consts.rtx_thresh = get_constant_uint(SWIFT_CONST_RTX_THRESH);
+    state.consts.ai = get_constant_float(SWIFT_CONST_AI);
+    state.consts.max_mdf = get_constant_float(SWIFT_CONST_MAX_MDF);
+    state.consts.fs_range = get_constant_float(SWIFT_CONST_FS_RANGE);
+    state.consts.fs_alpha = get_constant_float(SWIFT_CONST_FS_ALPHA);
+    state.consts.fs_beta = get_constant_float(SWIFT_CONST_FS_BETA);
+    state.consts.beta = get_constant_float(SWIFT_CONST_BETA);
+    state.consts.h = get_constant_float(SWIFT_CONST_H);
+
     state.num_nacks = get_signal(SWIFT_SIG_IDX_NACK);
     state.num_rtos = get_signal(SWIFT_SIG_IDX_RTO);
     state.num_acks = get_signal(SWIFT_SIG_IDX_ACK);
     state.tot_acked = get_local_state(SWIFT_LOCAL_STATE_IDX_ACKED) +
-                      state.num_acks * FABRIC_LINK_MTU;
+                      state.num_acks * state.consts.mss;
     state.delay = get_signal(SWIFT_SIG_IDX_RTT);
     state.now = get_signal(SIWFT_SIG_IDX_ELAPSED_TIME);
+
     state.t_last_decrease =
         get_local_state(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE);
     state.retransmit_cnt =
         get_local_state(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT);
     state.rtt_estim = get_local_state(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM);
+
     state.cwnd = get_control(SWIFT_CTRL_IDX_CWND);
 
     state.can_decrease = (state.now - state.t_last_decrease) >= state.rtt_estim;
@@ -112,12 +129,6 @@ int algorithm_main() {
     } else {
         return ERROR;
     }
-
-    /* Enforce bounds */
-    if (state.cwnd < FABRIC_MIN_CWND)
-        state.cwnd = FABRIC_MIN_CWND;
-    if (state.cwnd > FABRIC_MAX_CWND)
-        state.cwnd = FABRIC_MAX_CWND;
 
     /*
      * update last‐decrease timestamp if we actually shrank

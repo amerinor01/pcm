@@ -97,22 +97,20 @@ err_t register_constant_pcmc(size_t user_index, handle_t handle) {
                                          user_index);
 }
 
-err_t register_constant_initial_value_float_pcmc(size_t user_index,
-                                                 pcm_float value,
-                                                 handle_t handle) {
+err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
+                                         handle_t handle) {
     return algorithm_config_constant_float_set(
         (struct algorithm_config *)handle, user_index, value);
 }
 
-err_t register_constant_initial_value_int_pcmc(size_t user_index, pcm_int value,
-                                               handle_t handle) {
+err_t register_constant_value_int_pcmc(size_t user_index, pcm_int value,
+                                       handle_t handle) {
     return algorithm_config_constant_int_set((struct algorithm_config *)handle,
                                              user_index, value);
 }
 
-err_t register_constant_initial_value_uint_pcmc(size_t user_index,
-                                                pcm_uint value,
-                                                handle_t handle) {
+err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
+                                        handle_t handle) {
     return algorithm_config_constant_uint_set((struct algorithm_config *)handle,
                                               user_index, value);
 }

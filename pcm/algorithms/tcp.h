@@ -7,9 +7,11 @@
 #include "pcm.h"
 #include "pcm_network.h"
 
-#define TCP_SSTHRESH_INIT INT_MAX
-#define DCTCP_MAX_ALPHA 1024U
-#define DCTCP_SHIFT_G 4 /* g = 1/2^4 EWMA weight */
+#define DEFAULT_TCP_SSTHRESH_INIT UINT_MAX
+// #define DCTCP_MAX_ALPHA 1024U
+#define DEFAULT_DCTCP_MAX_ALPHA 1.0
+// #define DCTCP_SHIFT_G 4 /* g = 1/2^4 EWMA weight */
+#define DEFAULT_DCTCP_GAMMA 0.00390625 /* 1/256 */
 
 enum tcp_signal_idxs {
     TCP_SIG_IDX_NACK = 0,
@@ -26,7 +28,17 @@ enum tcp_local_var_idxs {
     TCP_LOCAL_STATE_IDX_IN_FAST_RECOV = 2,
     TCP_LOCAL_STATE_IDX_EPOCH_DELIVERED = 3,
     TCP_LOCAL_STATE_IDX_EPOCH_ECN_DELIVERED = 4,
-    TCP_LOCAL_STATE_IDX_ALPHA = 5
+    TCP_LOCAL_STATE_IDX_EPOCH_TO_DELIVER = 5,
+    TCP_LOCAL_STATE_IDX_ALPHA = 6
+};
+
+enum tcp_const_idxs { TCP_CONST_MSS = 0, TCP_CONST_GAMMA = 1 };
+
+struct tcp_constants {
+    pcm_uint mss;
+#ifdef BUILD_ALGO_DCTCP
+    pcm_float gamma;
+#endif
 };
 
 struct tcp_state_snapshot {
@@ -40,23 +52,42 @@ struct tcp_state_snapshot {
     pcm_uint in_fast_recovery;
 #ifdef BUILD_ALGO_DCTCP
     pcm_uint num_ecn;
+    pcm_uint to_deliver;
     pcm_uint delivered;
     pcm_uint delivered_ecn;
-    pcm_uint alpha;
+    // uint32_t alpha; // Linux
+    pcm_float alpha;
 #endif
+    struct tcp_constants consts;
 };
 
 #ifdef HANDLER_BUILD
 int algorithm_main();
 
-#define TCP_RTO_RECOVERY_SSTHRESH(state) (MAX((state->cwnd) >> 1, 2))
+#define TCP_RTO_RECOVERY_SSTHRESH(state) (MAX((state->cwnd) >> 1, 2U))
 
 /**
  * @brief Fast Recovery
  *
  * Upon entering set cwnd=ssthresh+3 and inflate cwnd by 1 MSS per extra
- * dup‐ACK
+ * dup‐ACK.
  */
+#define FAST_RECOVERY_DEFINE(algo_name, ssthresh_comp)                         \
+    static inline void algo_name##_fast_recovery(                              \
+        struct tcp_state_snapshot *state) {                                    \
+        if (!state->in_fast_recovery) {                                        \
+            state->ssthresh = (pcm_uint)ssthresh_comp(state);                  \
+            state->cwnd = state->ssthresh + 3;                                 \
+            state->in_fast_recovery = 1;                                       \
+        }                                                                      \
+    }
+
+/*
+// In the classical NewReno, NACK data is part of SACK, therefore, each SACK
+still ACKs
+// some data, in our current htsim setup, NACKs == trimmed packets, therefore
+// we can only decrease window upon entering FR during the first NACK
+// and then wait for the first ACK to exit FR
 #define FAST_RECOVERY_DEFINE(algo_name, ssthresh_comp)                         \
     static inline void algo_name##_fast_recovery(                              \
         struct tcp_state_snapshot *state) {                                    \
@@ -68,6 +99,7 @@ int algorithm_main();
             state->cwnd += state->num_nacks;                                   \
         }                                                                      \
     }
+*/
 
 /**
  * @brief Exit from Fast Recovery

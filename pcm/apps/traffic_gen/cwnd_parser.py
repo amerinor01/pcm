@@ -32,7 +32,7 @@ def parse_log(file_path):
     return times, cwnd_vals
 
 
-def plot_cwnd(times, cwnd_vals):
+def plot_cwnd(times, cwnd_vals, out_file):
     """
     Plot cwnd over time using matplotlib.
     """
@@ -42,14 +42,16 @@ def plot_cwnd(times, cwnd_vals):
     plt.ylabel('cwnd')
     plt.title('Congestion Window Evolution')
     plt.tight_layout()
+    plt.savefig(out_file, bbox_inches='tight')
     plt.show()
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print("Usage: python parser.py <log_file>")
+    if len(sys.argv) < 3:
+        print("Usage: python parser.py <log_file> <out_file>")
         sys.exit(1)
     
     log_file = sys.argv[1]
+    out_file = sys.argv[2]
     times, cwnd_vals = parse_log(log_file)
-    plot_cwnd(times, cwnd_vals)
+    plot_cwnd(times, cwnd_vals, out_file)

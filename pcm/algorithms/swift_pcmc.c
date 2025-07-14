@@ -59,10 +59,93 @@ int swift_pcmc_init(handle_t new_handle) {
     EXIT_ON_ERR(
         register_local_state_pcmc(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM, new_handle),
         SUCCESS);
-    EXIT_ON_ERR(
-        register_local_state_initial_value_pcmc(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM,
-                                                FABRIC_BASE_RTT, new_handle),
-        SUCCESS);
+    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+                    SWIFT_LOCAL_STATE_IDX_RTT_ESTIM, FABRIC_BRTT, new_handle),
+                SUCCESS);
 
+    struct swift_state_snapshot state = {0};
+    state.consts.brtt = FABRIC_BRTT;
+    state.consts.bdp = FABRIC_BDP;
+    state.consts.hop_count = FABRIC_HOP_COUNT;
+    state.consts.mss = FABRIC_LINK_MSS;
+    state.consts.rtx_thresh = 4;
+    state.consts.h = (pcm_float)state.consts.brtt / 6.55;
+    state.consts.fs_range = 5 * state.consts.brtt;
+    state.consts.rtx_thresh = 5;
+    state.consts.max_mdf = 0.5;
+    state.consts.fs_alpha =
+        state.consts.fs_range /
+        ((1.0 / sqrt(0.1) - (1.0 / sqrt(state.consts.bdp / state.consts.mss))));
+    state.consts.fs_beta =
+        -(state.consts.fs_alpha / sqrt(state.consts.bdp / state.consts.mss));
+    state.consts.beta = 0.8;
+    state.consts.ai = 1.0;
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_BRTT, new_handle), SUCCESS);
+    EXIT_ON_ERR(register_constant_value_uint_pcmc(
+                    SWIFT_CONST_BRTT, state.consts.brtt, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_BDP, new_handle), SUCCESS);
+    EXIT_ON_ERR(register_constant_value_uint_pcmc(SWIFT_CONST_BDP,
+                                                  state.consts.bdp, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_MSS, new_handle), SUCCESS);
+    EXIT_ON_ERR(register_constant_value_uint_pcmc(SWIFT_CONST_MSS,
+                                                  state.consts.mss, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_HOP_COUNT, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_constant_value_uint_pcmc(
+                    SWIFT_CONST_HOP_COUNT, state.consts.hop_count, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_RTX_THRESH, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_constant_value_uint_pcmc(SWIFT_CONST_RTX_THRESH,
+                                                  state.consts.rtx_thresh,
+                                                  new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_AI, new_handle), SUCCESS);
+    EXIT_ON_ERR(register_constant_value_float_pcmc(SWIFT_CONST_AI,
+                                                   state.consts.ai, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_MAX_MDF, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_constant_value_float_pcmc(
+                    SWIFT_CONST_MAX_MDF, state.consts.max_mdf, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_FS_RANGE, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_constant_value_float_pcmc(
+                    SWIFT_CONST_FS_RANGE, state.consts.fs_range, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_FS_ALPHA, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_constant_value_float_pcmc(
+                    SWIFT_CONST_FS_ALPHA, state.consts.fs_alpha, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_FS_BETA, new_handle),
+                SUCCESS);
+    EXIT_ON_ERR(register_constant_value_float_pcmc(
+                    SWIFT_CONST_FS_BETA, state.consts.fs_beta, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_BETA, new_handle), SUCCESS);
+    EXIT_ON_ERR(register_constant_value_float_pcmc(
+                    SWIFT_CONST_BETA, state.consts.beta, new_handle),
+                SUCCESS);
+
+    EXIT_ON_ERR(register_constant_pcmc(SWIFT_CONST_H, new_handle), SUCCESS);
+    EXIT_ON_ERR(register_constant_value_float_pcmc(SWIFT_CONST_H,
+                                                   state.consts.h, new_handle),
+                SUCCESS);
     return SUCCESS;
 }

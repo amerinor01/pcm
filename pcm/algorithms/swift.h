@@ -36,7 +36,22 @@ enum swift_local_var_idxs {
     SWIFT_LOCAL_STATE_IDX_RTT_ESTIM = 3
 };
 
-struct swift_state_shapshot {
+enum swift_consts_idxs {
+    SWIFT_CONST_BRTT = 0,
+    SWIFT_CONST_BDP = 1,
+    SWIFT_CONST_MSS = 2,
+    SWIFT_CONST_HOP_COUNT = 3,
+    SWIFT_CONST_RTX_THRESH = 4,
+    SWIFT_CONST_AI = 5,
+    SWIFT_CONST_MAX_MDF = 6,
+    SWIFT_CONST_FS_ALPHA = 7,
+    SWIFT_CONST_FS_BETA = 8,
+    SWIFT_CONST_FS_RANGE = 9,
+    SWIFT_CONST_H = 10,
+    SWIFT_CONST_BETA = 11
+};
+
+struct swift_state_snapshot {
     pcm_uint num_nacks;
     pcm_uint num_rtos;
     pcm_uint tot_acked;
@@ -49,6 +64,20 @@ struct swift_state_shapshot {
     pcm_uint cwnd_prev;
     pcm_uint retransmit_cnt;
     bool can_decrease;
+    struct swift_constants {
+        pcm_uint brtt;
+        pcm_uint bdp;
+        pcm_uint mss;
+        pcm_uint hop_count;
+        pcm_uint rtx_thresh;
+        pcm_float ai;
+        pcm_float max_mdf;
+        pcm_float fs_alpha;
+        pcm_float fs_beta;
+        pcm_float fs_range;
+        pcm_float h;
+        pcm_float beta;
+    } consts;
 };
 
 #ifdef HANDLER_BUILD

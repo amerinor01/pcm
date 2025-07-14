@@ -8,7 +8,11 @@
 extern "C" {
 #endif
 
+#ifdef __cplusplus
+#define STATIC_ASSERT static_assert
+#else
 #define STATIC_ASSERT _Static_assert
+#endif
 STATIC_ASSERT(sizeof(double) == sizeof(uint64_t),
               "sizeof(double) must be equal to sizeof(uint64_t)");
 
@@ -444,6 +448,8 @@ pcm_float __flow_constant_float_get(const void *ctx, size_t user_index);
  * @param[in] val          New signal value.
  */
 #define set_signal(user_index, val) __flow_signal_set(ctx, user_index, val)
+
+#define PCM_SIG_REARM (UINT64_MAX - 1)
 
 /**
  * @brief Update the signal value within a handler.

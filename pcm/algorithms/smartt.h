@@ -16,6 +16,19 @@
 #define SMARTT_QA_DEADLINE (SMARTT_TRTT_FACTOR * FABRIC_BASE_RTT)
 #define SMARTT_FI_TOL 1e-6
 
+struct smartt_constants {
+    pcm_uint bdp;
+    pcm_uint brtt;
+    pcm_uint trtt;
+    pcm_uint mss;
+    pcm_uint reaction_delay;
+    pcm_float x_gain;
+    pcm_float y_gain;
+    pcm_float z_gain;
+    pcm_float w_gain;
+    pcm_float qa_scaling;
+};
+
 struct smartt_state_snapshot {
     pcm_uint acked_bytes;     /* bytes acked since last QA */
     pcm_uint bytes_ignored;   /* QA-ignore counter */
@@ -32,6 +45,7 @@ struct smartt_state_snapshot {
     pcm_uint num_nacks;
     pcm_uint num_rtos;
     pcm_uint num_ecns; // instead of last_pkt_ecn
+    struct smartt_constants consts;
 };
 
 enum smartt_local_state_idxs {
@@ -54,6 +68,19 @@ enum smartt_signal_idxs {
 };
 
 enum smartt_ctrl_idxs { SMARTT_CTRL_CWND_BYTES = 0 };
+
+enum smartt_consts_idxs {
+    SMARTT_CONST_BDP = 0,
+    SMARTT_CONST_BRTT = 1,
+    SMARTT_CONST_TRTT = 2,
+    SMARTT_CONST_MSS = 3,
+    SMARTT_CONST_REACTION_DELAY = 4,
+    SMARTT_CONST_X_GAIN = 5,
+    SMARTT_CONST_Y_GAIN = 6,
+    SMARTT_CONST_Z_GAIN = 7,
+    SMARTT_CONST_W_GAIN = 8,
+    SMARTT_CONST_QA_SCALING = 9
+};
 
 #ifdef HANDLER_BUILD
 int algorithm_main();
