@@ -3,10 +3,11 @@
 
 #include "tcp.h"
 
-//#define DCTCP_SSTHRESH(state)                                                  \
-//    (MAX((uint32_t)state->cwnd -                                               \
-//             (((uint32_t)state->cwnd * state->alpha) >> 11U),                  \
-//         2U))
+// Linux-style DCTCP ssthresh
+// #define DCTCP_SSTHRESH(state)
+//     (MAX((uint32_t)state->cwnd -
+//              (((uint32_t)state->cwnd * state->alpha) >> 11U),
+//          2U))
 
 #define DCTCP_SSTHRESH(state)                                                  \
     (MAX(state->cwnd * (1.0 - state->alpha / 2.0), 2U))

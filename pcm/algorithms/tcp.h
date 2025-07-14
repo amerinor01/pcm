@@ -64,7 +64,7 @@ struct tcp_state_snapshot {
 #ifdef HANDLER_BUILD
 int algorithm_main();
 
-#define TCP_RTO_RECOVERY_SSTHRESH(state) (MAX((state->cwnd) >> 1, 2))
+#define TCP_RTO_RECOVERY_SSTHRESH(state) (MAX((state->cwnd) >> 1, 2U))
 
 /**
  * @brief Fast Recovery

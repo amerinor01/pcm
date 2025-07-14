@@ -57,11 +57,11 @@ bool flow_triggers_check(flow_t *flow) {
             flow->cur_trigger, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
             flow->trigger_user_index = attr->metadata.index;
-            LOG_INFO("[flow=%p, addr=%u] trigger signal_type=%s, "
-                     "accum_type=%s, index=%zu",
-                     flow, flow->addr, signal_type_to_string(attr->type),
-                     signal_accum_type_to_string(attr->accum_type),
-                     attr->metadata.index);
+            LOG_DBG("[flow=%p, addr=%u] trigger signal_type=%s, "
+                    "accum_type=%s, index=%zu",
+                    flow, flow->addr, signal_type_to_string(attr->type),
+                    signal_accum_type_to_string(attr->accum_type),
+                    attr->metadata.index);
             trigger = true;
         }
 

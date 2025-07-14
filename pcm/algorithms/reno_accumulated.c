@@ -50,7 +50,7 @@ int algorithm_main() {
     /* 1) Fast retransmit: multiplicative decrease */
     // this is broken!
     if (num_nacks > 0) {
-        ssthresh = MAX(cwnd >> num_nacks, 2);
+        ssthresh = MAX(cwnd >> num_nacks, 2U);
         cwnd = ssthresh;
         tot_acked = 0;
         update_signal(TCP_SIG_IDX_NACK, -1);
@@ -60,7 +60,7 @@ int algorithm_main() {
     if (num_rtos > 0) {
         /* Only trigger if we have exited slow-start */
         if (cwnd > ssthresh) {
-            ssthresh = MAX(cwnd >> 1, 2);
+            ssthresh = MAX(cwnd >> 1, 2U);
             cwnd = 1;
             tot_acked = 0;
         } else {
