@@ -558,6 +558,7 @@ void PcmSrc::mark_received(PcmAck &pkt) {
         // shouldn't cause harm either
         do {
             _sent_packets.erase(_sent_packets.begin());
+            flow_signals_update(_pcm_flow_ptr, SIG_ACK, 1);
         } while (!_sent_packets.empty() && _sent_packets[0].acked);
     } else {
         assert(i < _sent_packets.size());
@@ -588,6 +589,7 @@ void PcmSrc::mark_received(PcmAck &pkt) {
                 _rtx_timeout_pending = true;
             }
         }
+        flow_signals_update(_pcm_flow_ptr, SIG_ACK, 1);
     }
     update_rtx_time();
 }
@@ -782,7 +784,7 @@ void PcmSrc::processNack(PcmNack &pkt) {
          << " - " << pkt.is_failed << endl;
 
     // Reduce Window Or Do Fast Drop
-    if (algorithm_type != "mprdma") {
+    if (algorithm_type != "mprdma" && _pcm_ignore) {
         if (use_fast_drop) {
             if (count_received >= ignore_for) {
                 if (eventlist().now() > next_qa) {
@@ -1193,10 +1195,10 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
             f_flow_over_hook(pkt);
         }
 
-        /* cout << "Flow " << nodename() << " finished at " <<
-        timeAsMs(eventlist().now()) << endl; cout << "Flow " << nodename() << "
-        completion time is " << timeAsMs(eventlist().now() - _flow_start_time)
-             << endl; */
+        cout << "Flow " << nodename() << " finished at "
+             << timeAsMs(eventlist().now()) << endl;
+        cout << "Flow " << nodename() << "completion time is "
+             << timeAsMs(eventlist().now() - _flow_start_time) << endl;
 
         // printf("Completion Time Flow is %lu - Overall Time %lu\n",
         // eventlist().now() - _flow_start_time, GLOBAL_TIME);
@@ -1221,9 +1223,9 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
         current_pkt++;
         // printf("Triggering ADJ\n");
 
-        adjust_window(ts, marked, newRtt);
-
-        if (!_pcm_ignore) {
+        if (_pcm_ignore) {
+            adjust_window(ts, marked, newRtt);
+        } else {
             _cwnd = flow_cwnd_get(_pcm_flow_ptr); // overwrite CWND with pcm
             check_limits_cwnd();
         }
@@ -1310,6 +1312,7 @@ void PcmSrc::receivePacket(Packet &pkt) {
         eventlist().sourceIsPendingRel(*this, 1000);
     }
 
+    std::cout <<"UNACKED=" << get_unacked() << std::endl;
     std::cout << "[" << from << ":" << to
               << "] PCM TIME=" << eventlist().now() / 1000 << " cwnd=" << _cwnd
               << std::endl;
@@ -1423,7 +1426,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
             _cwnd += ((double)_mss / _cwnd) * 0 * _mss;
         }
     } else {
-        if (algorithm_type == "smartt") {
+        if (algorithm_type == "smartt" && _pcm_ignore) {
 
             if (use_fast_drop) {
                 if (count_received >= ignore_for) {
