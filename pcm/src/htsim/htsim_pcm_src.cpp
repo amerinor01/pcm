@@ -1312,7 +1312,6 @@ void PcmSrc::receivePacket(Packet &pkt) {
         eventlist().sourceIsPendingRel(*this, 1000);
     }
 
-    std::cout <<"UNACKED=" << get_unacked() << std::endl;
     std::cout << "[" << from << ":" << to
               << "] PCM TIME=" << eventlist().now() / 1000 << " cwnd=" << _cwnd
               << std::endl;
