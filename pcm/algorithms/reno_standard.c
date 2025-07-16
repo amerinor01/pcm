@@ -24,28 +24,28 @@ int algorithm_main() {
     state.in_fast_recovery = get_local_state(TCP_LOCAL_STATE_IDX_IN_FAST_RECOV);
 
     if (state.num_nacks > 0) {
-        tcp_fast_recovery(&state);
+        tcp_fast_recovery(ALGO_CTX_PASS, &state);
         update_signal(TCP_SIG_IDX_NACK, -1);
         // update_signal(TCP_SIG_IDX_NACK, -state.num_nacks);
         goto exit_handler;
     }
 
     if (state.num_rtos > 0) {
-        tcp_timeout_recovery(&state);
+        tcp_timeout_recovery(ALGO_CTX_PASS, &state);
         update_signal(TCP_SIG_IDX_RTO, -1);
         // update_signal(TCP_SIG_IDX_RTO, -state.num_rtos);
         goto exit_handler;
     }
 
     if (state.in_fast_recovery && state.num_acks > 0)
-        tcp_fast_recovery_exit(&state);
+        tcp_fast_recovery_exit(ALGO_CTX_PASS, &state);
 
     if (!state.in_fast_recovery && state.num_acks > 0) {
         if (state.cwnd < state.ssthresh) {
-            tcp_slow_start(&state);
+            tcp_slow_start(ALGO_CTX_PASS, &state);
         }
         if (state.num_acks) {
-            tcp_cong_avoid(&state);
+            tcp_cong_avoid(ALGO_CTX_PASS, &state);
         }
     }
 

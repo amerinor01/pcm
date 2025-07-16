@@ -1,6 +1,7 @@
 #include "swift.h"
 
-static inline pcm_float swift_target_delay(struct swift_state_snapshot *state,
+static inline pcm_float swift_target_delay(ALGO_CTX_ARGS,
+                                           struct swift_state_snapshot *state,
                                            pcm_uint cwnd) {
     pcm_uint fs_delay =
         state->consts.fs_alpha / sqrtf((pcm_float)cwnd / state->consts.mss) +
@@ -19,7 +20,8 @@ static inline pcm_float swift_target_delay(struct swift_state_snapshot *state,
     return state->consts.brtt + fs_delay + hop_delay;
 }
 
-static inline void swift_rtt_estimate(struct swift_state_snapshot *state) {
+static inline void swift_rtt_estimate(ALGO_CTX_ARGS,
+                                      struct swift_state_snapshot *state) {
     if (state->rtt_estim > 0) {
         state->rtt_estim = 7 * state->rtt_estim / 8 + state->delay / 8;
     } else {
@@ -27,14 +29,16 @@ static inline void swift_rtt_estimate(struct swift_state_snapshot *state) {
     }
 }
 
-static inline void swift_nack_recovery(struct swift_state_snapshot *state) {
+static inline void swift_nack_recovery(ALGO_CTX_ARGS,
+                                       struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
     if (state->can_decrease) {
         state->cwnd = (pcm_float)state->cwnd * (1.0 - state->consts.max_mdf);
     }
 }
 
-static inline void swift_timeout_recovery(struct swift_state_snapshot *state) {
+static inline void swift_timeout_recovery(ALGO_CTX_ARGS,
+                                          struct swift_state_snapshot *state) {
     state->retransmit_cnt++;
     if (state->retransmit_cnt >= state->consts.rtx_thresh) {
         state->cwnd = state->consts.mss; // min_cwnd
@@ -43,9 +47,10 @@ static inline void swift_timeout_recovery(struct swift_state_snapshot *state) {
     }
 }
 
-static inline void swift_ack_reaction(struct swift_state_snapshot *state) {
+static inline void swift_ack_reaction(ALGO_CTX_ARGS,
+                                      struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
-    pcm_float target_delay = swift_target_delay(state, state->cwnd);
+    pcm_float target_delay = swift_target_delay(ALGO_CTX_PASS, state, state->cwnd);
 
     if (state->delay < target_delay) {
         /* Additive Increase */
@@ -116,16 +121,16 @@ int algorithm_main() {
      * Note: for some reason htsim computes RTT estimation after computing
      * can_decrease predicate.
      */
-    swift_rtt_estimate(&state);
+    swift_rtt_estimate(ALGO_CTX_PASS, &state);
 
     if (state.num_nacks > 0) {
-        swift_nack_recovery(&state);
+        swift_nack_recovery(ALGO_CTX_PASS, &state);
         update_signal(SWIFT_SIG_IDX_NACK, -1);
     } else if (state.num_rtos > 0) {
-        swift_timeout_recovery(&state);
+        swift_timeout_recovery(ALGO_CTX_PASS, &state);
         update_signal(SWIFT_SIG_IDX_RTO, -1);
     } else if (state.tot_acked > 0) {
-        swift_ack_reaction(&state);
+        swift_ack_reaction(ALGO_CTX_PASS, &state);
     } else {
         return PCM_ERROR;
     }

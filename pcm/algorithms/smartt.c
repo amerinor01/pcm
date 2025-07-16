@@ -4,12 +4,13 @@
 #include "pcm.h"
 #include "smartt.h"
 
-static inline bool smartt_quick_adapt(struct smartt_state_snapshot *state) {
-    //printf("SMaRTT QA state: now=%llu qa_deadline=%llu bytes_to_ignore=%llu "
-    //       "bytes_ignored=%llu "
-    //       "acked_bytes=%llu trigger_qa=%llu\n",
-    //       state->now, state->qa_deadline, state->bytes_to_ignore,
-    //       state->bytes_ignored, state->acked_bytes, state->trigger_qa);
+static inline bool smartt_quick_adapt(ALGO_CTX_ARGS,
+                                      struct smartt_state_snapshot *state) {
+    // printf("SMaRTT QA state: now=%llu qa_deadline=%llu bytes_to_ignore=%llu "
+    //        "bytes_ignored=%llu "
+    //        "acked_bytes=%llu trigger_qa=%llu\n",
+    //        state->now, state->qa_deadline, state->bytes_to_ignore,
+    //        state->bytes_ignored, state->acked_bytes, state->trigger_qa);
     bool adapted = false;
     if (state->now >= state->qa_deadline) {
         if (state->qa_deadline != 0 && state->trigger_qa) {
@@ -28,23 +29,24 @@ static inline bool smartt_quick_adapt(struct smartt_state_snapshot *state) {
 }
 
 static inline void
-smartt_handle_loss_signal(struct smartt_state_snapshot *state) {
+smartt_handle_loss_signal(ALGO_CTX_ARGS, struct smartt_state_snapshot *state) {
     // state->cwnd -= state->consts.mss; // state->last_pkt_size
     //  SMaRTT paper explicitly mentions that NACKED/TRIMMED/RTO'ed
     //  packet needs to be retransmistted here.
     //  we assume datapath handles this outside
     if (state->bytes_ignored >= state->bytes_to_ignore) {
         state->trigger_qa = 1;
-        smartt_quick_adapt(state);
+        smartt_quick_adapt(ALGO_CTX_PASS, state);
     }
 }
 
-static inline bool smartt_fast_increase(struct smartt_state_snapshot *state) {
+static inline bool smartt_fast_increase(ALGO_CTX_ARGS,
+                                        struct smartt_state_snapshot *state) {
     // printf(
-    //     "SMaRTT FI state last_rtt=%llu brtt=%llu num_ecns=%llu fast_count=%llu cwnd=%llu "
-    //     "fast_active=%llu\n",
-    //     state->last_rtt, state->consts.brtt, state->num_ecns, state->fast_count,
-    //     state->cwnd, state->fast_active);
+    //     "SMaRTT FI state last_rtt=%llu brtt=%llu num_ecns=%llu
+    //     fast_count=%llu cwnd=%llu " "fast_active=%llu\n", state->last_rtt,
+    //     state->consts.brtt, state->num_ecns, state->fast_count, state->cwnd,
+    //     state->fast_active);
     if ((ABS((pcm_float)state->last_rtt - state->consts.brtt) <
          (0.75 * (pcm_float)state->consts.brtt)) &&
         !state->num_ecns) {
@@ -61,7 +63,8 @@ static inline bool smartt_fast_increase(struct smartt_state_snapshot *state) {
     return state->fast_active;
 }
 
-static inline void smartt_core_cases(struct smartt_state_snapshot *state) {
+static inline void smartt_core_cases(ALGO_CTX_ARGS,
+                                     struct smartt_state_snapshot *state) {
     if (!state->num_ecns && state->last_rtt < state->consts.trtt) {
         /* Fair Increase */
         // Case 1 RTT Based Increase
@@ -100,13 +103,15 @@ static inline void smartt_core_cases(struct smartt_state_snapshot *state) {
     }
 }
 
-static inline void smartt_handle_ack(struct smartt_state_snapshot *state) {
+static inline void smartt_handle_ack(ALGO_CTX_ARGS,
+                                     struct smartt_state_snapshot *state) {
     state->acked_bytes += state->consts.mss; // state->last_pkt_size
 
     if (state->bytes_ignored < state->bytes_to_ignore) {
         state->bytes_ignored += state->consts.mss; // state->last_pkt_size
-    } else if (!smartt_quick_adapt(state) || !smartt_fast_increase(state)) {
-        smartt_core_cases(state);
+    } else if (!smartt_quick_adapt(ALGO_CTX_PASS, state) ||
+               !smartt_fast_increase(ALGO_CTX_PASS, state)) {
+        smartt_core_cases(ALGO_CTX_PASS, state);
     }
 }
 
@@ -144,19 +149,19 @@ int algorithm_main() {
     state.cwnd = get_control(SMARTT_CTRL_CWND_BYTES);
 
     if (state.num_nacks > 0) {
-        smartt_handle_loss_signal(&state);
+        smartt_handle_loss_signal(ALGO_CTX_PASS, &state);
         update_signal(SMARTT_SIG_NUM_NACK, -1);
         goto save_state;
     }
 
     if (state.num_rtos > 0) {
-        smartt_handle_loss_signal(&state);
+        smartt_handle_loss_signal(ALGO_CTX_PASS, &state);
         update_signal(SMARTT_SIG_NUM_RTO, -1);
         goto save_state;
     }
 
     if (state.num_acks > 0) {
-        smartt_handle_ack(&state);
+        smartt_handle_ack(ALGO_CTX_PASS, &state);
         update_signal(SMARTT_SIG_NUM_ACK, -1);
         if (state.num_ecns) {
             update_signal(SMARTT_SIG_NUM_ECN, -1);
@@ -165,8 +170,8 @@ int algorithm_main() {
 
 save_state:
 
-    //printf("SMaRTT: num_nacks=%llu num_rtos=%llu num_acks=%llu, cwnd=%llu\n",
-    //       state.num_nacks, state.num_rtos, state.num_acks, state.cwnd);
+    // printf("SMaRTT: num_nacks=%llu num_rtos=%llu num_acks=%llu, cwnd=%llu\n",
+    //        state.num_nacks, state.num_rtos, state.num_acks, state.cwnd);
 
     set_control(SMARTT_CTRL_CWND_BYTES, state.cwnd);
 

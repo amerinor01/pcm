@@ -312,13 +312,15 @@ pcm_err_t register_algorithm_pcmc(const char *compile_path,
 // timos: the unoptimized handlers only use ctx, only when we use the
 // optimizing compiler passes will we make use of the other args, so
 // we mark them as unused here.
-#define __algorithm_entry_point                                                \
-    __algorithm_main(void *ctx, __attribute__((unused)) void *signals,         \
-                     __attribute__((unused)) void *thresholds,                 \
-                     __attribute__((unused)) void *controls,                   \
-                     __attribute__((unused)) void *local_state,                \
-                     __attribute__((unused)) void *constants)
+#define ALGO_CTX_ARGS                                                          \
+    void *ctx, __attribute__((unused)) void *signals,                          \
+        __attribute__((unused)) void *thresholds,                              \
+        __attribute__((unused)) void *controls,                                \
+        __attribute__((unused)) void *local_state
+#define ALGO_CTX_PASS ctx, signals, thresholds, controls, local_state
+#define __algorithm_entry_point __algorithm_main(ALGO_CTX_ARGS)
 #define __algorithm_entry_point_symbol "__algorithm_main"
+
 pcm_uint __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);
 pcm_uint __flow_signal_get(const void *ctx, size_t user_index);

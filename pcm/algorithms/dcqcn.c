@@ -3,14 +3,16 @@
 #include "assert.h"
 #include "pcm.h"
 
-static inline void dcqcn_rate_to_cwnd(struct dcqcn_state_snapshot *state) {
+static inline void dcqcn_rate_to_cwnd(ALGO_CTX_ARGS,
+                                      struct dcqcn_state_snapshot *state) {
     // Original DCQCN is a rate based, we use RTT to convert rate to cwnd
     // cwnd [bytes] = rate_cur [Gbytes/second] * brtt [picoseconds] * to_bytes
     state->cwnd =
         (pcm_float)state->rate_cur * (pcm_float)state->consts.brtt / 1000.;
 }
 
-static inline void dcqcn_rate_decrease(struct dcqcn_state_snapshot *state) {
+static inline void dcqcn_rate_decrease(ALGO_CTX_ARGS,
+                                       struct dcqcn_state_snapshot *state) {
     /* record old rate as target rate */
     state->rate_target = state->rate_cur;
     /* multiplicative decrease factor */
@@ -18,10 +20,11 @@ static inline void dcqcn_rate_decrease(struct dcqcn_state_snapshot *state) {
     /* update alpha */
     state->alpha =
         (1 - state->consts.gamma) * state->alpha + state->consts.gamma;
-    dcqcn_rate_to_cwnd(state);
+    dcqcn_rate_to_cwnd(ALGO_CTX_PASS, state);
 }
 
-static inline void dcqcn_rate_increase(struct dcqcn_state_snapshot *state) {
+static inline void dcqcn_rate_increase(ALGO_CTX_ARGS,
+                                       struct dcqcn_state_snapshot *state) {
     uint32_t min_counter;
     if (MAX(state->rate_increase_timer_evts, state->byte_counter_evts) <
         state->consts.fr_steps) {
@@ -39,7 +42,7 @@ static inline void dcqcn_rate_increase(struct dcqcn_state_snapshot *state) {
 
     state->rate_cur = (state->rate_target + state->rate_cur) / 2;
 
-    dcqcn_rate_to_cwnd(state);
+    dcqcn_rate_to_cwnd(ALGO_CTX_PASS, state);
 }
 
 int algorithm_main() {
@@ -66,7 +69,7 @@ int algorithm_main() {
     // timer
     pcm_uint num_ecns = get_signal(DCQCN_SIG_IDX_ECN);
     if (num_ecns) {
-        dcqcn_rate_decrease(&state);
+        dcqcn_rate_decrease(ALGO_CTX_PASS, &state);
         // we keep track of any excessive ECNs received, so
         // remaining ECN's can be processed immediately by this handler
         // TODO 1: implement reaction to all ECNs here to avoid costly handler
@@ -101,7 +104,7 @@ int algorithm_main() {
     switch (trigger_id) {
     case DCQCN_SIG_IDX_RATE_INCREASE_TIMER:
         state.rate_increase_timer_evts++;
-        dcqcn_rate_increase(&state);
+        dcqcn_rate_increase(ALGO_CTX_PASS, &state);
         set_local_state_int(DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS,
                             state.rate_increase_timer_evts);
         set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_CUR, state.rate_cur);
@@ -113,7 +116,7 @@ int algorithm_main() {
 
     case DCQCN_SIG_IDX_TX_BURST:
         state.byte_counter_evts++;
-        dcqcn_rate_increase(&state);
+        dcqcn_rate_increase(ALGO_CTX_PASS, &state);
         set_local_state_int(DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS,
                             state.byte_counter_evts);
         set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_CUR, state.rate_cur);

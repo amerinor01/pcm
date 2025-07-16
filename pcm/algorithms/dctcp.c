@@ -3,12 +3,6 @@
 
 #include "tcp.h"
 
-// Linux-style DCTCP ssthresh
-// #define DCTCP_SSTHRESH(state)
-//     (MAX((uint32_t)state->cwnd -
-//              (((uint32_t)state->cwnd * state->alpha) >> 11U),
-//          2U))
-
 #define DCTCP_SSTHRESH(state)                                                  \
     (MAX(state->cwnd * (1.0 - state->alpha / 2.0), 2U))
 
@@ -37,14 +31,14 @@ int algorithm_main() {
     state.alpha = get_local_state_float(TCP_LOCAL_STATE_IDX_ALPHA);
 
     if (state.num_nacks > 0) {
-        dctcp_fast_recovery(&state);
+        dctcp_fast_recovery(ALGO_CTX_PASS, &state);
         // update_signal(TCP_SIG_IDX_NACK, -state.num_nacks);
         update_signal(TCP_SIG_IDX_NACK, -1);
         goto exit_handler;
     }
 
     if (state.num_rtos > 0) {
-        tcp_timeout_recovery(&state);
+        tcp_timeout_recovery(ALGO_CTX_PASS, &state);
         // update_signal(TCP_SIG_IDX_RTO, -state.num_rtos);
         update_signal(TCP_SIG_IDX_RTO, -1);
         goto exit_handler;
@@ -71,15 +65,6 @@ int algorithm_main() {
 
         /* alpha = (1 - g) * alpha + g * F */
 
-        // Linux version:
-        // state.alpha -= MIN_NOT_ZERO(state.alpha, state.alpha >>
-        // DCTCP_SHIFT_G); if (state.delivered_ecn) {
-        //     state.delivered_ecn <<= (10 - DCTCP_SHIFT_G);
-        //     state.delivered_ecn /= MAX(1U, state.delivered);
-        //     state.alpha =
-        //         MIN(state.alpha + state.delivered_ecn, DCTCP_MAX_ALPHA);
-        // }
-
         pcm_float F =
             (pcm_float)state.delivered_ecn / (pcm_float)state.delivered;
         state.alpha =
@@ -94,14 +79,14 @@ int algorithm_main() {
     }
 
     if (state.in_fast_recovery && state.num_acks > 0)
-        tcp_fast_recovery_exit(&state);
+        tcp_fast_recovery_exit(ALGO_CTX_PASS, &state);
 
     if (!state.in_fast_recovery && state.num_acks > 0) {
         if (state.cwnd < state.ssthresh) {
-            tcp_slow_start(&state);
+            tcp_slow_start(ALGO_CTX_PASS, &state);
         }
         if (state.num_acks) {
-            tcp_cong_avoid(&state);
+            tcp_cong_avoid(ALGO_CTX_PASS, &state);
         }
     }
 
