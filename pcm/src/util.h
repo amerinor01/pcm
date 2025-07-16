@@ -45,18 +45,18 @@
         if ((item_counter) >= (max_items)) {                                   \
             LOG_CRIT("[attr_list=%p] %s list storage is full", attr_list,      \
                      #attr_list);                                              \
-            return ERROR;                                                      \
+            return PCM_ERROR;                                                      \
         }                                                                      \
         if ((user_index) >= (max_items)) {                                     \
             LOG_CRIT("[attr_list=%p] user_index exeeds %s list capacity",      \
                      attr_list, #attr_list);                                   \
-            return ERROR;                                                      \
+            return PCM_ERROR;                                                      \
         }                                                                      \
         (attr_ptr) = calloc(1, sizeof(*(attr_ptr)));                           \
         if (!(attr_ptr)) {                                                     \
             LOG_CRIT("[attr_list=%p] failed to allocate new attribute",        \
                      attr_list);                                               \
-            return ERROR;                                                      \
+            return PCM_ERROR;                                                      \
         }                                                                      \
         (attr_ptr)->metadata.index = (user_index);                             \
         slist_insert_head(&(attr_ptr)->metadata.list_entry, (attr_list));      \
@@ -83,7 +83,7 @@
                     ->metadata.index == (user_index)) {                        \
                 LOG_CRIT("[attr_list=%p] found duplicate index=%zu",           \
                          attr_list, user_index);                               \
-                return ERROR;                                                  \
+                return PCM_ERROR;                                                  \
             }                                                                  \
         }                                                                      \
     }
@@ -97,7 +97,7 @@
                 (chk_type)) {                                                  \
                 LOG_CRIT("[attr_list=%p] found duplicate type=%d", attr_list,  \
                          chk_type);                                            \
-                return ERROR;                                                  \
+                return PCM_ERROR;                                                  \
             }                                                                  \
         }                                                                      \
     }
@@ -124,7 +124,7 @@
         if (slist_empty(attr_list)) {                                          \
             LOG_CRIT("[attr_list=%p] item set on an empty list at index=%zu",  \
                      attr_list, user_index);                                   \
-            return ERROR;                                                      \
+            return PCM_ERROR;                                                      \
         }                                                                      \
         (found_attr_ptr) = NULL;                                               \
         attr_type *cur_attr = NULL;                                            \
@@ -140,7 +140,7 @@
         if (!(found_attr_ptr)) {                                               \
             LOG_CRIT("[attr_list=%p] failed to find attribute with index=%zu", \
                      attr_list, user_index);                                   \
-            return ERROR;                                                      \
+            return PCM_ERROR;                                                      \
         }                                                                      \
         (found_attr_ptr)->metadata.value = val;                                \
     }
@@ -156,38 +156,38 @@
         }                                                                      \
     }
 
-static inline const char *signal_type_to_string(signal_t type) {
+static inline const char *signal_type_to_string(pcm_signal_t type) {
     switch (type) {
-    case SIG_ACK:
-        return "SIG_ACK";
-    case SIG_RTO:
-        return "SIG_RTO";
-    case SIG_NACK:
-        return "SIG_NACK";
-    case SIG_ECN:
-        return "SIG_ECN";
-    case SIG_RTT:
-        return "SIG_RTT";
-    case SIG_DATA_TX:
-        return "SIG_DATA_TX";
-    case SIG_ELAPSED_TIME:
-        return "SIG_ELAPSED_TIME";
+    case PCM_SIG_ACK:
+        return "PCM_SIG_ACK";
+    case PCM_SIG_RTO:
+        return "PCM_SIG_RTO";
+    case PCM_SIG_NACK:
+        return "PCM_SIG_NACK";
+    case PCM_SIG_ECN:
+        return "PCM_SIG_ECN";
+    case PCM_SIG_RTT:
+        return "PCM_SIG_RTT";
+    case PCM_SIG_DATA_TX:
+        return "PCM_SIG_DATA_TX";
+    case PCM_SIG_ELAPSED_TIME:
+        return "PCM_SIG_ELAPSED_TIME";
     default:
         return "SIG_UNKNOWN";
     }
     return "SIG_ACCUM_UNKNOWN";
 }
 
-static inline const char *signal_accum_type_to_string(signal_accum_t type) {
+static inline const char *signal_accum_type_to_string(pcm_signal_accum_t type) {
     switch (type) {
-    case SIG_ACCUM_SUM:
+    case PCM_SIG_ACCUM_SUM:
         return "SIG_ACCUM_SUM";
-    case SIG_ACCUM_MIN:
-        return "SIG_ACCUM_MIN";
-    case SIG_ACCUM_MAX:
-        return "SIG_ACCUM_MAX";
-    case SIG_ACCUM_LAST:
-        return "SIG_ACCUM_LAST";
+    case PCM_SIG_ACCUM_MIN:
+        return "PCM_SIG_ACCUM_MIN";
+    case PCM_SIG_ACCUM_MAX:
+        return "PCM_SIG_ACCUM_MAX";
+    case PCM_SIG_ACCUM_LAST:
+        return "PCM_SIG_ACCUM_LAST";
     default:
         return "SIG_ACCUM_UNKNOWN";
     }

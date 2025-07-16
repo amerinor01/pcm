@@ -178,5 +178,5 @@ save_state:
     set_local_state(SMARTT_LOCAL_STATE_FAST_COUNT, state.fast_count);
     set_local_state(SMARTT_LOCAL_STATE_FAST_ACTIVE, state.fast_active);
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }

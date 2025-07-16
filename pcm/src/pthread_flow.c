@@ -9,13 +9,13 @@ bool pthrd_flow_is_ready(const flow_t *flow) {
 }
 
 int pthrd_flow_destroy(flow_t *flow) {
-    int ret = SUCCESS;
+    int ret = PCM_SUCCESS;
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
 
     flow_ctx->running = false;
     if (pthread_join(flow_ctx->pthread_obj, NULL)) {
         LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow, flow->addr);
-        ret = ERROR;
+        ret = PCM_ERROR;
     }
 
     free(flow->backend_ctx);
@@ -27,7 +27,7 @@ int pthrd_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
     flow->backend_ctx = calloc(1, sizeof(struct pthrd_flow));
     if (!flow->backend_ctx) {
         LOG_CRIT("failed to allocate new pthread flow context");
-        return ERROR;
+        return PCM_ERROR;
     }
 
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)flow->backend_ctx;
@@ -54,7 +54,7 @@ int pthrd_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
                        (void *)flow)) {
         LOG_CRIT("failed to start thread for flow=%p addr=%u", flow,
                  flow->addr);
-        return ERROR;
+        return PCM_ERROR;
     }
 
     LOG_DBG("started thread for flow=%p addr=%u", flow, flow->addr);
@@ -69,7 +69,7 @@ int pthrd_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
     // Mark flow as ready to generate traffic
     flow_ctx->running = true;
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 
 thread_destroy:
     return pthrd_flow_destroy(flow);
@@ -152,5 +152,5 @@ struct flow_plugin_ops pthrd_flow_ops = {
 
 int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     *flow_ops = pthrd_flow_ops;
-    return SUCCESS;
+    return PCM_SUCCESS;
 }

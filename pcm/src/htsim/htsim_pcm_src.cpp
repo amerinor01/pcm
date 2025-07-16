@@ -82,7 +82,7 @@ PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger,
     }
 
     if (flow_create(pcmDevice.getDevicePtr(), &_pcm_flow_ptr, NULL) !=
-        SUCCESS) {
+        PCM_SUCCESS) {
         LOG_FATAL("Failed to create PCM flow on htsim::PcmSrc");
     }
 
@@ -397,7 +397,7 @@ PcmSrc::~PcmSrc() {
 
         MyFileECNRate.close();
     }
-    if (flow_destroy(_pcm_flow_ptr) != SUCCESS) {
+    if (flow_destroy(_pcm_flow_ptr) != PCM_SUCCESS) {
         LOG_FATAL("Failed to destroy PCM flow on htsim::PcmSrc");
     }
 }
@@ -542,7 +542,7 @@ void PcmSrc::mark_received(PcmAck &pkt) {
             !_sent_packets.empty() &&
             (_sent_packets[0].seqno <= pkt.ackno() || _sent_packets[0].acked)) {
             _sent_packets.erase(_sent_packets.begin());
-            flow_signals_update(_pcm_flow_ptr, SIG_ACK, 1);
+            flow_signals_update(_pcm_flow_ptr, PCM_SIG_ACK, 1);
         }
         update_rtx_time();
         return;
@@ -558,7 +558,7 @@ void PcmSrc::mark_received(PcmAck &pkt) {
         // shouldn't cause harm either
         do {
             _sent_packets.erase(_sent_packets.begin());
-            flow_signals_update(_pcm_flow_ptr, SIG_ACK, 1);
+            flow_signals_update(_pcm_flow_ptr, PCM_SIG_ACK, 1);
         } while (!_sent_packets.empty() && _sent_packets[0].acked);
     } else {
         assert(i < _sent_packets.size());
@@ -589,7 +589,7 @@ void PcmSrc::mark_received(PcmAck &pkt) {
                 _rtx_timeout_pending = true;
             }
         }
-        flow_signals_update(_pcm_flow_ptr, SIG_ACK, 1);
+        flow_signals_update(_pcm_flow_ptr, PCM_SIG_ACK, 1);
     }
     update_rtx_time();
 }
@@ -811,7 +811,7 @@ void PcmSrc::processNack(PcmNack &pkt) {
     }
     check_limits_cwnd();
 
-    flow_signals_update(_pcm_flow_ptr, SIG_NACK, 1);
+    flow_signals_update(_pcm_flow_ptr, PCM_SIG_NACK, 1);
     if (!_pcm_ignore) {
         _cwnd = flow_cwnd_get(_pcm_flow_ptr); // overwrite CWND with pcm
         check_limits_cwnd();
@@ -1135,7 +1135,7 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
                     precision_ts);
     }
     uint64_t newRtt = now_time - ts;
-    flow_signals_update(_pcm_flow_ptr, SIG_RTT,
+    flow_signals_update(_pcm_flow_ptr, PCM_SIG_RTT,
                         newRtt); // TODO: make sure that it's ok to cast here!!
     mark_received(pkt);
 
@@ -1158,7 +1158,7 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
             std::make_pair(eventlist().now() / 1000, 1));
         count_total_ecn++;
         consecutive_good_medium = 0;
-        flow_signals_update(_pcm_flow_ptr, SIG_ECN, 1);
+        flow_signals_update(_pcm_flow_ptr, PCM_SIG_ECN, 1);
     }
 
     if (from == 0 && count_total_ack % 10 == 0) {
@@ -1905,7 +1905,7 @@ void PcmSrc::send_packets() {
         _sent_packets.push_back(
             PcmSentPacket(eventlist().now() + service_time + _rto, p->seqno(),
                           false, false, false));
-        flow_signals_update(_pcm_flow_ptr, SIG_DATA_TX, _mss);
+        flow_signals_update(_pcm_flow_ptr, PCM_SIG_DATA_TX, _mss);
         if (generic_pacer != NULL && use_pacing) {
             generic_pacer->just_sent();
             _paced_packet = false;
@@ -2122,7 +2122,7 @@ bool PcmSrc::resend_packet(std::size_t idx) {
         --_nack_rtx_pending;
         _sent_packets[idx].nacked = false;
     }
-    flow_signals_update(_pcm_flow_ptr, SIG_DATA_TX, _mss);
+    flow_signals_update(_pcm_flow_ptr, PCM_SIG_DATA_TX, _mss);
     _sent_packets[idx].timer = eventlist().now() + service_time + _rto;
     _sent_packets[idx].timedOut = false;
     update_rtx_time();

@@ -116,5 +116,5 @@ int algorithm_main() {
     set_local_state(TCP_LOCAL_STATE_IDX_ACKED, tot_acked);
     set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, ssthresh);
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }

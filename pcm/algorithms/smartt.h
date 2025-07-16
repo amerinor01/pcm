@@ -90,7 +90,7 @@ int algorithm_main();
 extern "C" {
 #endif
 
-int smartt_pcmc_init(handle_t new_handle);
+int smartt_pcmc_init(pcm_handle_t new_handle);
 
 #ifdef __cplusplus
 }

@@ -88,7 +88,7 @@ int algorithm_main();
 extern "C" {
 #endif
 
-int swift_pcmc_init(handle_t new_handle);
+int swift_pcmc_init(pcm_handle_t new_handle);
 
 #ifdef __cplusplus
 }

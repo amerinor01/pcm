@@ -11,7 +11,7 @@ const char *htsim_flow_plugin_name = "htsim";
 int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     (void)flow_ops;
     LOG_CRIT("PCM library was build without htsim support");
-    return ERROR;
+    return PCM_ERROR;
 }
 
 #else
@@ -20,7 +20,7 @@ size_t htsim_flow_max_regfile_size_get() { return HTSIM_MAX_REGFILE_SIZE; }
 
 int htsim_flow_destroy(flow_t *flow) {
     free(flow->backend_ctx);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int htsim_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
@@ -28,7 +28,7 @@ int htsim_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
     flow->backend_ctx = calloc(1, sizeof(struct htsim_flow));
     if (!flow->backend_ctx) {
         LOG_CRIT("failed to allocate new pthread flow context");
-        return ERROR;
+        return PCM_ERROR;
     }
 
     struct htsim_flow *flow_ctx = (struct htsim_flow *)flow->backend_ctx;
@@ -51,7 +51,7 @@ int htsim_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
     // Arm all triggers, so that all timers/counters could start
     flow_triggers_arm(flow);
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 PLUGIN_FLOW_SIGNAL_GET_GENERIC_DEFINE(htsim)
@@ -129,7 +129,7 @@ struct flow_plugin_ops htsim_flow_ops = {
 
 int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     *flow_ops = htsim_flow_ops;
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 #endif

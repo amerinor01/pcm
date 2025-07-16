@@ -30,31 +30,31 @@ typedef double pcm_float;
  */
 
 /**
- * @typedef handle_t
+ * @typedef pcm_handle_t
  * @brief Opaque handle for a PCM context.
  */
-typedef void *handle_t;
+typedef void *pcm_handle_t;
 
 /**
- * @typedef addr_t
+ * @typedef pcm_addr_t
  * @brief Opaque representation of a network address.
  */
-typedef uint32_t addr_t;
+typedef uint32_t pcm_addr_t;
 
 /**
- * @typedef addr_mask_t
+ * @typedef pcm_addr_mask_t
  * @brief Opaque representation of a network address mask.
  */
-typedef uint32_t addr_mask_t;
+typedef uint32_t pcm_addr_mask_t;
 
 /**
  * @enum err_t
  * @brief Return codes for PCM calls.
  */
 typedef enum err {
-    SUCCESS = 0, /**< Operation completed successfully */
-    ERROR = 1    /**< Generic error occurred */
-} err_t;
+    PCM_SUCCESS = 0, /**< Operation completed successfully */
+    PCM_ERROR = 1    /**< Generic error occurred */
+} pcm_err_t;
 
 /**
  * @brief Allocate a new PCM handle that represents a PCM
@@ -72,62 +72,62 @@ typedef enum err {
  * @param[in] dst_addr_mask     Mask for wildcard PDC destination address
  * matching.
  * @param[out] handle            PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_pcmc(void *dev, addr_t src_addr, addr_mask_t src_addr_mask,
-                    addr_t dst_addr, addr_mask_t dst_addr_mask,
-                    handle_t *handle);
+pcm_err_t register_pcmc(void *dev, pcm_addr_t src_addr,
+                        pcm_addr_mask_t src_addr_mask, pcm_addr_t dst_addr,
+                        pcm_addr_mask_t dst_addr_mask, pcm_handle_t *handle);
 
 /**
  * @brief Release and free a previously allocated PCMC handle.
  *
  * @param[in] handle  Handle to release.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t deregister_pcmc(handle_t handle);
+pcm_err_t deregister_pcmc(pcm_handle_t handle);
 
 /**
  * @brief Activate the PCMC handle, enabling PCM-based management on new PDCs
  * that satisfy PCMC's matching rule.
  *
  * @param[in] handle  Handle to activate.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t activate_pcmc(handle_t handle);
+pcm_err_t activate_pcmc(pcm_handle_t handle);
 
 /**
  * @brief Deactivate the PCMC handle, disabling PCM-based management on new PDCs
  * that satisfy PCMC's matching rule.
  *
  * @param[in] handle  Handle to deactivate.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t deactivate_pcmc(handle_t handle);
+pcm_err_t deactivate_pcmc(pcm_handle_t handle);
 
 /**
- * @enum signal_t
+ * @enum pcm_signal_t
  * @brief Identifiers for PCM signals.
  */
 typedef enum signal {
-    SIG_ACK = 0,         /**< Number of ACK packets received */
-    SIG_RTO = 1,         /**< Number of RTO packets received */
-    SIG_NACK = 2,        /**< Number of NACK packets received */
-    SIG_ECN = 3,         /**< Number of ECN packets received */
-    SIG_RTT = 4,         /**< RTT timestamp */
-    SIG_DATA_TX = 5,     /**< Number of sent bytes */
-    SIG_ELAPSED_TIME = 6 /**< Monotonic elapsed time */
-} signal_t;
+    PCM_SIG_ACK = 0,         /**< Number of ACK packets received */
+    PCM_SIG_RTO = 1,         /**< Number of RTO packets received */
+    PCM_SIG_NACK = 2,        /**< Number of NACK packets received */
+    PCM_SIG_ECN = 3,         /**< Number of ECN packets received */
+    PCM_SIG_RTT = 4,         /**< RTT timestamp */
+    PCM_SIG_DATA_TX = 5,     /**< Number of sent bytes */
+    PCM_SIG_ELAPSED_TIME = 6 /**< Monotonic elapsed time */
+} pcm_signal_t;
 
 /**
- * @enum signal_accum_t
+ * @enum pcm_signal_accum_t
  * @brief Accumulation operations for PCM signals.
  */
 typedef enum signal_accum {
-    SIG_ACCUM_SUM = 0, /**< Sum all samples */
-    SIG_ACCUM_MIN = 1, /**< Keep minimum sample */
-    SIG_ACCUM_MAX = 2, /**< Keep maximum sample */
-    SIG_ACCUM_LAST = 3 /**< Keep only the last sample */
-} signal_accum_t;
+    PCM_SIG_ACCUM_SUM = 0, /**< Sum all samples */
+    PCM_SIG_ACCUM_MIN = 1, /**< Keep minimum sample */
+    PCM_SIG_ACCUM_MAX = 2, /**< Keep maximum sample */
+    PCM_SIG_ACCUM_LAST = 3 /**< Keep only the last sample */
+} pcm_signal_accum_t;
 
 /**
  * @brief Register a signal for network events monitoring.
@@ -136,10 +136,11 @@ typedef enum signal_accum {
  * @param[in] accum_type   Accumulation operation (SIG_ACCUM_*).
  * @param[in] user_index   Index for user-defined signal mapping.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_signal_pcmc(signal_t signal, signal_accum_t accum_type,
-                           size_t user_index, handle_t handle);
+pcm_err_t register_signal_pcmc(pcm_signal_t signal,
+                               pcm_signal_accum_t accum_type, size_t user_index,
+                               pcm_handle_t handle);
 
 /**
  * @brief Set a threshold to trigger algorithm callback.
@@ -151,19 +152,20 @@ err_t register_signal_pcmc(signal_t signal, signal_accum_t accum_type,
  * @param[in] user_index   User-defined signal index.
  * @param[in] threshold    Threshold value for triggering.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_signal_invoke_trigger_pcmc(size_t user_index, pcm_uint threshold,
-                                          handle_t handle);
+pcm_err_t register_signal_invoke_trigger_pcmc(size_t user_index,
+                                              pcm_uint threshold,
+                                              pcm_handle_t handle);
 
 /**
- * @enum control_t
+ * @enum pcm_control_t
  * @brief Identifiers for PCM control knobs.
  */
 typedef enum control {
-    CTRL_CWND = 0, /**< Sending congestion window */
-    CTRL_RATE = 1  /**< Sending rate control */
-} control_t;
+    PCM_CTRL_CWND = 0, /**< Sending congestion window */
+    PCM_CTRL_RATE = 1  /**< Sending rate control */
+} pcm_control_t;
 
 /**
  * @brief Register a control knob for external adjustment by an algorithm.
@@ -171,10 +173,10 @@ typedef enum control {
  * @param[in] control      Control identifier (CTRL_*).
  * @param[in] user_index   Index for user-defined control mapping.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_control_pcmc(control_t control, size_t user_index,
-                            handle_t handle);
+pcm_err_t register_control_pcmc(pcm_control_t control, size_t user_index,
+                                pcm_handle_t handle);
 
 /**
  * @brief Set the initial value for an algorithm output control knob.
@@ -185,20 +187,20 @@ err_t register_control_pcmc(control_t control, size_t user_index,
  * @param[in] user_index   User-defined control index.
  * @param[in] initial_value Initial control value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_control_initial_value_pcmc(size_t user_index,
-                                          pcm_uint initial_value,
-                                          handle_t handle);
+pcm_err_t register_control_initial_value_pcmc(size_t user_index,
+                                              pcm_uint initial_value,
+                                              pcm_handle_t handle);
 
 /**
  * @brief Register persistent integer value state storage for a flow.
  *
  * @param[in] user_index   Index for user-defined state mapping.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_local_state_pcmc(size_t user_index, handle_t handle);
+pcm_err_t register_local_state_pcmc(size_t user_index, pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent state value for a flow.
@@ -207,11 +209,11 @@ err_t register_local_state_pcmc(size_t user_index, handle_t handle);
  * @param[in] user_index   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_local_state_initial_value_pcmc(size_t user_index,
-                                              pcm_uint initial_value,
-                                              handle_t handle);
+pcm_err_t register_local_state_initial_value_pcmc(size_t user_index,
+                                                  pcm_uint initial_value,
+                                                  pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent int state value for a flow.
@@ -219,11 +221,11 @@ err_t register_local_state_initial_value_pcmc(size_t user_index,
  * @param[in] user_index   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_local_state_initial_value_int_pcmc(size_t user_index,
-                                                  pcm_int initial_value,
-                                                  handle_t handle);
+pcm_err_t register_local_state_initial_value_int_pcmc(size_t user_index,
+                                                      pcm_int initial_value,
+                                                      pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent uint state value for a flow.
@@ -231,11 +233,11 @@ err_t register_local_state_initial_value_int_pcmc(size_t user_index,
  * @param[in] user_index   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_local_state_initial_value_uint_pcmc(size_t user_index,
-                                                   pcm_uint initial_value,
-                                                   handle_t handle);
+pcm_err_t register_local_state_initial_value_uint_pcmc(size_t user_index,
+                                                       pcm_uint initial_value,
+                                                       pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent float state value for a flow.
@@ -243,20 +245,20 @@ err_t register_local_state_initial_value_uint_pcmc(size_t user_index,
  * @param[in] user_index   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_local_state_initial_value_float_pcmc(size_t user_index,
-                                                    pcm_float initial_value,
-                                                    handle_t handle);
+pcm_err_t register_local_state_initial_value_float_pcmc(size_t user_index,
+                                                        pcm_float initial_value,
+                                                        pcm_handle_t handle);
 
 /**
  * @brief Register constant storage for a flow.
  *
  * @param[in] user_index   Index for user-defined constant mapping.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_constant_pcmc(size_t user_index, handle_t handle);
+pcm_err_t register_constant_pcmc(size_t user_index, pcm_handle_t handle);
 
 /**
  * @brief Set constant value for a flow.
@@ -264,10 +266,10 @@ err_t register_constant_pcmc(size_t user_index, handle_t handle);
  * @param[in] user_index   User-defined state index.
  * @param[in] value Constant value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_constant_value_int_pcmc(size_t user_index, pcm_int value,
-                                       handle_t handle);
+pcm_err_t register_constant_value_int_pcmc(size_t user_index, pcm_int value,
+                                           pcm_handle_t handle);
 
 /**
  * @brief Set constant value for a flow.
@@ -275,10 +277,10 @@ err_t register_constant_value_int_pcmc(size_t user_index, pcm_int value,
  * @param[in] user_index   User-defined state index.
  * @param[in] value Constant value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
-                                        handle_t handle);
+pcm_err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
+                                            pcm_handle_t handle);
 
 /**
  * @brief Set constant value for a flow.
@@ -286,10 +288,10 @@ err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
  * @param[in] user_index   User-defined state index.
  * @param[in] value Constant value.
  * @param[in] handle       PCM handle.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
-                                         handle_t handle);
+pcm_err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
+                                             pcm_handle_t handle);
 
 /**
  * @brief Compile and register an algorithm with PCMC.
@@ -299,22 +301,23 @@ err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
  * @param[out] compile_output_string Implementation defined null-terminated
  *        string that contains compile-time outputs.
  * @param[in] handle       Handle to associate the compiled algorithm with.
- * @return SUCCESS on success, ERROR on failure.
+ * @return SUCCESS on success, PCM_ERROR on failure.
  */
-err_t register_algorithm_pcmc(const char *compile_path,
-                              char **compile_output_string, handle_t handle);
+pcm_err_t register_algorithm_pcmc(const char *compile_path,
+                                  char **compile_output_string,
+                                  pcm_handle_t handle);
 
 /* Handler-side API */
 
-//timos: the unoptimized handlers only use ctx, only when we use the
-//optimizing compiler passes will we make use of the other args, so
-//we mark them as unused here.
-#define __algorithm_entry_point  __algorithm_main(void *ctx,               \
-		                 __attribute__((unused)) void *signals,    \
-                                 __attribute__((unused)) void *thresholds, \
-		                 __attribute__((unused)) void *controls,   \
-				 __attribute__((unused)) void *local_state,\
-		                 __attribute__((unused)) void *constants)
+// timos: the unoptimized handlers only use ctx, only when we use the
+// optimizing compiler passes will we make use of the other args, so
+// we mark them as unused here.
+#define __algorithm_entry_point                                                \
+    __algorithm_main(void *ctx, __attribute__((unused)) void *signals,         \
+                     __attribute__((unused)) void *thresholds,                 \
+                     __attribute__((unused)) void *controls,                   \
+                     __attribute__((unused)) void *local_state,                \
+                     __attribute__((unused)) void *constants)
 #define __algorithm_entry_point_symbol "__algorithm_main"
 pcm_uint __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);

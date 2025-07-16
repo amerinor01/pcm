@@ -130,7 +130,7 @@ int algorithm_main() {
         break;
 
     default:
-        return ERROR;
+        return PCM_ERROR;
     }
 
 exit:
@@ -139,5 +139,5 @@ exit:
     //     " "rate_cur=%lf " "alpha=%lf cwnd=%llu\n", ctx, trigger_id, num_ecns,
     //     state.rate_target, state.rate_cur, state.alpha, state.cwnd);
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }

@@ -92,28 +92,28 @@ void print_path(std::ofstream &paths, const Route *rt) {
 }
 
 int pcmc_init(const char *algo_name, device_t *dev_ctx,
-              const char *reno_handler_path, handle_t *algo_handler) {
+              const char *reno_handler_path, pcm_handle_t *algo_handler) {
 
-    handle_t new_handle;
+    pcm_handle_t new_handle;
     EXIT_ON_ERR(register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle),
-                SUCCESS);
+                PCM_SUCCESS);
 
     if (!strcmp(algo_name, "newreno")) {
         cout << "Algorithm requested: NewReno" << endl;
-        EXIT_ON_ERR(tcp_pcmc_init(new_handle), SUCCESS);
+        EXIT_ON_ERR(tcp_pcmc_init(new_handle), PCM_SUCCESS);
     } else if (!strcmp(algo_name, "dctcp")) {
         cout << "Algorithm requested: DCTCP" << endl;
-        EXIT_ON_ERR(tcp_pcmc_init(new_handle), SUCCESS);
-        EXIT_ON_ERR(dctcp_pcmc_init(new_handle), SUCCESS);
+        EXIT_ON_ERR(tcp_pcmc_init(new_handle), PCM_SUCCESS);
+        EXIT_ON_ERR(dctcp_pcmc_init(new_handle), PCM_SUCCESS);
     } else if (!strcmp(algo_name, "swift")) {
         cout << "Algorithm requested: Swift" << endl;
-        EXIT_ON_ERR(swift_pcmc_init(new_handle), SUCCESS);
+        EXIT_ON_ERR(swift_pcmc_init(new_handle), PCM_SUCCESS);
     } else if (!strcmp(algo_name, "dcqcn")) {
         cout << "Algorithm requested: DCQCN" << endl;
-        EXIT_ON_ERR(dcqcn_pcmc_init(new_handle), SUCCESS);
+        EXIT_ON_ERR(dcqcn_pcmc_init(new_handle), PCM_SUCCESS);
     } else if (!strcmp(algo_name, "smartt")) {
         cout << "Algorithm requested: SMaRTT" << endl;
-        EXIT_ON_ERR(smartt_pcmc_init(new_handle), SUCCESS);
+        EXIT_ON_ERR(smartt_pcmc_init(new_handle), PCM_SUCCESS);
     } else {
         cerr << "Unknown algorithm name " << algo_name << endl;
         exit(EXIT_FAILURE);
@@ -122,18 +122,18 @@ int pcmc_init(const char *algo_name, device_t *dev_ctx,
     char *compile_out;
     EXIT_ON_ERR(
         register_algorithm_pcmc(reno_handler_path, &compile_out, new_handle),
-        SUCCESS);
+        PCM_SUCCESS);
 
-    EXIT_ON_ERR(activate_pcmc(new_handle), SUCCESS);
+    EXIT_ON_ERR(activate_pcmc(new_handle), PCM_SUCCESS);
 
     *algo_handler = new_handle;
 
     return 0;
 }
 
-int pcmc_destroy(handle_t algo_handler) {
-    EXIT_ON_ERR(deactivate_pcmc(algo_handler), SUCCESS);
-    EXIT_ON_ERR(deregister_pcmc(algo_handler), SUCCESS);
+int pcmc_destroy(pcm_handle_t algo_handler) {
+    EXIT_ON_ERR(deactivate_pcmc(algo_handler), PCM_SUCCESS);
+    EXIT_ON_ERR(deregister_pcmc(algo_handler), PCM_SUCCESS);
     return 0;
 }
 
@@ -840,10 +840,10 @@ int main(int argc, char **argv) {
     LogSimInterface *lgs = NULL;
 
     PcmDevice pcm_device(eventlist, 1000, 1000);
-    handle_t pcm_algo_handler;
+    pcm_handle_t pcm_algo_handler;
     if (pcmc_init(pcm_algo.c_str(), pcm_device.getDevicePtr(),
                   pcm_algo_handler_path.c_str(),
-                  &pcm_algo_handler) != SUCCESS) {
+                  &pcm_algo_handler) != PCM_SUCCESS) {
         exit(EXIT_FAILURE);
     }
 

@@ -169,8 +169,8 @@ static inline void tcp_cong_avoid(struct tcp_state_snapshot *state) {
 extern "C" {
 #endif
 
-int tcp_pcmc_init(handle_t new_handle);
-int dctcp_pcmc_init(handle_t new_handle);
+int tcp_pcmc_init(pcm_handle_t new_handle);
+int dctcp_pcmc_init(pcm_handle_t new_handle);
 
 #ifdef __cplusplus
 }

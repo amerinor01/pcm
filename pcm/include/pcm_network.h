@@ -22,7 +22,7 @@ int flow_create(device_t *device, flow_t **flow,
 int flow_destroy(flow_t *flow);
 bool flow_is_ready(const flow_t *flow);
 pcm_uint flow_cwnd_get(const flow_t *flow);
-void flow_signals_update(flow_t *flow, signal_t signal_type, pcm_uint value);
+void flow_signals_update(flow_t *flow, pcm_signal_t signal_type, pcm_uint value);
 
 #ifdef __cplusplus
 } /* extern "C" */

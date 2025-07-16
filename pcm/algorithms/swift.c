@@ -127,7 +127,7 @@ int algorithm_main() {
     } else if (state.tot_acked > 0) {
         swift_ack_reaction(&state);
     } else {
-        return ERROR;
+        return PCM_ERROR;
     }
 
     /*
@@ -154,5 +154,5 @@ int algorithm_main() {
     set_local_state(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM, state.rtt_estim);
     set_control(SWIFT_CTRL_IDX_CWND, state.cwnd);
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
