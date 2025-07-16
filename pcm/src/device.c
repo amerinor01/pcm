@@ -16,20 +16,20 @@ int device_init(const char *flow_plugin_name, device_t **out) {
     device_t *device = calloc(1, sizeof(*device));
     if (!device) {
         LOG_CRIT("failed to allocate new device");
-        return ERROR;
+        return PCM_ERROR;
     }
 
     slist_init(&device->configs_list);
 
     bool needs_progress_thread = false;
     if (!strcmp(pthrd_flow_plugin_name, flow_plugin_name)) {
-        if (pthrd_flow_ops_init(&device->flow_ops) != SUCCESS) {
+        if (pthrd_flow_ops_init(&device->flow_ops) != PCM_SUCCESS) {
             LOG_CRIT("failed to initialize flow backend %s", flow_plugin_name);
             goto destroy_scheduler;
         }
         needs_progress_thread = true;
     } else if (!strcmp(htsim_flow_plugin_name, flow_plugin_name)) {
-        if (htsim_flow_ops_init(&device->flow_ops) != SUCCESS) {
+        if (htsim_flow_ops_init(&device->flow_ops) != PCM_SUCCESS) {
             LOG_CRIT("failed to initialize flow backend %s", flow_plugin_name);
             goto destroy_scheduler;
         }
@@ -45,21 +45,21 @@ int device_init(const char *flow_plugin_name, device_t **out) {
 
     *out = device;
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 
 destroy_scheduler:
     device_scheduler_destroy(&device->scheduler);
 err:
     free(device);
 
-    return ERROR;
+    return PCM_ERROR;
 }
 
 int device_destroy(device_t *device) {
-    int ret = SUCCESS;
+    int ret = PCM_SUCCESS;
 
     ret = device_scheduler_destroy(&device->scheduler);
-    if (ret != SUCCESS)
+    if (ret != PCM_SUCCESS)
         LOG_CRIT("[dev=%p] failed to destroy scheduler", device);
 
     if (!slist_empty(&device->configs_list)) {
@@ -69,7 +69,7 @@ int device_destroy(device_t *device) {
                 container_of(slist_remove_head(&device->configs_list),
                              struct algorithm_config, list_entry));
         }
-        ret = ERROR;
+        ret = PCM_ERROR;
     }
 
     free(device);
@@ -78,7 +78,7 @@ int device_destroy(device_t *device) {
 }
 
 const struct algorithm_config *
-device_flow_id_to_config_match(const device_t *device, addr_t addr) {
+device_flow_id_to_config_match(const device_t *device, pcm_addr_t addr) {
     struct slist_entry *item, *prev;
     slist_foreach(&device->configs_list, item, prev) {
         (void)prev; /* suppress complier warning */
@@ -104,10 +104,10 @@ int device_scheduler_init(struct scheduler *scheduler,
     scheduler->progress_auto = needs_progress_thread;
 
     if (scheduler->progress_auto) {
-        scheduler->progress.thread.err = SUCCESS;
+        scheduler->progress.thread.err = PCM_SUCCESS;
         if (pthread_mutex_init(&scheduler->progress.thread.flow_list_lock,
                                NULL))
-            return ERROR;
+            return PCM_ERROR;
         scheduler->progress.thread.running = true;
         if (pthread_create(&scheduler->progress.thread.pthread_obj, NULL,
                            device_scheduler_thread_fn, (void *)scheduler))
@@ -116,32 +116,32 @@ int device_scheduler_init(struct scheduler *scheduler,
         scheduler->progress.cur_flow = NULL;
     }
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 
 err:
     if (scheduler->progress_auto) {
-        scheduler->progress.thread.err = ERROR;
+        scheduler->progress.thread.err = PCM_ERROR;
         scheduler->progress.thread.running = false;
         pthread_mutex_destroy(&scheduler->progress.thread.flow_list_lock);
     }
-    return ERROR;
+    return PCM_ERROR;
 }
 
 int device_scheduler_destroy(struct scheduler *scheduler) {
-    int ret = SUCCESS;
+    int ret = PCM_SUCCESS;
 
     if (scheduler->progress_auto) {
         if (!scheduler->progress.thread.running)
-            return ERROR;
+            return PCM_ERROR;
         scheduler->progress.thread.running = false;
         if (pthread_join(scheduler->progress.thread.pthread_obj, NULL))
-            ret = ERROR;
+            ret = PCM_ERROR;
 
         if (scheduler->progress.thread.err)
-            ret = ERROR;
+            ret = PCM_ERROR;
 
         if (pthread_mutex_destroy(&scheduler->progress.thread.flow_list_lock)) {
-            ret = ERROR;
+            ret = PCM_ERROR;
         }
     }
 
@@ -151,21 +151,21 @@ int device_scheduler_destroy(struct scheduler *scheduler) {
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
     if (scheduler->progress_auto &&
         pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
-        return ERROR;
+        return PCM_ERROR;
 
     slist_insert_tail(&flow->flow_list_entry, &scheduler->flow_list);
 
     if (scheduler->progress_auto &&
         pthread_mutex_unlock(&scheduler->progress.thread.flow_list_lock))
-        return ERROR;
+        return PCM_ERROR;
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
     if (scheduler->progress_auto &&
         pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
-        return ERROR;
+        return PCM_ERROR;
 
     struct slist_entry *item, *prev;
     bool found = false;
@@ -182,16 +182,16 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
 
     if (scheduler->progress_auto &&
         pthread_mutex_unlock(&scheduler->progress.thread.flow_list_lock))
-        return ERROR;
+        return PCM_ERROR;
 
     if (!found) {
         LOG_CRIT("[flow=%p addr=%u] flow was not found in the scheduler's "
                  "flow list",
                  flow, flow->addr);
-        return ERROR;
+        return PCM_ERROR;
     }
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 static void *device_scheduler_thread_fn(void *arg) {
@@ -204,7 +204,7 @@ static void *device_scheduler_thread_fn(void *arg) {
 
     while (scheduler->progress.thread.running) {
         if (pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock)) {
-            scheduler->progress.thread.err = ERROR;
+            scheduler->progress.thread.err = PCM_ERROR;
             break;
         }
 
@@ -218,9 +218,9 @@ static void *device_scheduler_thread_fn(void *arg) {
         }
 
         if (pthread_mutex_unlock(&scheduler->progress.thread.flow_list_lock))
-            scheduler->progress.thread.err = ERROR;
+            scheduler->progress.thread.err = PCM_ERROR;
 
-        if (scheduler->progress.thread.err == ERROR)
+        if (scheduler->progress.thread.err == PCM_ERROR)
             break;
 
         usleep(SCHEDULER_SLEEP_US);

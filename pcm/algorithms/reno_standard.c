@@ -61,5 +61,5 @@ exit_handler:
     set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, state.ssthresh);
     set_local_state(TCP_LOCAL_STATE_IDX_ACKED, state.tot_acked);
     set_local_state(TCP_LOCAL_STATE_IDX_IN_FAST_RECOV, state.in_fast_recovery);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }

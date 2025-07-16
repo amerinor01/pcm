@@ -37,8 +37,8 @@ extern signal_accumulation_op_fn flow_signal_accumulation_no_op;
 
 struct signal_attr {
     struct generic_metadata metadata;
-    signal_t type;
-    signal_accum_t accum_type;
+    pcm_signal_t type;
+    pcm_signal_accum_t accum_type;
     signal_accumulation_op_fn accumulation_op_fn;
     bool is_trigger;
     signal_trigger_check_fn trigger_check_fn;
@@ -47,7 +47,7 @@ struct signal_attr {
 
 struct control_attr {
     struct generic_metadata metadata;
-    control_t type;
+    pcm_control_t type;
 };
 
 struct local_state_attr {
@@ -69,7 +69,7 @@ struct algorithm_config {
     struct device *device;
     struct slist_entry list_entry;
     bool active;
-    addr_mask_t matching_rule_mask;
+    pcm_addr_mask_t matching_rule_mask;
     struct slist signals_list;
     size_t num_signals;
     struct slist controls_list;
@@ -124,7 +124,7 @@ struct flow_plugin_ops {
 
 struct flow {
     device_t *device;
-    addr_t addr;
+    pcm_addr_t addr;
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
     struct slist_entry *cur_trigger;
@@ -157,7 +157,7 @@ struct scheduler {
 
 struct device {
     struct flow_plugin_ops flow_ops;
-    addr_t flow_addr_counter;
+    pcm_addr_t flow_addr_counter;
     struct slist configs_list;
     struct scheduler scheduler;
 };
@@ -165,16 +165,16 @@ struct device {
 int algorithm_config_alloc(device_t *device, struct algorithm_config **config);
 int algorithm_config_destroy(struct algorithm_config *config);
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
-                                       addr_mask_t matching_rule_mask);
+                                       pcm_addr_mask_t matching_rule_mask);
 int algorithm_config_activate(struct algorithm_config *config);
 int algorithm_config_deactivate(struct algorithm_config *config);
 int algorithm_config_signal_add(struct algorithm_config *config,
-                                signal_t signal, signal_accum_t accum_type,
+                                pcm_signal_t signal, pcm_signal_accum_t accum_type,
                                 size_t user_index);
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
                                         size_t user_index, pcm_uint threshold);
 int algorithm_config_control_add(struct algorithm_config *config,
-                                 control_t control, size_t user_index);
+                                 pcm_control_t control, size_t user_index);
 int algorithm_config_control_initial_value_set(struct algorithm_config *config,
                                                size_t user_index,
                                                pcm_uint initial_value);
@@ -202,7 +202,7 @@ int algorithm_config_compile(struct algorithm_config *config,
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
 const struct algorithm_config *
-device_flow_id_to_config_match(const device_t *device, addr_t id);
+device_flow_id_to_config_match(const device_t *device, pcm_addr_t id);
 
 void flow_triggers_arm(flow_t *flow);
 bool flow_handler_invoke_on_trigger(flow_t *flow);

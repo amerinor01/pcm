@@ -18,7 +18,7 @@ signal_accumulation_op_fn flow_signal_accumulation_no_op = NULL;
 pcm_uint flow_cwnd_get(const flow_t *flow) {
     size_t cwnd_idx;
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
-        &flow->config->controls_list, struct control_attr, CTRL_CWND, cwnd_idx);
+        &flow->config->controls_list, struct control_attr, PCM_CTRL_CWND, cwnd_idx);
     return flow->device->flow_ops.handler.control_get(flow, cwnd_idx);
 }
 
@@ -30,7 +30,7 @@ bool flow_is_ready(const flow_t *flow) {
     return flow->device->flow_ops.control.is_ready(flow);
 }
 
-void flow_signals_update(flow_t *flow, signal_t signal_type, pcm_uint value) {
+void flow_signals_update(flow_t *flow, pcm_signal_t signal_type, pcm_uint value) {
     struct slist_entry *item, *prev;
     slist_foreach(&flow->config->signals_list, item, prev) {
         (void)prev; /* suppress compiler warnings */
@@ -102,7 +102,7 @@ bool flow_handler_invoke_on_trigger(flow_t *flow) {
     PERF_PROF_REGION_START();
     bool handler_invoked = false;
     if (flow_triggers_check(flow)) {
-        flow_signals_update(flow, SIG_ELAPSED_TIME, 0);
+        flow_signals_update(flow, PCM_SIG_ELAPSED_TIME, 0);
         flow->config->algorithm_fn((void *)flow, flow->signals,
                                    flow->thresholds, flow->controls,
                                    flow->local_state, flow->constants);
@@ -116,18 +116,18 @@ bool flow_handler_invoke_on_trigger(flow_t *flow) {
 }
 
 int flow_destroy(flow_t *flow) {
-    int ret = SUCCESS;
+    int ret = PCM_SUCCESS;
 
     if (device_scheduler_flow_remove(&flow->config->device->scheduler, flow)) {
         LOG_CRIT("[flow=%p addr=%u] failed to remove flow from scheduler", flow,
                  flow->addr);
-        ret = ERROR;
+        ret = PCM_ERROR;
     }
 
     if (flow->device->flow_ops.control.destroy(flow)) {
         LOG_CRIT("[flow=%p addr=%u] failed to destroy flow backend state", flow,
                  flow->addr)
-        ret = ERROR;
+        ret = PCM_ERROR;
     }
 
     free(flow);
@@ -138,13 +138,13 @@ int flow_destroy(flow_t *flow) {
 int flow_create(device_t *device, flow_t **flow,
                 traffic_gen_fn_t traffic_gen_fn) {
     if (!device)
-        return ERROR;
+        return PCM_ERROR;
 
     flow_t *new_flow = (flow_t *)calloc(
         1, sizeof(*new_flow) + device->flow_ops.control.max_regfile_size_get());
     if (!new_flow) {
         LOG_CRIT("[dev=%p] failed to allocate new flow", device);
-        return ERROR;
+        return PCM_ERROR;
     }
 
     new_flow->device = device;
@@ -175,11 +175,11 @@ int flow_create(device_t *device, flow_t **flow,
 
     *flow = new_flow;
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 
 err_destroy_plugin:
     new_flow->device->flow_ops.control.destroy(new_flow);
 err_free_flow:
     free(new_flow);
-    return ERROR;
+    return PCM_ERROR;
 }

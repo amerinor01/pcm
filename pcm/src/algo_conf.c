@@ -5,12 +5,12 @@
 
 int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
     if (!device)
-        return ERROR;
+        return PCM_ERROR;
 
     struct algorithm_config *new_config = calloc(1, sizeof(*new_config));
     if (!new_config) {
         LOG_CRIT("[dev=%p] failed to allocate new algorithm config", device);
-        return ERROR;
+        return PCM_ERROR;
     }
 
     new_config->device = device;
@@ -24,11 +24,11 @@ int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
     LOG_DBG("[dev=%p] allocated new config=%p", device, new_config);
     *config = new_config;
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_destroy(struct algorithm_config *config) {
-    int ret = SUCCESS;
+    int ret = PCM_SUCCESS;
 
     struct slist_entry *item, *prev;
     bool found = false;
@@ -41,7 +41,7 @@ int algorithm_config_destroy(struct algorithm_config *config) {
 
     if (!found) {
         LOG_CRIT("[dev=%p conf=%p] config not found", config->device, config);
-        ret = ERROR;
+        ret = PCM_ERROR;
     }
 
     ATTR_LIST_FREE(&config->signals_list, struct signal_attr,
@@ -56,7 +56,7 @@ int algorithm_config_destroy(struct algorithm_config *config) {
     if (dlclose(config->dlopen_handle)) {
         LOG_CRIT("[dev=%p conf=%p] dlclose() failed with %s", config->device,
                  config, dlerror());
-        ret = ERROR;
+        ret = PCM_ERROR;
     }
 
     LOG_DBG("[dev=%p] destroyed config=%p", config->device, config);
@@ -69,55 +69,55 @@ int algorithm_config_activate(struct algorithm_config *config) {
     if (config->active) {
         LOG_CRIT("[dev=%p conf=%p] config activation called twice",
                  config->device, config);
-        return ERROR;
+        return PCM_ERROR;
     }
     if (!config->algorithm_fn) {
         LOG_CRIT("[dev=%p conf=%p] algorithm handler function must be compiled",
                  config->device, config);
-        return ERROR;
+        return PCM_ERROR;
     }
     if (!config->num_signals) {
         LOG_CRIT("[dev=%p conf=%p] at least one signal must be registered with "
                  "configuration file",
                  config->device, config);
-        return ERROR;
+        return PCM_ERROR;
     }
     if (!config->num_controls) {
         LOG_CRIT(
             "[dev=%p conf=%p] at least one control must be registered with "
             "configuration file",
             config->device, config);
-        return ERROR;
+        return PCM_ERROR;
     }
     config->active = true;
     LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu "
             "num_constants=%zu",
             config->device, config, config->num_signals, config->num_controls,
             config->num_constants);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_deactivate(struct algorithm_config *config) {
     if (!config->active) {
         LOG_CRIT("[dev=%p conf=%p] config deactivation called twice",
                  config->device, config);
-        return ERROR;
+        return PCM_ERROR;
     }
     config->active = false;
     LOG_DBG("[dev=%p conf=%p] deactivated", config->device, config);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
-                                       addr_mask_t matching_rule_mask) {
+                                       pcm_addr_mask_t matching_rule_mask) {
     config->matching_rule_mask = matching_rule_mask;
     LOG_DBG("[dev=%p conf=%p] added matching rule=0x%x", config->device, config,
             matching_rule_mask);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_signal_add(struct algorithm_config *config,
-                                signal_t signal, signal_accum_t accum_type,
+                                pcm_signal_t signal, pcm_signal_accum_t accum_type,
                                 size_t user_index) {
     ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->signals_list,
                                        struct signal_attr, user_index);
@@ -128,30 +128,30 @@ int algorithm_config_signal_add(struct algorithm_config *config,
     attr->type = signal;
     attr->accum_type = accum_type;
     switch (attr->accum_type) {
-    case SIG_ACCUM_SUM:
+    case PCM_SIG_ACCUM_SUM:
         attr->accumulation_op_fn = config->device->flow_ops.datapath.sum;
         break;
-    case SIG_ACCUM_LAST:
+    case PCM_SIG_ACCUM_LAST:
         attr->accumulation_op_fn = config->device->flow_ops.datapath.last;
         break;
-    case SIG_ACCUM_MIN:
+    case PCM_SIG_ACCUM_MIN:
         attr->accumulation_op_fn = config->device->flow_ops.datapath.min;
         break;
-    case SIG_ACCUM_MAX:
+    case PCM_SIG_ACCUM_MAX:
         attr->accumulation_op_fn = config->device->flow_ops.datapath.max;
         break;
     default:
         LOG_CRIT("[dev=%p conf=%p] unknown or unsupported signal accumulation "
                  "type requested",
                  config->device, config);
-        return ERROR;
+        return PCM_ERROR;
     }
 
-    if (attr->type == SIG_ELAPSED_TIME)
+    if (attr->type == PCM_SIG_ELAPSED_TIME)
         attr->accumulation_op_fn =
             config->device->flow_ops.datapath.elapsed_time;
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
@@ -160,27 +160,27 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
     ATTR_LIST_ITEM_SET(&config->signals_list, struct signal_attr, user_index,
                        threshold, attr);
     if (threshold <= 0)
-        return ERROR;
+        return PCM_ERROR;
 
     attr->trigger_check_fn = config->device->flow_ops.datapath.overflow_check;
     attr->trigger_arm_fn = flow_signal_trigger_arm_no_op;
 
     // trigger on elapsed time (timer) relies on aux state
-    if (attr->type == SIG_ELAPSED_TIME) {
+    if (attr->type == PCM_SIG_ELAPSED_TIME) {
         attr->accumulation_op_fn = flow_signal_accumulation_no_op;
         attr->trigger_check_fn = config->device->flow_ops.datapath.timer_check;
         attr->trigger_arm_fn = config->device->flow_ops.datapath.timer_reset;
-    } else if (attr->type == SIG_DATA_TX) {
+    } else if (attr->type == PCM_SIG_DATA_TX) {
         attr->trigger_check_fn = config->device->flow_ops.datapath.burst_check;
         attr->trigger_arm_fn = config->device->flow_ops.datapath.burst_reset;
     }
 
     attr->is_trigger = true;
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_control_add(struct algorithm_config *config,
-                                 control_t control, size_t user_index) {
+                                 pcm_control_t control, size_t user_index) {
     ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->controls_list,
                                        struct control_attr, user_index);
     ATTR_LIST_DUPLICATE_TYPE_CHK(&config->controls_list, struct control_attr,
@@ -190,7 +190,7 @@ int algorithm_config_control_add(struct algorithm_config *config,
                          config->num_controls, ALGO_CONF_MAX_NUM_CONTROLS,
                          attr);
     attr->type = control;
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_control_initial_value_set(struct algorithm_config *config,
@@ -199,7 +199,7 @@ int algorithm_config_control_initial_value_set(struct algorithm_config *config,
     struct control_attr *attr;
     ATTR_LIST_ITEM_SET(&config->controls_list, struct control_attr, user_index,
                        initial_value, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_local_state_add(struct algorithm_config *config,
@@ -210,7 +210,7 @@ int algorithm_config_local_state_add(struct algorithm_config *config,
     ATTR_LIST_ITEM_ALLOC(&config->local_state_list, user_index,
                          config->num_local_states,
                          ALGO_CONF_MAX_LOCAL_STATE_VARS, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_local_state_uint_set(struct algorithm_config *config,
@@ -219,7 +219,7 @@ int algorithm_config_local_state_uint_set(struct algorithm_config *config,
     struct local_state_attr *attr;
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
                        user_index, initial_value, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_local_state_int_set(struct algorithm_config *config,
@@ -229,7 +229,7 @@ int algorithm_config_local_state_int_set(struct algorithm_config *config,
     pcm_uint encoded_val = encode_pcm_int(initial_value);
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
                        user_index, encoded_val, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_local_state_float_set(struct algorithm_config *config,
@@ -239,7 +239,7 @@ int algorithm_config_local_state_float_set(struct algorithm_config *config,
     pcm_uint encoded_val = encode_pcm_float(initial_value);
     ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
                        user_index, encoded_val, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_constant_add(struct algorithm_config *config,
@@ -250,7 +250,7 @@ int algorithm_config_constant_add(struct algorithm_config *config,
     ATTR_LIST_ITEM_ALLOC(&config->constants_list, user_index,
                          config->num_constants, ALGO_CONF_MAX_NUM_CONSTANTS,
                          attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_constant_uint_set(struct algorithm_config *config,
@@ -258,7 +258,7 @@ int algorithm_config_constant_uint_set(struct algorithm_config *config,
     struct constant_attr *attr;
     ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
                        user_index, value, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_constant_int_set(struct algorithm_config *config,
@@ -267,7 +267,7 @@ int algorithm_config_constant_int_set(struct algorithm_config *config,
     pcm_uint encoded_val = encode_pcm_int(value);
     ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
                        user_index, encoded_val, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_constant_float_set(struct algorithm_config *config,
@@ -276,7 +276,7 @@ int algorithm_config_constant_float_set(struct algorithm_config *config,
     pcm_uint encoded_val = encode_pcm_float(value);
     ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
                        user_index, encoded_val, attr);
-    return SUCCESS;
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_compile(struct algorithm_config *config,
@@ -286,7 +286,7 @@ int algorithm_config_compile(struct algorithm_config *config,
         LOG_CRIT("[dev=%p conf=%p] dlopen(%s) failed with %s", config->device,
                  config, compile_path, dlerror());
         *err = dlerror();
-        return ERROR;
+        return PCM_ERROR;
     }
 
     config->algorithm_fn = (algo_function_t)dlsym(
@@ -297,12 +297,12 @@ int algorithm_config_compile(struct algorithm_config *config,
         LOG_CRIT("[dev=%p conf=%p] %s symbol lookup in %s failed with %s",
                  config->device, config, __algorithm_entry_point_symbol,
                  compile_path, dlerror());
-        return ERROR;
+        return PCM_ERROR;
     }
 
     LOG_DBG("[dev=%p conf=%p] loaded %s symbol=%p from file=%s", config->device,
             config, __algorithm_entry_point_symbol, config->algorithm_fn,
             compile_path);
 
-    return SUCCESS;
+    return PCM_SUCCESS;
 }

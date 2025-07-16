@@ -6,7 +6,7 @@ PcmDevice::PcmDevice(EventList &event_list, simtime_picosec handlerDelay,
     : EventSource(event_list, "PcmDevice"), _handler_delay(handlerDelay),
       _poll_delay(pollDelay) {
 
-    if (device_init("htsim", &_pcm_device_ptr) != SUCCESS) {
+    if (device_init("htsim", &_pcm_device_ptr) != PCM_SUCCESS) {
         LOG_FATAL("Failed to init PCM device\n");
     }
     _next_sched = eventlist().now() + _poll_delay;
@@ -14,7 +14,7 @@ PcmDevice::PcmDevice(EventList &event_list, simtime_picosec handlerDelay,
 }
 
 PcmDevice::~PcmDevice() {
-    if (device_destroy(_pcm_device_ptr) != SUCCESS) {
+    if (device_destroy(_pcm_device_ptr) != PCM_SUCCESS) {
         LOG_FATAL("Failed to destroy PCM device\n");
     }
 }
