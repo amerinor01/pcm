@@ -77,6 +77,36 @@ int device_destroy(device_t *device) {
     return ret;
 }
 
+int device_pcmc_init(device_t *dev_ctx, const char *algo_name,
+                     pcm_handle_t *algo_handler) {
+    pcm_handle_t new_handle;
+    if (register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    if (register_algorithm_pcmc(algo_name, new_handle) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    if (activate_pcmc(new_handle) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    *algo_handler = new_handle;
+
+    LOG_INFO("[dev=%p config=%p] algorithm %s registered and activated\n",
+             dev_ctx, new_handle, algo_name);
+
+    return PCM_SUCCESS;
+}
+
+int device_pcmc_destroy(pcm_handle_t algo_handler) {
+    if (deactivate_pcmc(algo_handler) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    if (deregister_pcmc(algo_handler) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    return PCM_SUCCESS;
+}
+
 const struct algorithm_config *
 device_flow_id_to_config_match(const device_t *device, pcm_addr_t addr) {
     struct slist_entry *item, *prev;

@@ -2,7 +2,7 @@
 #include "pcm.h"
 #include "smartt.h"
 
-int smartt_pcmc_init(pcm_handle_t new_handle) {
+int __smartt_pcmc_init(pcm_handle_t new_handle) {
     EXIT_ON_ERR(
         register_local_state_pcmc(SMARTT_LOCAL_STATE_ACKED_BYTES, new_handle),
         PCM_SUCCESS);

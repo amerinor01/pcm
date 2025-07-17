@@ -8,47 +8,35 @@
 #include "fabric_params.h"
 #include "pcm.h"
 
-#define SWIFT_RETX_RESET_THRESHOLD 4         /* as in S3.6 */
-#define SWIFT_H (FABRIC_BASE_RTT / 6.55)     //  Value is a guess
-#define SWIFT_FS_RANGE (5 * FABRIC_BASE_RTT) //  Value is a guess
-#define SWIFT_FS_ALPHA                                                         \
-    (SWIFT_FS_RANGE /                                                          \
-     ((1.0 / sqrt(FABRIC_MIN_CWND)) - (1.0 / sqrt(FABRIC_MAX_CWND))))
-#define SWIFT_FS_BETA -(SWIFT_FS_ALPHA / sqrt(FABRIC_MAX_CWND))
-#define SWIFT_MAX_MDF 0.5 // max multiplicate decrease factor.  Value is a guess
-#define SWIFT_AI 1.0      // increase constant.  Value is a guess
-#define SWIFT_BETA 0.8    // decrease constant.  Value is a guess
+#define MSS FABRIC_LINK_MSS
+#define BRTT FABRIC_BRTT
+#define BDP FABRIC_BDP
+#define HOP_COUNT FABRIC_HOP_COUNT
+#define RTX_RESET_THRESH 4         /* as in S3.6 */
+#define H (FABRIC_BRTT / 6.55)     //  Value is a guess
+#define FS_RANGE (5 * FABRIC_BRTT) //  Value is a guess
+#define FS_ALPHA                                                               \
+    (FS_RANGE / ((1.0 / sqrt(FABRIC_MIN_CWND)) - (1.0 / sqrt(FABRIC_MAX_CWND))))
+#define FS_BETA -(FS_ALPHA / sqrt(FABRIC_MAX_CWND))
+#define MAX_MDF 0.5 // max multiplicate decrease factor.  Value is a guess
+#define AI 1.0      // increase constant.  Value is a guess
+#define BETA 0.8    // decrease constant.  Value is a guess
 
 enum swift_signal_idxs {
-    SWIFT_SIG_IDX_NACK = 0,
-    SWIFT_SIG_IDX_RTO = 1,
-    SWIFT_SIG_IDX_ACK = 2,
-    SWIFT_SIG_IDX_RTT = 3,
-    SIWFT_SIG_IDX_ELAPSED_TIME = 4
+    SIG_NACK = 0,
+    SIG_RTO = 1,
+    SIG_ACK = 2,
+    SIG_RTT = 3,
+    SIG_ELAPSED_TIME = 4
 };
 
-enum swift_control_idxs { SWIFT_CTRL_IDX_CWND = 0 };
+enum swift_control_idxs { CTRL_CWND = 0 };
 
 enum swift_local_var_idxs {
-    SWIFT_LOCAL_STATE_IDX_ACKED = 0,
-    SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE = 1,
-    SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT = 2,
-    SWIFT_LOCAL_STATE_IDX_RTT_ESTIM = 3
-};
-
-enum swift_consts_idxs {
-    SWIFT_CONST_BRTT = 0,
-    SWIFT_CONST_BDP = 1,
-    SWIFT_CONST_MSS = 2,
-    SWIFT_CONST_HOP_COUNT = 3,
-    SWIFT_CONST_RTX_THRESH = 4,
-    SWIFT_CONST_AI = 5,
-    SWIFT_CONST_MAX_MDF = 6,
-    SWIFT_CONST_FS_ALPHA = 7,
-    SWIFT_CONST_FS_BETA = 8,
-    SWIFT_CONST_FS_RANGE = 9,
-    SWIFT_CONST_H = 10,
-    SWIFT_CONST_BETA = 11
+    VAR_ACKED = 0,
+    VAR_T_LAST_DECREASE = 1,
+    VAR_RTX_CNT = 2,
+    VAR_RTT_ESTIM = 3
 };
 
 struct swift_state_snapshot {
@@ -64,20 +52,6 @@ struct swift_state_snapshot {
     pcm_uint cwnd_prev;
     pcm_uint retransmit_cnt;
     bool can_decrease;
-    struct swift_constants {
-        pcm_uint brtt;
-        pcm_uint bdp;
-        pcm_uint mss;
-        pcm_uint hop_count;
-        pcm_uint rtx_thresh;
-        pcm_float ai;
-        pcm_float max_mdf;
-        pcm_float fs_alpha;
-        pcm_float fs_beta;
-        pcm_float fs_range;
-        pcm_float h;
-        pcm_float beta;
-    } consts;
 };
 
 #ifdef HANDLER_BUILD
@@ -88,7 +62,7 @@ int algorithm_main();
 extern "C" {
 #endif
 
-int swift_pcmc_init(pcm_handle_t new_handle);
+int __swift_pcmc_init(pcm_handle_t new_handle);
 
 #ifdef __cplusplus
 }

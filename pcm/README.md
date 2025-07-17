@@ -17,7 +17,7 @@
     - `CC=gcc make` - change compiler to GCC (default is Clang)
 2. `export LD_LIBRARY_PATH=$(pwd)/lib/:$LD_LIBRARY_PATH`
 3. `export PATH=$(pwd)/bin/:$PATH`
-4. `traffic_gen_app 1 10000000 dctcp $(pwd)/lib/libdctcp.so &> dctcp.log` runs single flow for 10 seconds (10000000 us) and outputs log into the `dctcp.log` file
+4. `traffic_gen_app 1 10000000 dctcp &> dctcp.log` runs single flow for 10 seconds (10000000 us) and outputs log into the `dctcp.log` file
 5. `python3 ./apps/traffic_gen/cwnd_parser.py dctcp.log cwnd.png` - parse log from the previous step and produces congestion window evolution plot on the screen and into `cwnd.png`:
 ![](dctcp_cwnd.png)
 
@@ -34,6 +34,6 @@
 For now, the supported htsim version is `spcl/HTSIM` on `lgs_stable` branch.
 1. Edit root `Makefile` to supply the path to the htsim directory that contains `libhtsim.a` and all related htsim sources
 2. `BUILD_HTSIM_FLOW_PLUGIN=1 make` - Note: all warnings are coming from the htsim side
-3. `./bin/htsim_flow_app -o uec_entry -k 1 -algorithm smartt -nodes 1024 -q 4452000 -strat ecmp_host_random2_ecn -number_entropies 256 -kmin 20 -kmax 80 -target_rtt_percentage_over_base 50 -use_fast_increase 1 -use_super_fast_increase 1 -fast_drop 1 -seed 919 -queue_type composite -reuse_entropy 1 -tm ./apps/htsim/incast_8_1MB.cm -x_gain 2 -y_gain 2.5 -w_gain 2 -z_gain 0.8  -collect_data 1 -pcm_algorithm smartt -pcm_algorithm_handler $(pwd)/lib/libsmartt.so &> pcm.log`
+3. `./bin/htsim_flow_app -o uec_entry -k 1 -algorithm smartt -nodes 1024 -q 4452000 -strat ecmp_host_random2_ecn -number_entropies 256 -kmin 20 -kmax 80 -target_rtt_percentage_over_base 50 -use_fast_increase 1 -use_super_fast_increase 1 -fast_drop 1 -seed 919 -queue_type composite -reuse_entropy 1 -tm ./apps/htsim/incast_8_1MB.cm -x_gain 2 -y_gain 2.5 -w_gain 2 -z_gain 0.8  -collect_data 1 -pcm_algorithm smartt &> pcm.log`
 4. `python3 apps/htsim/htsim_pcm_cwnd_parser.py pcm.log pcm_cwnd.png`:
 ![](smartt_htsim.png)

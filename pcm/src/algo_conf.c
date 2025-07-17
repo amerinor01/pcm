@@ -3,6 +3,35 @@
 #include "impl.h"
 #include "util.h"
 
+static int shared_symbol_open(const char *lib_name, char *fn_name,
+                              void **so_handle, void **fn_ptr) {
+
+    *so_handle = dlopen(lib_name, RTLD_NOW | RTLD_LOCAL);
+    if (!(*so_handle)) {
+        LOG_CRIT("dlopen(%s) failed with %s", lib_name, dlerror());
+        return PCM_ERROR;
+    }
+
+    *fn_ptr = dlsym(*so_handle, fn_name);
+    if (!(*fn_ptr)) {
+        dlclose(*so_handle);
+        LOG_CRIT("dlsym(%s) failed with %s", fn_name, dlerror());
+        return PCM_ERROR;
+    }
+
+    LOG_DBG("dlsym(%s, %s)=%p", lib_name, fn_name, *fn_ptr);
+
+    return PCM_SUCCESS;
+}
+
+static int shared_symbol_close(void *so_handle) {
+    if (dlclose(so_handle)) {
+        LOG_CRIT("dlclose() failed with %s", dlerror());
+        return PCM_ERROR;
+    }
+    return PCM_SUCCESS;
+}
+
 int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
     if (!device)
         return PCM_ERROR;
@@ -53,9 +82,9 @@ int algorithm_config_destroy(struct algorithm_config *config) {
     ATTR_LIST_FREE(&config->constants_list, struct constant_attr,
                    config->num_constants);
 
-    if (dlclose(config->dlopen_handle)) {
-        LOG_CRIT("[dev=%p conf=%p] dlclose() failed with %s", config->device,
-                 config, dlerror());
+    if (shared_symbol_close(config->dlopen_handle) != PCM_SUCCESS) {
+        LOG_CRIT("[dev=%p conf=%p] failed to close handler dlopen object",
+                 config->device, config);
         ret = PCM_ERROR;
     }
 
@@ -63,6 +92,68 @@ int algorithm_config_destroy(struct algorithm_config *config) {
     free(config);
 
     return ret;
+}
+
+int algorithm_config_compile(struct algorithm_config *config,
+                             const char *algo_name) {
+    if ((strlen(algo_name) + 1) > PCMC_MAX_LEN_ALGO_NAME) {
+        LOG_CRIT("Algorithm name length exceeds limit of %d characters",
+                 PCMC_MAX_LEN_ALGO_NAME);
+        return PCM_ERROR;
+    }
+
+    char lib_name[PCMC_MAX_LIB_NAME];
+
+    // 1. finish the PCMC handle initialization
+    // open lib<algo_name>_pcmc.so and call __<algo_name>_pcmc_init()
+    if (sprintf(lib_name, "lib%s_pcmc.so", algo_name) < 0) {
+        LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init library name",
+                 config->device, config);
+        return PCM_ERROR;
+    }
+
+    char pcmc_init_fn_name[PCMC_MAX_INIT_FN_NAME];
+    if (sprintf(pcmc_init_fn_name, "__%s_pcmc_init", algo_name) < 0) {
+        LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init function name",
+                 config->device, config);
+        return PCM_ERROR;
+    }
+
+    pcmc_init_function_t pcmc_init_fn = NULL;
+    void *so_handle = NULL;
+    void *raw_fn_ptr = NULL;
+    if (shared_symbol_open(lib_name, pcmc_init_fn_name, &so_handle,
+                           &raw_fn_ptr))
+        return PCM_ERROR;
+    pcmc_init_fn = (pcmc_init_function_t)raw_fn_ptr;
+
+    if (pcmc_init_fn(config) != PCM_SUCCESS) {
+        LOG_CRIT("[dev=%p conf=%p] %s failed to initialize PCMC config",
+                 config->device, config, pcmc_init_fn_name);
+        return PCM_ERROR;
+    }
+
+    if (shared_symbol_close(so_handle) != PCM_SUCCESS) {
+        LOG_CRIT("[dev=%p conf=%p] failed to close %s object", config->device,
+                 config, lib_name);
+        return PCM_ERROR;
+    }
+
+    // 2. Cache pointer to the algorithm entry point in the config
+    if (sprintf(lib_name, "lib%s.so", algo_name) < 0) {
+        LOG_CRIT("[dev=%p conf=%p] failed to format algorithm library name",
+                 config->device, config);
+        return PCM_ERROR;
+    }
+
+    raw_fn_ptr = NULL;
+    if (shared_symbol_open(lib_name, __algorithm_entry_point_symbol,
+                           &config->dlopen_handle, &raw_fn_ptr))
+        return PCM_ERROR;
+    config->algorithm_fn = (algo_function_t)raw_fn_ptr;
+    // config->dlopen_handle is closed upon the config gets distroyed
+
+    return PCM_SUCCESS;
 }
 
 int algorithm_config_activate(struct algorithm_config *config) {
@@ -117,7 +208,8 @@ int algorithm_config_matching_rule_add(struct algorithm_config *config,
 }
 
 int algorithm_config_signal_add(struct algorithm_config *config,
-                                pcm_signal_t signal, pcm_signal_accum_t accum_type,
+                                pcm_signal_t signal,
+                                pcm_signal_accum_t accum_type,
                                 size_t user_index) {
     ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->signals_list,
                                        struct signal_attr, user_index);
@@ -276,33 +368,5 @@ int algorithm_config_constant_float_set(struct algorithm_config *config,
     pcm_uint encoded_val = encode_pcm_float(value);
     ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
                        user_index, encoded_val, attr);
-    return PCM_SUCCESS;
-}
-
-int algorithm_config_compile(struct algorithm_config *config,
-                             const char *compile_path, char **err) {
-    config->dlopen_handle = dlopen(compile_path, RTLD_NOW | RTLD_LOCAL);
-    if (!config->dlopen_handle) {
-        LOG_CRIT("[dev=%p conf=%p] dlopen(%s) failed with %s", config->device,
-                 config, compile_path, dlerror());
-        *err = dlerror();
-        return PCM_ERROR;
-    }
-
-    config->algorithm_fn = (algo_function_t)dlsym(
-        config->dlopen_handle, __algorithm_entry_point_symbol);
-    if (!config->algorithm_fn) {
-        *err = dlerror();
-        dlclose(config->dlopen_handle);
-        LOG_CRIT("[dev=%p conf=%p] %s symbol lookup in %s failed with %s",
-                 config->device, config, __algorithm_entry_point_symbol,
-                 compile_path, dlerror());
-        return PCM_ERROR;
-    }
-
-    LOG_DBG("[dev=%p conf=%p] loaded %s symbol=%p from file=%s", config->device,
-            config, __algorithm_entry_point_symbol, config->algorithm_fn,
-            compile_path);
-
     return PCM_SUCCESS;
 }

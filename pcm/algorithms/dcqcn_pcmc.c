@@ -2,7 +2,7 @@
 #include "dcqcn.h"
 #include "pcm.h"
 
-int dcqcn_pcmc_init(pcm_handle_t new_handle) {
+int __dcqcn_pcmc_init(pcm_handle_t new_handle) {
     EXIT_ON_ERR(register_signal_pcmc(PCM_SIG_ECN, PCM_SIG_ACCUM_SUM, DCQCN_SIG_IDX_ECN,
                                      new_handle),
                 PCM_SUCCESS);

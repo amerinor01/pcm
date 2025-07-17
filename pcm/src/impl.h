@@ -59,6 +59,10 @@ struct constant_attr {
 };
 
 typedef int (*algo_function_t)(void *, void *, void *, void *, void *, void *);
+typedef int (*pcmc_init_function_t)(pcm_handle_t);
+#define PCMC_MAX_INIT_FN_NAME 256
+#define PCMC_MAX_LIB_NAME 256
+#define PCMC_MAX_LEN_ALGO_NAME (PCMC_MAX_INIT_FN_NAME / 2)
 
 #define ALGO_CONF_MAX_NUM_SIGNALS 16
 #define ALGO_CONF_MAX_NUM_CONTROLS 2
@@ -67,9 +71,11 @@ typedef int (*algo_function_t)(void *, void *, void *, void *, void *, void *);
 
 struct algorithm_config {
     struct device *device;
-    struct slist_entry list_entry;
     bool active;
     pcm_addr_mask_t matching_rule_mask;
+    struct slist_entry list_entry;
+    void *dlopen_handle;
+    algo_function_t algorithm_fn;
     struct slist signals_list;
     size_t num_signals;
     struct slist controls_list;
@@ -78,8 +84,6 @@ struct algorithm_config {
     size_t num_local_states;
     struct slist constants_list;
     size_t num_constants;
-    void *dlopen_handle;
-    algo_function_t algorithm_fn;
 };
 
 struct flow_plugin_ops {
@@ -169,7 +173,8 @@ int algorithm_config_matching_rule_add(struct algorithm_config *config,
 int algorithm_config_activate(struct algorithm_config *config);
 int algorithm_config_deactivate(struct algorithm_config *config);
 int algorithm_config_signal_add(struct algorithm_config *config,
-                                pcm_signal_t signal, pcm_signal_accum_t accum_type,
+                                pcm_signal_t signal,
+                                pcm_signal_accum_t accum_type,
                                 size_t user_index);
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
                                         size_t user_index, pcm_uint threshold);
@@ -198,7 +203,7 @@ int algorithm_config_constant_int_set(struct algorithm_config *config,
 int algorithm_config_constant_float_set(struct algorithm_config *config,
                                         size_t user_index, pcm_float value);
 int algorithm_config_compile(struct algorithm_config *config,
-                             const char *compile_path, char **err);
+                             const char *algo_name);
 int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
 int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
 const struct algorithm_config *

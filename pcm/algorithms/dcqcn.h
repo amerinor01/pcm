@@ -66,7 +66,7 @@ int algorithm_main();
 extern "C" {
 #endif
 
-int dcqcn_pcmc_init(pcm_handle_t new_handle);
+int __dcqcn_pcmc_init(pcm_handle_t new_handle);
 
 #ifdef __cplusplus
 }

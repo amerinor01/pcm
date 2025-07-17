@@ -1,8 +1,8 @@
 #include "impl.h"
 
-pcm_err_t register_pcmc(void *dev, pcm_addr_t src_addr, pcm_addr_mask_t src_addr_mask,
-                    pcm_addr_t dst_addr, pcm_addr_mask_t dst_addr_mask,
-                    pcm_handle_t *handle) {
+pcm_err_t register_pcmc(void *dev, pcm_addr_t src_addr,
+                        pcm_addr_mask_t src_addr_mask, pcm_addr_t dst_addr,
+                        pcm_addr_mask_t dst_addr_mask, pcm_handle_t *handle) {
     int ret = PCM_SUCCESS;
     struct algorithm_config *new_config;
 
@@ -34,27 +34,29 @@ pcm_err_t deactivate_pcmc(pcm_handle_t handle) {
     return algorithm_config_deactivate((struct algorithm_config *)handle);
 }
 
-pcm_err_t register_signal_pcmc(pcm_signal_t signal, pcm_signal_accum_t accum_type,
-                           size_t user_index, pcm_handle_t handle) {
+pcm_err_t register_signal_pcmc(pcm_signal_t signal,
+                               pcm_signal_accum_t accum_type, size_t user_index,
+                               pcm_handle_t handle) {
     return algorithm_config_signal_add((struct algorithm_config *)handle,
                                        signal, accum_type, user_index);
 }
 
-pcm_err_t register_signal_invoke_trigger_pcmc(size_t user_index, pcm_uint threshold,
-                                          pcm_handle_t handle) {
+pcm_err_t register_signal_invoke_trigger_pcmc(size_t user_index,
+                                              pcm_uint threshold,
+                                              pcm_handle_t handle) {
     return algorithm_config_signal_trigger_set(
         (struct algorithm_config *)handle, user_index, threshold);
 }
 
 pcm_err_t register_control_pcmc(pcm_control_t control, size_t user_index,
-                            pcm_handle_t handle) {
+                                pcm_handle_t handle) {
     return algorithm_config_control_add((struct algorithm_config *)handle,
                                         control, user_index);
 }
 
 pcm_err_t register_control_initial_value_pcmc(size_t user_index,
-                                          pcm_uint initial_value,
-                                          pcm_handle_t handle) {
+                                              pcm_uint initial_value,
+                                              pcm_handle_t handle) {
     return algorithm_config_control_initial_value_set(
         (struct algorithm_config *)handle, user_index, initial_value);
 }
@@ -65,29 +67,29 @@ pcm_err_t register_local_state_pcmc(size_t user_index, pcm_handle_t handle) {
 }
 
 pcm_err_t register_local_state_initial_value_float_pcmc(size_t user_index,
-                                                    pcm_float initial_value,
-                                                    pcm_handle_t handle) {
+                                                        pcm_float initial_value,
+                                                        pcm_handle_t handle) {
     return algorithm_config_local_state_float_set(
         (struct algorithm_config *)handle, user_index, initial_value);
 }
 
 pcm_err_t register_local_state_initial_value_int_pcmc(size_t user_index,
-                                                  pcm_int initial_value,
-                                                  pcm_handle_t handle) {
+                                                      pcm_int initial_value,
+                                                      pcm_handle_t handle) {
     return algorithm_config_local_state_int_set(
         (struct algorithm_config *)handle, user_index, initial_value);
 }
 
 pcm_err_t register_local_state_initial_value_uint_pcmc(size_t user_index,
-                                                   pcm_uint initial_value,
-                                                   pcm_handle_t handle) {
+                                                       pcm_uint initial_value,
+                                                       pcm_handle_t handle) {
     return algorithm_config_local_state_uint_set(
         (struct algorithm_config *)handle, user_index, initial_value);
 }
 
 pcm_err_t register_local_state_initial_value_pcmc(size_t user_index,
-                                              pcm_uint initial_value,
-                                              pcm_handle_t handle) {
+                                                  pcm_uint initial_value,
+                                                  pcm_handle_t handle) {
     return register_local_state_initial_value_uint_pcmc(user_index,
                                                         initial_value, handle);
 }
@@ -98,25 +100,24 @@ pcm_err_t register_constant_pcmc(size_t user_index, pcm_handle_t handle) {
 }
 
 pcm_err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
-                                         pcm_handle_t handle) {
+                                             pcm_handle_t handle) {
     return algorithm_config_constant_float_set(
         (struct algorithm_config *)handle, user_index, value);
 }
 
 pcm_err_t register_constant_value_int_pcmc(size_t user_index, pcm_int value,
-                                       pcm_handle_t handle) {
+                                           pcm_handle_t handle) {
     return algorithm_config_constant_int_set((struct algorithm_config *)handle,
                                              user_index, value);
 }
 
 pcm_err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
-                                        pcm_handle_t handle) {
+                                            pcm_handle_t handle) {
     return algorithm_config_constant_uint_set((struct algorithm_config *)handle,
                                               user_index, value);
 }
 
-pcm_err_t register_algorithm_pcmc(const char *compile_path,
-                              char **compile_output_string, pcm_handle_t handle) {
+pcm_err_t register_algorithm_pcmc(const char *algo_name, pcm_handle_t handle) {
     return algorithm_config_compile((struct algorithm_config *)handle,
-                                    compile_path, compile_output_string);
+                                    algo_name);
 }

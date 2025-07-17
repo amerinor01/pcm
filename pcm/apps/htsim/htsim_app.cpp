@@ -91,52 +91,6 @@ void print_path(std::ofstream &paths, const Route *rt) {
     paths << endl;
 }
 
-int pcmc_init(const char *algo_name, device_t *dev_ctx,
-              const char *reno_handler_path, pcm_handle_t *algo_handler) {
-
-    pcm_handle_t new_handle;
-    EXIT_ON_ERR(register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle),
-                PCM_SUCCESS);
-
-    if (!strcmp(algo_name, "newreno")) {
-        cout << "Algorithm requested: NewReno" << endl;
-        EXIT_ON_ERR(tcp_pcmc_init(new_handle), PCM_SUCCESS);
-    } else if (!strcmp(algo_name, "dctcp")) {
-        cout << "Algorithm requested: DCTCP" << endl;
-        EXIT_ON_ERR(tcp_pcmc_init(new_handle), PCM_SUCCESS);
-        EXIT_ON_ERR(dctcp_pcmc_init(new_handle), PCM_SUCCESS);
-    } else if (!strcmp(algo_name, "swift")) {
-        cout << "Algorithm requested: Swift" << endl;
-        EXIT_ON_ERR(swift_pcmc_init(new_handle), PCM_SUCCESS);
-    } else if (!strcmp(algo_name, "dcqcn")) {
-        cout << "Algorithm requested: DCQCN" << endl;
-        EXIT_ON_ERR(dcqcn_pcmc_init(new_handle), PCM_SUCCESS);
-    } else if (!strcmp(algo_name, "smartt")) {
-        cout << "Algorithm requested: SMaRTT" << endl;
-        EXIT_ON_ERR(smartt_pcmc_init(new_handle), PCM_SUCCESS);
-    } else {
-        cerr << "Unknown algorithm name " << algo_name << endl;
-        exit(EXIT_FAILURE);
-    }
-
-    char *compile_out;
-    EXIT_ON_ERR(
-        register_algorithm_pcmc(reno_handler_path, &compile_out, new_handle),
-        PCM_SUCCESS);
-
-    EXIT_ON_ERR(activate_pcmc(new_handle), PCM_SUCCESS);
-
-    *algo_handler = new_handle;
-
-    return 0;
-}
-
-int pcmc_destroy(pcm_handle_t algo_handler) {
-    EXIT_ON_ERR(deactivate_pcmc(algo_handler), PCM_SUCCESS);
-    EXIT_ON_ERR(deregister_pcmc(algo_handler), PCM_SUCCESS);
-    return 0;
-}
-
 int main(int argc, char **argv) {
     Packet::set_packet_size(PKT_SIZE_MODERN);
     simtime_picosec end_time = timeFromUs(1000.0);
@@ -215,7 +169,6 @@ int main(int argc, char **argv) {
     uint64_t max_queue_size = 0;
 
     std::string pcm_algo;
-    std::string pcm_algo_handler_path;
     bool pcm_ignore = false;
 
     int i = 1;
@@ -654,10 +607,6 @@ int main(int argc, char **argv) {
             pcm_algo = argv[i + 1];
             cout << "PCM algo requested " << pcm_algo << endl;
             i++;
-        } else if (!strcmp(argv[i], "-pcm_algorithm_handler")) {
-            pcm_algo_handler_path = argv[i + 1];
-            cout << "PCM algo handler " << pcm_algo_handler_path << endl;
-            i++;
         } else if (!strcmp(argv[i], "-pcm_ignore")) {
             pcm_ignore = true;
         } else
@@ -841,9 +790,8 @@ int main(int argc, char **argv) {
 
     PcmDevice pcm_device(eventlist, 1000, 1000);
     pcm_handle_t pcm_algo_handler;
-    if (pcmc_init(pcm_algo.c_str(), pcm_device.getDevicePtr(),
-                  pcm_algo_handler_path.c_str(),
-                  &pcm_algo_handler) != PCM_SUCCESS) {
+    if (device_pcmc_init(pcm_device.getDevicePtr(), pcm_algo.c_str(),
+                         &pcm_algo_handler) != PCM_SUCCESS) {
         exit(EXIT_FAILURE);
     }
 
@@ -1205,7 +1153,7 @@ int main(int argc, char **argv) {
     for (int i = 0; i < 10; i++)
         cout << "Hop " << i << " Count " << counts[i] << endl;
 
-    pcmc_destroy(pcm_algo_handler);
+    device_pcmc_destroy(pcm_algo_handler);
 }
 
 string ntoa(double n) {

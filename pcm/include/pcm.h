@@ -87,6 +87,16 @@ pcm_err_t register_pcmc(void *dev, pcm_addr_t src_addr,
 pcm_err_t deregister_pcmc(pcm_handle_t handle);
 
 /**
+ * @brief Compile and register an algorithm with PCMC.
+ *
+ * @param[in] algo_name Name of the algorithm. LD_LIBRARY_PATH must
+ * contain path to the lib<algo_name>.so and lib<algo_name>_pcmc.so.
+ * @param[in] handle       Handle to associate the compiled algorithm with.
+ * @return SUCCESS on success, PCM_ERROR on failure.
+ */
+pcm_err_t register_algorithm_pcmc(const char *algo_name, pcm_handle_t handle);
+
+/**
  * @brief Activate the PCMC handle, enabling PCM-based management on new PDCs
  * that satisfy PCMC's matching rule.
  *
@@ -293,33 +303,21 @@ pcm_err_t register_constant_value_uint_pcmc(size_t user_index, pcm_uint value,
 pcm_err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
                                              pcm_handle_t handle);
 
-/**
- * @brief Compile and register an algorithm with PCMC.
- *
- * @param[in] compile_path Path to the directory containing algorithm
- * definition.
- * @param[out] compile_output_string Implementation defined null-terminated
- *        string that contains compile-time outputs.
- * @param[in] handle       Handle to associate the compiled algorithm with.
- * @return SUCCESS on success, PCM_ERROR on failure.
- */
-pcm_err_t register_algorithm_pcmc(const char *compile_path,
-                                  char **compile_output_string,
-                                  pcm_handle_t handle);
-
 /* Handler-side API */
 
 // timos: the unoptimized handlers only use ctx, only when we use the
 // optimizing compiler passes will we make use of the other args, so
 // we mark them as unused here.
 #define ALGO_CTX_ARGS                                                          \
-    void *ctx, __attribute__((unused)) void *signals,                          \
+    __attribute__((unused)) void *ctx, __attribute__((unused)) void *signals,  \
         __attribute__((unused)) void *thresholds,                              \
         __attribute__((unused)) void *controls,                                \
         __attribute__((unused)) void *local_state
 #define ALGO_CTX_PASS ctx, signals, thresholds, controls, local_state
 #define __algorithm_entry_point __algorithm_main(ALGO_CTX_ARGS)
 #define __algorithm_entry_point_symbol "__algorithm_main"
+
+#define PCM_FORCE_INLINE inline __attribute__((always_inline)) 
 
 pcm_uint __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);

@@ -63,11 +63,10 @@ PCM_CPP_OBJS     := $(PCM_CPP_SRCS:%.cpp=%.o)
 PCM_LIB_OBJS     := $(PCM_C_OBJS) $(PCM_CPP_OBJS)
 PCM_LIB_TARGET   := $(LIBDIR)/libpcm.so
 
-ALGO_PLUGIN_NAMES := reno_accumulated reno_standard dctcp swift dcqcn smartt
+ALGO_PLUGIN_NAMES := newreno dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
-ALGO_PLUGIN_PCMC_NAMES := tcp swift dcqcn smartt
-ALGO_PLUGIN_PCMC_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix _pcmc.so,$(ALGO_PLUGIN_PCMC_NAMES)))
-ALGO_PLUGIN_PCMC_LDLIBS  := $(addprefix -l,$(addsuffix _pcmc,$(ALGO_PLUGIN_PCMC_NAMES)))
+ALGO_PLUGIN_PCMC_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix _pcmc.so,$(ALGO_PLUGIN_NAMES)))
+ALGO_PLUGIN_PCMC_LDLIBS  := $(addprefix -l,$(addsuffix _pcmc,$(ALGO_PLUGIN_NAMES)))
 
 # compile HAC-related optimizaitons if enabled
 ifeq ($(BUILD_HAC_PASS),1)
@@ -106,32 +105,40 @@ $(PCM_LIB_TARGET): $(PCM_LIB_OBJS)
 # Algorithm plugins
 # -----------------------------------------------
 
+# Special cases for dctcp and newreno with additional prerequisites
+$(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(ALGODIR)/tcp_utils.c $(PCM_LIB_TARGET)
+	@mkdir -p $(LIBDIR)
+	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) \
+		-o $@ $(filter %.c,$^) -L$(LIBDIR) -lpcm -lm
+
+$(LIBDIR)/libnewreno.so: $(ALGODIR)/newreno.c $(ALGODIR)/tcp_utils.c $(PCM_LIB_TARGET)
+	@mkdir -p $(LIBDIR)
+	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_NEWRENO $(LDFLAGS) \
+		-o $@ $(filter %.c,$^) -L$(LIBDIR) -lpcm -lm
+
+# General rule for other algorithms
+$(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
+	@mkdir -p $(LIBDIR)
+	$(CC) $(CFLAGS) \
+		-DHANDLER_BUILD \
+		-DBUILD_ALGO_$(shell echo $* | tr '[:lower:]' '[:upper:]') $(LDFLAGS) \
+		-o $@ \
+		$(filter %.c,$^) \
+		-L$(LIBDIR) -lpcm -lm
+
 # host-side PCMC init code
 $(LIBDIR)/lib%_pcmc.so: $(ALGODIR)/%_pcmc.c $(PCM_LIB_TARGET)
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(LDFLAGS) \
 	    -o $@ $< -L$(LIBDIR) -lpcm
 
-# DCTCP is special as it needs BUILD_ALGO_DCTCP
-$(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET)
-	@mkdir -p $(LIBDIR)
-	$(CC) $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP $(LDFLAGS) \
-	    -o $@ $< -L$(LIBDIR) -lpcm -lm
-
-# other algos
-$(LIBDIR)/lib%.so: $(ALGODIR)/%.c $(PCM_LIB_TARGET)
-	@mkdir -p $(LIBDIR)
-	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@ $< -L$(LIBDIR) -lpcm -lm
-
-
 #-----------------------------------------------
 # HAC-optimized handlers (dirty, make an actual HAC script and clean up)
 #-----------------------------------------------
 
-# DCTCP is special as it needs BUILD_ALGO_DCTCP  (why? looks ugly):
-$(LIBDIR)/libdctcp.ll: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET) $(HAC_PASS)
+$(LIBDIR)/libdctcp.ll: $(ALGODIR)/dctcp.c $(ALGODIR)/tcp_utils.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	@mkdir -p $(LIBDIR)
-	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP -o $@ $<
+	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_DCTCP -o $@ $(filter %.c,$^)
 	opt -load-pass-plugin $(HAC_PASS) -passes=replace-call-with-load -S $@ -o $@_opt.ll
 	opt -O3 $@_opt.ll -o $@
 	@rm $@_opt.ll
@@ -139,10 +146,23 @@ $(LIBDIR)/libdctcp.ll: $(ALGODIR)/dctcp.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@.so $@.o -L$(LIBDIR) -lpcm -lm
 	@rm $@.o
 
-# other algos
+$(LIBDIR)/libnewreno.ll: $(ALGODIR)/newreno.c $(ALGODIR)/tcp_utils.c $(PCM_LIB_TARGET) $(HAC_PASS)
+	@mkdir -p $(LIBDIR)
+	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -DBUILD_ALGO_NEWRENO -o $@ $(filter %.c,$^)
+	opt -load-pass-plugin $(HAC_PASS) -passes=replace-call-with-load -S $@ -o $@_opt.ll
+	opt -O3 $@_opt.ll -o $@
+	@rm $@_opt.ll
+	llc -filetype=obj -relocation-model=pic $@ -o $@.o
+	$(CC) $(CFLAGS) -DHANDLER_BUILD $(LDFLAGS) -o $@.so $@.o -L$(LIBDIR) -lpcm -lm
+	@rm $@.o
+
+# General rule for other algorithms
 $(LIBDIR)/lib%.ll: $(ALGODIR)/%.c $(PCM_LIB_TARGET) $(HAC_PASS)
 	@mkdir -p $(LIBDIR)
-	clang -S -emit-llvm $(CFLAGS) -DHANDLER_BUILD -o $@ $<
+	clang -S -emit-llvm $(CFLAGS) \
+		-DHANDLER_BUILD \
+		-DBUILD_ALGO_$(shell echo $* | tr '[:lower:]' '[:upper:]') \
+		-o $@ $(filter %.c,$^)
 	opt -load-pass-plugin $(HAC_PASS) -passes=replace-call-with-load -S $@ -o $@_opt.ll
 	opt -O3 $@_opt.ll -o $@
 	@rm $@_opt.ll
@@ -195,5 +215,7 @@ clean:
 	@if [ -n "$(HTSIM_APP_TARGET)" ]; then rm -f $(HTSIM_APP_TARGET); fi
 	@if [ -n "$(HTSIM_APP_TARGET)" ]; then rm -f $(HTSIM_APP_OBJS); fi
 	@rm -rf HAC/build
+	@rm -f $(LIBDIR)/*.ll $(LIBDIR)/*.ll.so
+	@rm -rf $(LIBDIR)/*.dSYM
 distclean: clean
 	rm -rf $(LIBDIR) $(BINDIR)

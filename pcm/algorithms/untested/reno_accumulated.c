@@ -34,16 +34,14 @@ int algorithm_main() {
      * which is unsafe (unless we have memory protection).
      * Can we ensure safety here through static analysis?
      */
-    pcm_uint num_nacks = get_signal(TCP_SIG_IDX_NACK);
-    pcm_uint num_rtos = get_signal(TCP_SIG_IDX_RTO);
-    pcm_uint num_acks = get_signal(TCP_SIG_IDX_ACK);
+    pcm_uint num_nacks = get_signal(SIG_NACK);
+    pcm_uint num_rtos = get_signal(SIG_RTO);
+    pcm_uint num_acks = get_signal(SIG_ACK);
 
-    pcm_uint mss = get_constant_uint(TCP_CONST_MSS);
+    pcm_uint cwnd = get_control(CTRL_CWND) / MSS;
 
-    pcm_uint cwnd = get_control(TCP_CTRL_IDX_CWND) / mss;
-
-    pcm_uint ssthresh = get_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH);
-    pcm_uint tot_acked = get_local_state(TCP_LOCAL_STATE_IDX_ACKED) + num_acks;
+    pcm_uint ssthresh = get_local_state(VAR_SSTHRESH);
+    pcm_uint tot_acked = get_local_state(VAR_TOT_ACKED) + num_acks;
 
     pcm_uint num_acks_consumed = 0;
 
@@ -53,7 +51,7 @@ int algorithm_main() {
         ssthresh = MAX(cwnd >> num_nacks, 2U);
         cwnd = ssthresh;
         tot_acked = 0;
-        update_signal(TCP_SIG_IDX_NACK, -1);
+        update_signal(SIG_NACK, -1);
     }
 
     /* 2) Timeout recovery */
@@ -66,7 +64,7 @@ int algorithm_main() {
         } else {
             num_rtos = 0;
         }
-        update_signal(TCP_SIG_IDX_RTO, -1);
+        update_signal(SIG_RTO, -1);
     }
 
     /*
@@ -111,10 +109,10 @@ int algorithm_main() {
         }
     }
 
-    update_signal(TCP_SIG_IDX_ACK, -num_acks_consumed);
-    set_control(TCP_CTRL_IDX_CWND, cwnd / mss);
-    set_local_state(TCP_LOCAL_STATE_IDX_ACKED, tot_acked);
-    set_local_state(TCP_LOCAL_STATE_IDX_SSTHRESH, ssthresh);
+    update_signal(SIG_ACK, -num_acks_consumed);
+    set_control(CTRL_CWND, cwnd / MSS);
+    set_local_state(VAR_TOT_ACKED, tot_acked);
+    set_local_state(VAR_SSTHRESH, ssthresh);
 
     return PCM_SUCCESS;
 }

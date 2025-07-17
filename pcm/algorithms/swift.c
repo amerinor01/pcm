@@ -1,14 +1,10 @@
 #include "swift.h"
 
-static inline pcm_float swift_target_delay(ALGO_CTX_ARGS,
-                                           struct swift_state_snapshot *state,
-                                           pcm_uint cwnd) {
-    pcm_uint fs_delay =
-        state->consts.fs_alpha / sqrtf((pcm_float)cwnd / state->consts.mss) +
-        state->consts.fs_beta;
+static inline pcm_float swift_target_delay(ALGO_CTX_ARGS, pcm_uint cwnd) {
+    pcm_uint fs_delay = FS_ALPHA / sqrtf((pcm_float)cwnd / MSS) + FS_BETA;
 
-    if (fs_delay > state->consts.fs_range)
-        fs_delay = state->consts.fs_range;
+    if (fs_delay > FS_RANGE)
+        fs_delay = FS_RANGE;
 
     if (fs_delay < 0.0)
         fs_delay = 0.0;
@@ -16,8 +12,8 @@ static inline pcm_float swift_target_delay(ALGO_CTX_ARGS,
     if (cwnd == 0)
         fs_delay = 0.0;
 
-    pcm_uint hop_delay = state->consts.hop_count * state->consts.h;
-    return state->consts.brtt + fs_delay + hop_delay;
+    pcm_uint hop_delay = HOP_COUNT * H;
+    return BRTT + fs_delay + hop_delay;
 }
 
 static inline void swift_rtt_estimate(ALGO_CTX_ARGS,
@@ -33,43 +29,41 @@ static inline void swift_nack_recovery(ALGO_CTX_ARGS,
                                        struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
     if (state->can_decrease) {
-        state->cwnd = (pcm_float)state->cwnd * (1.0 - state->consts.max_mdf);
+        state->cwnd = (pcm_float)state->cwnd * (1.0 - MAX_MDF);
     }
 }
 
 static inline void swift_timeout_recovery(ALGO_CTX_ARGS,
                                           struct swift_state_snapshot *state) {
     state->retransmit_cnt++;
-    if (state->retransmit_cnt >= state->consts.rtx_thresh) {
-        state->cwnd = state->consts.mss; // min_cwnd
+    if (state->retransmit_cnt >= RTX_RESET_THRESH) {
+        state->cwnd = MSS; // min_cwnd
     } else if (state->can_decrease) {
-        state->cwnd = (pcm_float)state->cwnd * (1.0 - state->consts.max_mdf);
+        state->cwnd = (pcm_float)state->cwnd * (1.0 - MAX_MDF);
     }
 }
 
 static inline void swift_ack_reaction(ALGO_CTX_ARGS,
                                       struct swift_state_snapshot *state) {
     state->retransmit_cnt = 0;
-    pcm_float target_delay = swift_target_delay(ALGO_CTX_PASS, state, state->cwnd);
+    pcm_float target_delay = swift_target_delay(ALGO_CTX_PASS, state->cwnd);
 
     if (state->delay < target_delay) {
         /* Additive Increase */
-        state->cwnd += state->consts.mss * state->consts.ai *
-                       (state->tot_acked / state->cwnd);
+        state->cwnd += MSS * AI * (state->tot_acked / state->cwnd);
         // Note: we DO NOT support FP fractional cwnd (yet)
         // if (state->cwnd >= 1) {
-        //    state->cwnd += state->consts.ai * state->tot_acked / state->cwnd;
+        //    state->cwnd += AI * state->tot_acked / state->cwnd;
         //} else {
-        //    state->cwnd += state->consts.ai * state->tot_acked;
+        //    state->cwnd += AI * state->tot_acked;
         //}
     } else {
         /* Multiplicative Decrease */
         if (state->can_decrease) {
-            pcm_float mdf =
-                state->consts.beta * ((pcm_float)(state->delay - target_delay) /
-                                      (pcm_float)state->delay);
-            state->cwnd = (pcm_float)state->cwnd *
-                          MAX(1.0 - mdf, 1.0 - state->consts.max_mdf);
+            pcm_float mdf = BETA * ((pcm_float)(state->delay - target_delay) /
+                                    (pcm_float)state->delay);
+            state->cwnd =
+                (pcm_float)state->cwnd * MAX(1.0 - mdf, 1.0 - MAX_MDF);
         }
     }
 }
@@ -85,34 +79,18 @@ static inline void swift_ack_reaction(ALGO_CTX_ARGS,
 int algorithm_main() {
     struct swift_state_snapshot state;
 
-    state.consts.brtt = get_constant_uint(SWIFT_CONST_BRTT);
-    state.consts.bdp = get_constant_uint(SWIFT_CONST_BDP);
-    state.consts.mss = get_constant_uint(SWIFT_CONST_MSS);
-    state.consts.hop_count = get_constant_uint(SWIFT_CONST_HOP_COUNT);
-    state.consts.rtx_thresh = get_constant_uint(SWIFT_CONST_RTX_THRESH);
-    state.consts.ai = get_constant_float(SWIFT_CONST_AI);
-    state.consts.max_mdf = get_constant_float(SWIFT_CONST_MAX_MDF);
-    state.consts.fs_range = get_constant_float(SWIFT_CONST_FS_RANGE);
-    state.consts.fs_alpha = get_constant_float(SWIFT_CONST_FS_ALPHA);
-    state.consts.fs_beta = get_constant_float(SWIFT_CONST_FS_BETA);
-    state.consts.beta = get_constant_float(SWIFT_CONST_BETA);
-    state.consts.h = get_constant_float(SWIFT_CONST_H);
+    state.num_nacks = get_signal(SIG_NACK);
+    state.num_rtos = get_signal(SIG_RTO);
+    state.num_acks = get_signal(SIG_ACK);
+    state.tot_acked = get_local_state(VAR_ACKED) + state.num_acks * MSS;
+    state.delay = get_signal(SIG_RTT);
+    state.now = get_signal(SIG_ELAPSED_TIME);
 
-    state.num_nacks = get_signal(SWIFT_SIG_IDX_NACK);
-    state.num_rtos = get_signal(SWIFT_SIG_IDX_RTO);
-    state.num_acks = get_signal(SWIFT_SIG_IDX_ACK);
-    state.tot_acked = get_local_state(SWIFT_LOCAL_STATE_IDX_ACKED) +
-                      state.num_acks * state.consts.mss;
-    state.delay = get_signal(SWIFT_SIG_IDX_RTT);
-    state.now = get_signal(SIWFT_SIG_IDX_ELAPSED_TIME);
+    state.t_last_decrease = get_local_state(VAR_T_LAST_DECREASE);
+    state.retransmit_cnt = get_local_state(VAR_RTX_CNT);
+    state.rtt_estim = get_local_state(VAR_RTT_ESTIM);
 
-    state.t_last_decrease =
-        get_local_state(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE);
-    state.retransmit_cnt =
-        get_local_state(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT);
-    state.rtt_estim = get_local_state(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM);
-
-    state.cwnd = get_control(SWIFT_CTRL_IDX_CWND);
+    state.cwnd = get_control(CTRL_CWND);
 
     state.can_decrease = (state.now - state.t_last_decrease) >= state.rtt_estim;
     state.cwnd_prev = state.cwnd;
@@ -125,10 +103,10 @@ int algorithm_main() {
 
     if (state.num_nacks > 0) {
         swift_nack_recovery(ALGO_CTX_PASS, &state);
-        update_signal(SWIFT_SIG_IDX_NACK, -1);
+        update_signal(SIG_NACK, -1);
     } else if (state.num_rtos > 0) {
         swift_timeout_recovery(ALGO_CTX_PASS, &state);
-        update_signal(SWIFT_SIG_IDX_RTO, -1);
+        update_signal(SIG_RTO, -1);
     } else if (state.tot_acked > 0) {
         swift_ack_reaction(ALGO_CTX_PASS, &state);
     } else {
@@ -151,13 +129,12 @@ int algorithm_main() {
     //    state.pacer_delay = 0;
     //}
 
-    update_signal(SWIFT_SIG_IDX_ACK, -state.num_acks);
-    set_local_state(SWIFT_LOCAL_STATE_IDX_ACKED, state.tot_acked);
-    set_local_state(SWIFT_LOCAL_STATE_IDX_T_LAST_DECREASE,
-                    state.t_last_decrease);
-    set_local_state(SWIFT_LOCAL_STATE_IDX_RETRANSMIT_CNT, state.retransmit_cnt);
-    set_local_state(SWIFT_LOCAL_STATE_IDX_RTT_ESTIM, state.rtt_estim);
-    set_control(SWIFT_CTRL_IDX_CWND, state.cwnd);
+    update_signal(SIG_ACK, -state.num_acks);
+    set_local_state(VAR_ACKED, state.tot_acked);
+    set_local_state(VAR_T_LAST_DECREASE, state.t_last_decrease);
+    set_local_state(VAR_RTX_CNT, state.retransmit_cnt);
+    set_local_state(VAR_RTT_ESTIM, state.rtt_estim);
+    set_control(CTRL_CWND, state.cwnd);
 
     return PCM_SUCCESS;
 }
