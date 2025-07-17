@@ -317,7 +317,11 @@ pcm_err_t register_constant_value_float_pcmc(size_t user_index, pcm_float value,
 #define __algorithm_entry_point __algorithm_main(ALGO_CTX_ARGS)
 #define __algorithm_entry_point_symbol "__algorithm_main"
 
-#define PCM_FORCE_INLINE inline __attribute__((always_inline)) 
+#if defined(__GNUC__) || defined(__clang__)
+#define PCM_FORCE_INLINE __attribute__((always_inline)) inline
+#else
+#define PCM_FORCE_INLINE inline
+#endif
 
 pcm_uint __flow_control_get(const void *ctx, size_t user_index);
 void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);

@@ -2,7 +2,7 @@
 """
  PCMC Code Generator
 
-Generates algorithm-specific PCMC and header files from 
+Generates algorithm-specific PCMC and header files from
 a YAML configuration file and a fabric constants YAML.
 """
 
@@ -17,21 +17,23 @@ from typing import List, Dict, Any
 class CalcLoader(yaml.SafeLoader):
     pass
 
+
 def construct_calc(loader: yaml.Loader, node: yaml.nodes.ScalarNode) -> str:
     # Treat the scalar tagged with "!eval" as a raw expression string
     return node.value
 
-CalcLoader.add_constructor('!eval', construct_calc)
+
+CalcLoader.add_constructor("!eval", construct_calc)
 
 
 class AlgorithmCodeGenerator:
 
     def __init__(self, constants_file: str, config_file: str):
-        with open(constants_file, 'r') as f:
+        with open(constants_file, "r") as f:
             self.fabric_constants: Dict[str, Any] = yaml.safe_load(f)
-        
+
         # Load algorithm config, allowing !calc tags
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             # Use custom loader so !calc yields expression strings
             self.config: Dict[str, Any] = yaml.load(f, Loader=CalcLoader)
 
@@ -48,7 +50,7 @@ class AlgorithmCodeGenerator:
         with open(header_path, "w") as f:
             f.write(header_content)
         print(f"Generated {header_path}")
-        
+
         """Generate PCMC file in the specified output directory."""
         pcmc_content = self._generate_pcmc()
         pcmc_path = os.path.join(output_dir, f"{self.algorithm_name}_pcmc.c")
@@ -71,31 +73,32 @@ class AlgorithmCodeGenerator:
         ctx: Dict[str, Any] = dict(self.fabric_constants)
         # include computed constants first
         # constants may depend on each other
-        consts = self.config.get('constants', [])
+        consts = self.config.get("constants", [])
         unresolved = consts[:]
         while unresolved:
             progress = False
             for c in unresolved[:]:
-                name = c['name']
-                raw = c.get('value')
+                name = c["name"]
+                raw = c.get("value")
                 try:
                     if isinstance(raw, str) and raw in ctx:
                         val = ctx[raw]
                     elif isinstance(raw, (int, float)):
                         val = raw
                     elif isinstance(raw, str):
-                        val = eval(raw, {**vars(math), 'sqrt': math.sqrt}, ctx)
+                        val = eval(raw, {**vars(math), "sqrt": math.sqrt}, ctx)
                     else:
                         val = raw
                 except NameError:
                     continue
-                c['value'] = val
+                c["value"] = val
                 ctx[name] = val
                 unresolved.remove(c)
                 progress = True
             if not progress:
-                missing = [c['name'] for c in unresolved]
+                missing = [c["name"] for c in unresolved]
                 raise ValueError(f"Unresolved constants: {missing}")
+
         # helper to evaluate any field
         def resolve(raw):
             if isinstance(raw, str) and raw in ctx:
@@ -103,56 +106,69 @@ class AlgorithmCodeGenerator:
             if isinstance(raw, (int, float)):
                 return raw
             if isinstance(raw, str):
-                return eval(raw, {**vars(math), 'sqrt': math.sqrt}, ctx)
+                return eval(raw, {**vars(math), "sqrt": math.sqrt}, ctx)
             return raw
+
         # compute other fields
-        for sig in self.config.get('signals', []):
-            if 'trigger_threshold' in sig:
-                sig['trigger_threshold'] = resolve(sig['trigger_threshold'])
-        for ctrl in self.config.get('controls', []):
-            if 'initial_value' in ctrl:
-                ctrl['initial_value'] = resolve(ctrl['initial_value'])
-        for var in self.config.get('variables', []):
-            if 'initial_value' in var:
-                var['initial_value'] = resolve(var['initial_value'])
+        for sig in self.config.get("signals", []):
+            if "trigger_threshold" in sig:
+                sig["trigger_threshold"] = resolve(sig["trigger_threshold"])
+        for ctrl in self.config.get("controls", []):
+            if "initial_value" in ctrl:
+                ctrl["initial_value"] = resolve(ctrl["initial_value"])
+        for var in self.config.get("variables", []):
+            if "initial_value" in var:
+                var["initial_value"] = resolve(var["initial_value"])
 
     def _generate_pcmc(self) -> str:
         lines: List[str] = []
         lines.append('#include "algo_utils.h"')
         lines.append('#include "pcm.h"')
         lines.append(f'#include "{self.algorithm_name}.h"')
-        lines.append('')
-        lines.append(f'int __pcmc_init(pcm_handle_t new_handle)')
-        lines.append('{')
-        lines.append('    /* Signals */')
-        for sig in self.config.get('signals', []):
-            typ, accum = sig['type'], sig['accumulation']
+        lines.append("")
+        lines.append(f"int __{self.algorithm_name}_pcmc_init(pcm_handle_t new_handle)")
+        lines.append("{")
+        lines.append("    /* Signals */")
+        for sig in self.config.get("signals", []):
+            typ, accum = sig["type"], sig["accumulation"]
             name = f"SIG_{sig['name']}"
-            lines.append(f'    PCMC_EXIT_ON_ERR(register_signal_pcmc({typ}, {accum}, {name}, new_handle), PCM_SUCCESS);')
-            if 'trigger_threshold' in sig:
-                thr = sig['trigger_threshold']
-                lines.append(f'    PCMC_EXIT_ON_ERR(register_signal_invoke_trigger_pcmc({name}, {thr}, new_handle), PCM_SUCCESS);')
-        lines.append('')
-        lines.append('    /* Controls */')
-        for ctrl in self.config.get('controls', []):
-            typ = ctrl['type']
+            lines.append(
+                f"    EXIT_ON_ERR(register_signal_pcmc({typ}, {accum}, {name}, new_handle), PCM_SUCCESS);"
+            )
+            if "trigger_threshold" in sig:
+                thr = sig["trigger_threshold"]
+                lines.append(
+                    f"    EXIT_ON_ERR(register_signal_invoke_trigger_pcmc({name}, {thr}, new_handle), PCM_SUCCESS);"
+                )
+        lines.append("")
+        lines.append("    /* Controls */")
+        for ctrl in self.config.get("controls", []):
+            typ = ctrl["type"]
             name = f"CTRL_{ctrl['name']}"
-            init = ctrl.get('initial_value')
-            lines.append(f'    PCMC_EXIT_ON_ERR(register_control_pcmc({typ}, {name}, new_handle), PCM_SUCCESS);')
+            init = ctrl.get("initial_value")
+            lines.append(
+                f"    EXIT_ON_ERR(register_control_pcmc({typ}, {name}, new_handle), PCM_SUCCESS);"
+            )
             if init is not None:
-                lines.append(f'    PCMC_EXIT_ON_ERR(register_control_initial_value_pcmc({name}, {init}, new_handle), PCM_SUCCESS);')
-        lines.append('')
-        lines.append('    /* Variables */')
-        for var in self.config.get('variables', []):
+                lines.append(
+                    f"    EXIT_ON_ERR(register_control_initial_value_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
+                )
+        lines.append("")
+        lines.append("    /* Variables */")
+        for var in self.config.get("variables", []):
             name = f"VAR_{var['name']}"
-            init = var.get('initial_value')
-            lines.append(f'    PCMC_EXIT_ON_ERR(register_local_state_pcmc({name}, new_handle), PCM_SUCCESS);')
+            init = var.get("initial_value")
+            lines.append(
+                f"    EXIT_ON_ERR(register_local_state_pcmc({name}, new_handle), PCM_SUCCESS);"
+            )
             if init is not None:
-                lines.append(f'    PCMC_EXIT_ON_ERR(register_local_state_initial_value_pcmc({name}, {init}, new_handle), PCM_SUCCESS);')
-        lines.append('')
-        lines.append('    return PCM_SUCCESS;')
-        lines.append('}')
-        return '\n'.join(lines)
+                lines.append(
+                    f"    EXIT_ON_ERR(register_local_state_initial_value_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
+                )
+        lines.append("")
+        lines.append("    return PCM_SUCCESS;")
+        lines.append("}")
+        return "\n".join(lines)
 
     def _generate_header(self) -> str:
         """Generate header file for algorithm and PCMC"""
@@ -171,7 +187,9 @@ class AlgorithmCodeGenerator:
             lines.append(f"#define {const['name'].upper()} {val}")
         lines.append("")
 
-        def __generate_enum(block: str, items: List[Dict[str, Any]], cathegory: str) -> None:
+        def __generate_enum(
+            block: str, items: List[Dict[str, Any]], cathegory: str
+        ) -> None:
             """Helper to define enum for a given cathegory."""
             lines.append(f"enum {self.algorithm_name}_{block} {{")
             for item in items:
@@ -193,14 +211,14 @@ class AlgorithmCodeGenerator:
             'extern "C" {',
             "#endif",
             "",
-            f"int __pcmc_init(handle_t new_handle);",
+            f"int __{self.algorithm_name}_pcmc_init(pcm_handle_t new_handle);",
             "",
             "#ifdef __cplusplus",
             "}",
             "#endif",
             "",
             "#endif",
-            f"#endif /* _{self.algorithm_name_upper}_H_ */"
+            f"#endif /* _{self.algorithm_name_upper}_H_ */",
         ]:
             lines.append(decl)
 
@@ -209,16 +227,22 @@ class AlgorithmCodeGenerator:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Generate algorithm files from YAML config"
+        description="Generate <algo_name>_.h and <algo_name>_pcmc.c files from algorithm YAML config"
     )
     parser.add_argument(
-        "constants", help="YAML fabric constants file"
+        "-c", "--constants", required=True, help="path to fabric.yaml file"
     )
     parser.add_argument(
-        "config", help="YAML algorithm configuration file"
+        "-f",
+        "--config",
+        required=True,
+        help="path to algorithm configuration <algo_name>.yaml file",
     )
     parser.add_argument(
-        "-o", "--output", default=".", help="Output directory"
+        "-o",
+        "--output",
+        default=".",
+        help="path to output directory",
     )
 
     args = parser.parse_args()

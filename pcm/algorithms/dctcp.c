@@ -1,12 +1,15 @@
+#include <assert.h>
+
 #include "dctcp.h"
 #include "fabric_params.h"
 #include "tcp_utils.h"
 
 #define DCTCP_SSTHRESH(cur_cwnd)                                               \
     (MAX(cur_cwnd * (1.0 - get_local_state_float(VAR_ALPHA) / 2.0), 2U))
-FAST_RECOVERY_DEFINE(dctcp, DCTCP_SSTHRESH); // Macro to
+FAST_RECOVERY_DEFINE(dctcp, DCTCP_SSTHRESH);
 
-static inline void dctcp_alpha_update(ALGO_CTX_ARGS, pcm_uint num_acks) {
+static PCM_FORCE_INLINE void dctcp_alpha_update(ALGO_CTX_ARGS,
+                                                pcm_uint num_acks) {
     pcm_uint delivered = get_local_state_uint(VAR_EPOCH_DELIVERED) + num_acks;
     pcm_uint delivered_ecn =
         get_local_state_uint(VAR_EPOCH_ECN_DELIVERED) + get_signal(SIG_ECN);
@@ -43,6 +46,11 @@ int algorithm_main() {
     pcm_uint cur_cwnd = get_control(CTRL_CWND) / FABRIC_LINK_MSS;
     pcm_uint num_acks = get_signal(SIG_ACK);
 
+    /*
+     * Negative feedback part has higher priority
+     */
+    pcm_uint acks_to_consume = 0;
+
     if (get_signal(SIG_NACK) > 0) {
         dctcp_fast_recovery(ALGO_CTX_PASS, &cur_cwnd);
         update_signal(SIG_NACK, -1);
@@ -55,11 +63,19 @@ int algorithm_main() {
         goto save_cwnd_and_exit;
     }
 
-    pcm_uint acks_to_consume = num_acks;
+    /*
+     * We have no positive feedback and at least one ACK (otherwise we wouldn't
+     * be triggered)
+     */
+    assert(get_signal(SIG_ACK));
+    acks_to_consume = num_acks;
 
     if (get_local_state(VAR_IN_FAST_RECOV) && acks_to_consume > 0)
         tcp_fast_recovery_exit(ALGO_CTX_PASS, &cur_cwnd, &acks_to_consume);
 
+    /*
+     * Fallback to rate increase
+     */
     if (!get_local_state(VAR_IN_FAST_RECOV) && acks_to_consume > 0) {
         if (cur_cwnd < get_local_state(VAR_SSTHRESH)) {
             tcp_slow_start(ALGO_CTX_PASS, &cur_cwnd, &acks_to_consume);
@@ -69,11 +85,16 @@ int algorithm_main() {
         }
     }
 
-    update_signal(SIG_ACK, -(num_acks - acks_to_consume));
-
 save_cwnd_and_exit:
-    dctcp_alpha_update(ALGO_CTX_PASS, num_acks);
+    // fprintf(stderr,
+    //         "cur_cwnd=%llu ssthresh=%llu in_fr=%llu num_acks=%llu "
+    //         "acks_to_consume=%llu\n",
+    //         cur_cwnd, get_local_state_uint(VAR_SSTHRESH),
+    //         get_local_state_uint(VAR_IN_FAST_RECOV), num_acks, acks_to_consume);
+    update_signal(SIG_ACK, -(num_acks - acks_to_consume));
     set_control(CTRL_CWND, cur_cwnd * FABRIC_LINK_MSS);
+
+    dctcp_alpha_update(ALGO_CTX_PASS, num_acks);
 
     return PCM_SUCCESS;
 }

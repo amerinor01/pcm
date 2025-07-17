@@ -36,10 +36,10 @@ constants:
     type: uint
     value: "FABRIC_HOP_COUNT"
     description: "Number of hops"
-  - name: RTX_THRESH
+  - name: RETX_RESET_THRESH
     type: uint
     value: 4
-    description: "Retransmission threshold"
+    description: "Retransmission reset threshold"
   - name: AI
     type: float
     value: 1.0
@@ -81,7 +81,7 @@ variables:
   - name: T_LAST_DECREASE
     initial_value: 0
     type: uint
-  - name: RETRANSMIT_CNT
+  - name: RETX_CNT
     initial_value: 0
     type: uint
   - name: RTT_ESTIM
