@@ -20,18 +20,18 @@ static PCM_FORCE_INLINE bool smartt_quick_adapt(ALGO_CTX_ARGS, pcm_uint t_now,
             set_var_uint(VAR_BYTES_TO_IGNORE,
                          *cur_cwnd); // TODO: use inflight bytes
             *cur_cwnd = (pcm_uint)(MAX(
-                get_var_uint(VAR_ACKED_BYTES) * CONST_QA_SCALING, CONST_MSS));
+                get_var_uint(VAR_ACKED_BYTES) * QA_SCALING, MSS));
             set_var_uint(VAR_BYTES_IGNORED, 0);
         }
         set_var_uint(VAR_ACKED_BYTES, 0);
-        set_var_uint(VAR_QA_DEADLINE, t_now + CONST_TRTT);
+        set_var_uint(VAR_QA_DEADLINE, t_now + TRTT);
     }
     return adapted;
 }
 
 static PCM_FORCE_INLINE void
 smartt_handle_loss_signal(ALGO_CTX_ARGS, pcm_uint t_now, pcm_uint *cur_cwnd) {
-    // *cur_cwnd -= CONST_TRTT; // state->last_pkt_size
+    // *cur_cwnd -= TRTT; // state->last_pkt_size
     //  SMaRTT paper explicitly mentions that NACKED/TRIMMED/RTO'ed
     //  packet needs to be retransmistted here.
     //  we assume datapath handles this outside
@@ -48,17 +48,16 @@ static PCM_FORCE_INLINE bool smartt_fast_increase(ALGO_CTX_ARGS,
     // printf(
     //     "SMaRTT FI state rtt_sample=%llu brtt=%llu num_ecns=%llu
     //     fast_count=%llu cwnd=%llu " "fast_active=%llu\n", rtt_sample,
-    //     CONST_BRTT, num_ecns, state->fast_count, *cur_cwnd,
+    //     BRTT, num_ecns, state->fast_count, *cur_cwnd,
     //     state->fast_active);
-    if ((ABS((pcm_float)rtt_sample - CONST_BRTT) <
-         (CONST_FI_BRTT_TOL * (pcm_float)CONST_BRTT)) &&
+    if ((ABS((pcm_float)rtt_sample - BRTT) < (FI_BRTT_TOL * (pcm_float)BRTT)) &&
         !num_ecns) {
         set_var_uint(VAR_FAST_COUNT,
-                     get_var_uint(VAR_FAST_COUNT) + CONST_MSS); // last_pkt_size
+                     get_var_uint(VAR_FAST_COUNT) + MSS); // last_pkt_size
         if (get_var_uint(VAR_FAST_COUNT) > *cur_cwnd ||
             get_var_uint(VAR_FAST_ACTIVE)) {
-            // *cur_cwnd += (pcm_uint)(SMARTT_K_CONST * CONST_MSS);
-            *cur_cwnd += CONST_MSS;
+            // *cur_cwnd += (pcm_uint)(SMARTT_K_CONST * MSS);
+            *cur_cwnd += MSS;
             set_var_uint(VAR_FAST_ACTIVE, 1);
         }
     } else {
@@ -71,36 +70,33 @@ static PCM_FORCE_INLINE bool smartt_fast_increase(ALGO_CTX_ARGS,
 static PCM_FORCE_INLINE void smartt_core_cases(ALGO_CTX_ARGS, pcm_uint num_ecns,
                                                pcm_uint rtt_sample,
                                                pcm_uint *cur_cwnd) {
-    if (!num_ecns && rtt_sample < CONST_TRTT) {
+    if (!num_ecns && rtt_sample < TRTT) {
         /* Fair Increase */
         // Case 1 RTT Based Increase
+        *cur_cwnd += (MIN((((TRTT - rtt_sample) / (double)rtt_sample) * Y_GAIN *
+                           MSS * (MSS / (double)*cur_cwnd)),
+                          MSS)) *
+                     REACTION_DELAY;
         *cur_cwnd +=
-            (MIN((((CONST_TRTT - rtt_sample) / (double)rtt_sample) *
-                  CONST_Y_GAIN * CONST_MSS * (CONST_MSS / (double)*cur_cwnd)),
-                 CONST_MSS)) *
-            CONST_REACTION_DELAY;
-        *cur_cwnd += ((pcm_float)CONST_MSS / *cur_cwnd) * CONST_X_GAIN *
-                     CONST_MSS * CONST_REACTION_DELAY;
-    } else if (num_ecns && rtt_sample > CONST_TRTT) {
+            ((pcm_float)MSS / *cur_cwnd) * X_GAIN * MSS * REACTION_DELAY;
+    } else if (num_ecns && rtt_sample > TRTT) {
         /* Multiplicative Decrease */
         // Case 2 Hybrid Based Decrease || RTT Decrease
         *cur_cwnd -=
-            CONST_REACTION_DELAY *
-            MIN(((CONST_W_GAIN * (rtt_sample - (pcm_float)CONST_TRTT) /
-                  rtt_sample * CONST_MSS) +
-                 *cur_cwnd / (double)CONST_BDP * CONST_Z_GAIN * CONST_MSS),
-                CONST_MSS);
-    } else if (num_ecns && rtt_sample < CONST_TRTT) {
+            REACTION_DELAY *
+            MIN(((W_GAIN * (rtt_sample - (pcm_float)TRTT) / rtt_sample * MSS) +
+                 *cur_cwnd / (double)BDP * Z_GAIN * MSS),
+                MSS);
+    } else if (num_ecns && rtt_sample < TRTT) {
         // Case 3 Gentle Decrease (Window based)
-        *cur_cwnd -=
-            MAX(CONST_MSS, (pcm_float)(*cur_cwnd) / CONST_BDP * CONST_MSS *
-                               CONST_Z_GAIN * CONST_REACTION_DELAY);
+        *cur_cwnd -= MAX(MSS, (pcm_float)(*cur_cwnd) / BDP * MSS * Z_GAIN *
+                                  REACTION_DELAY);
         // TBD: request LB path change
-    } else if (!num_ecns && rtt_sample > CONST_TRTT) {
+    } else if (!num_ecns && rtt_sample > TRTT) {
         /* Proportional Increase */
         // Case 4 Do nothing but fairness
-        *cur_cwnd += ((pcm_float)CONST_MSS / *cur_cwnd) * CONST_X_GAIN *
-                     CONST_MSS * CONST_REACTION_DELAY;
+        *cur_cwnd +=
+            ((pcm_float)MSS / *cur_cwnd) * X_GAIN * MSS * REACTION_DELAY;
     }
 }
 
@@ -109,12 +105,12 @@ static PCM_FORCE_INLINE void smartt_handle_ack(ALGO_CTX_ARGS, pcm_uint num_ecns,
                                                pcm_uint t_now,
                                                pcm_uint *cur_cwnd) {
     // TODO: last_pkt_size, not MSS?
-    set_var_uint(VAR_ACKED_BYTES, get_var_uint(VAR_ACKED_BYTES) + CONST_MSS);
+    set_var_uint(VAR_ACKED_BYTES, get_var_uint(VAR_ACKED_BYTES) + MSS);
 
     if (get_var_uint(VAR_BYTES_IGNORED) < get_var_uint(VAR_BYTES_TO_IGNORE)) {
         set_var_uint(VAR_BYTES_IGNORED,
                      get_var_uint(VAR_BYTES_IGNORED) +
-                         CONST_MSS); // TODO: += last_pkt_size
+                         MSS); // TODO: += last_pkt_size
     } else if (!smartt_quick_adapt(ALGO_CTX_PASS, t_now, cur_cwnd) ||
                !smartt_fast_increase(ALGO_CTX_PASS, num_ecns, rtt_sample,
                                      cur_cwnd)) {

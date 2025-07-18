@@ -24,8 +24,8 @@ static PCM_FORCE_INLINE void dctcp_alpha_update(ALGO_CTX_ARGS,
     if (delivered >= get_var_uint(VAR_EPOCH_TO_DELIVER)) {
         // alpha = (1 - g) * alpha + g * F
         pcm_float F = (pcm_float)delivered_ecn / (pcm_float)delivered;
-        set_var_float(VAR_ALPHA, (1 - CONST_GAMMA) * get_var_float(VAR_ALPHA) +
-                                     CONST_GAMMA * F);
+        set_var_float(VAR_ALPHA,
+                      (1 - GAMMA) * get_var_float(VAR_ALPHA) + GAMMA * F);
         set_var_uint(VAR_EPOCH_DELIVERED, 0);
         set_var_uint(VAR_EPOCH_ECN_DELIVERED, 0);
         update_signal(SIG_ECN, -get_signal(SIG_ECN));

@@ -158,12 +158,13 @@ class AlgorithmCodeGenerator:
         for var in self.config.get("variables", []):
             name = f"VAR_{var['name']}"
             init = var.get("initial_value")
+            dtype = var.get("type")
             lines.append(
-                f"    EXIT_ON_ERR(register_local_state_pcmc({name}, new_handle), PCM_SUCCESS);"
+                f"    EXIT_ON_ERR(register_var_pcmc({name}, new_handle), PCM_SUCCESS);"
             )
             if init is not None:
                 lines.append(
-                    f"    EXIT_ON_ERR(register_local_state_initial_value_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
+                    f"    EXIT_ON_ERR(register_var_initial_value_{dtype}_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
                 )
         lines.append("")
         lines.append("    return PCM_SUCCESS;")

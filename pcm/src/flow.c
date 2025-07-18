@@ -105,7 +105,7 @@ bool flow_handler_invoke_on_trigger(flow_t *flow) {
         flow_signals_update(flow, PCM_SIG_ELAPSED_TIME, 0);
         flow->config->algorithm_fn((void *)flow, flow->signals,
                                    flow->thresholds, flow->controls,
-                                   flow->var);
+                                   flow->vars);
         LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
                 flow_time_get(flow), flow_cwnd_get(flow));
         flow_triggers_arm(flow);

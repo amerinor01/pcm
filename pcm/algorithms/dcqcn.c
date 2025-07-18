@@ -7,7 +7,7 @@ static PCM_FORCE_INLINE void dcqcn_rate_to_cwnd(ALGO_CTX_ARGS,
                                                 pcm_uint *cwnd_cur) {
     // Original DCQCN is a rate based, we use RTT to convert rate to cwnd
     // cwnd [bytes] = rate_cur [Gbytes/second] * brtt [picoseconds] * to_bytes
-    *cwnd_cur = get_var_float(VAR_CUR_RATE) * CONST_BRTT / 1000.;
+    *cwnd_cur = get_var_float(VAR_CUR_RATE) * BRTT / 1000.;
 }
 
 static PCM_FORCE_INLINE void dcqcn_rate_decrease(ALGO_CTX_ARGS,
@@ -18,8 +18,7 @@ static PCM_FORCE_INLINE void dcqcn_rate_decrease(ALGO_CTX_ARGS,
     set_var_float(VAR_CUR_RATE, get_var_float(VAR_CUR_RATE) *
                                     (1.0 - 0.5 * get_var_float(VAR_ALPHA)));
     /* update alpha */
-    set_var_float(VAR_ALPHA,
-                  (1 - CONST_GAMMA) * get_var_float(VAR_ALPHA) + CONST_GAMMA);
+    set_var_float(VAR_ALPHA, (1 - GAMMA) * get_var_float(VAR_ALPHA) + GAMMA);
     dcqcn_rate_to_cwnd(ALGO_CTX_PASS, cwnd_cur);
 }
 
@@ -27,18 +26,18 @@ static PCM_FORCE_INLINE void dcqcn_rate_increase(ALGO_CTX_ARGS,
                                                  pcm_uint *cwnd_cur) {
     uint32_t min_counter;
     if (MAX(get_var_uint(VAR_RATE_INCREASE_EVTS),
-            get_var_uint(VAR_BYTE_COUNTER_EVTS)) < CONST_FR_STEPS) {
+            get_var_uint(VAR_BYTE_COUNTER_EVTS)) < FR_STEPS) {
         /* Fast Recovery */
         // in fast recovery we are approaching last cached target rate.
     } else if ((min_counter = MIN(get_var_uint(VAR_RATE_INCREASE_EVTS),
                                   get_var_uint(VAR_BYTE_COUNTER_EVTS))) >
-               CONST_FR_STEPS) {
+               FR_STEPS) {
         /* Hyper Increase */
         set_var_float(VAR_TGT_RATE,
-                      get_var_float(VAR_TGT_RATE) + min_counter * CONST_RHAI);
+                      get_var_float(VAR_TGT_RATE) + min_counter * RHAI);
     } else {
         /* Additive Increase */
-        set_var_float(VAR_TGT_RATE, get_var_float(VAR_TGT_RATE) + CONST_RAI);
+        set_var_float(VAR_TGT_RATE, get_var_float(VAR_TGT_RATE) + RAI);
     }
 
     set_var_float(VAR_CUR_RATE,
@@ -99,7 +98,7 @@ int algorithm_main() {
         break;
 
     case SIG_ALPHA_TIMER:
-        set_var_float(VAR_ALPHA, (1 - CONST_GAMMA) * get_var_float(VAR_ALPHA));
+        set_var_float(VAR_ALPHA, (1 - GAMMA) * get_var_float(VAR_ALPHA));
         set_signal(SIG_ALPHA_TIMER, PCM_SIG_REARM);
         goto exit;
 

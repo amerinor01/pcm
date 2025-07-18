@@ -66,7 +66,6 @@ PCM_LIB_TARGET   := $(LIBDIR)/libpcm.so
 ALGO_PLUGIN_NAMES := newreno dctcp swift dcqcn smartt
 ALGO_PLUGIN_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix .so,$(ALGO_PLUGIN_NAMES)))
 ALGO_PLUGIN_PCMC_LIBS  := $(addprefix $(LIBDIR)/lib,$(addsuffix _pcmc.so,$(ALGO_PLUGIN_NAMES)))
-ALGO_PLUGIN_PCMC_LDLIBS  := $(addprefix -l,$(addsuffix _pcmc,$(ALGO_PLUGIN_NAMES)))
 
 # compile HAC-related optimizaitons if enabled
 ifeq ($(BUILD_HAC_PASS),1)
@@ -104,6 +103,16 @@ $(PCM_LIB_TARGET): $(PCM_LIB_OBJS)
 # -----------------------------------------------
 # Algorithm plugins
 # -----------------------------------------------
+
+# Ensure generated sources exist before building plugins
+$(ALGO_PLUGIN_LIBS): | generate_sources
+$(ALGO_PLUGIN_PCMC_LIBS): | generate_sources
+
+.PHONY: generate_sources
+generate_sources:
+	@for algo in $(ALGO_PLUGIN_NAMES); do \
+		python3 ./yaml/pcmc_yaml2src.py -o $(ALGODIR) -f $(ALGODIR)/$$algo.yaml -c $(ALGODIR)/fabric.yaml; \
+	done
 
 # Special cases for dctcp and newreno with additional prerequisites
 $(LIBDIR)/libdctcp.so: $(ALGODIR)/dctcp.c $(ALGODIR)/tcp_utils.c $(PCM_LIB_TARGET)
@@ -185,7 +194,7 @@ $(TGEN_APP_SRCS)/%.o: $(TGEN_APP_SRCS)/%.c
 
 $(TGEN_APP_TARGET): $(TGEN_APP_OBJS)
 	@mkdir -p $(BINDIR)
-	$(CC) $^ -L$(LIBDIR) $(ALGO_PLUGIN_PCMC_LDLIBS) -lpcm -o $@
+	$(CC) $^ -L$(LIBDIR) -lpcm -o $@
 
 # -----------------------------------------------
 # HTSIM application
@@ -199,7 +208,7 @@ $(HTSIM_APP_SRCS)/%.o: $(HTSIM_APP_SRCS)/%.cpp
 
 $(HTSIM_APP_TARGET): $(HTSIM_APP_PREREQ_OBJS) $(HTSIM_APP_OBJS)
 	@mkdir -p $(BINDIR)
-	$(CXX) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) -L$(LIBDIR) $(ALGO_PLUGIN_PCMC_LDLIBS) -lpcm
+	$(CXX) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) -L$(LIBDIR) -lpcm
 
 endif
 
