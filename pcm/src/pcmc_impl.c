@@ -6,7 +6,7 @@ pcm_err_t register_pcmc(void *dev, pcm_addr_t src_addr,
     int ret = PCM_SUCCESS;
     struct algorithm_config *new_config;
 
-    ret = algorithm_config_alloc((device_t *)dev, &new_config);
+    ret = algorithm_config_alloc((pcm_device_t)dev, &new_config);
     if (ret != PCM_SUCCESS)
         return ret;
 

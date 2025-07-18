@@ -12,7 +12,7 @@
 extern const char *pthrd_flow_plugin_name;
 
 struct pthrd_flow {
-    flow_t *flow;
+    pcm_flow_t flow;
     atomic_uint_fast64_t signals[ALGO_CONF_MAX_NUM_SIGNALS];
     atomic_uint_fast64_t thresholds[ALGO_CONF_MAX_NUM_SIGNALS];
     atomic_uint_fast64_t controls[ALGO_CONF_MAX_NUM_CONTROLS];

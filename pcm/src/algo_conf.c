@@ -32,7 +32,7 @@ static int shared_symbol_close(void *so_handle) {
     return PCM_SUCCESS;
 }
 
-int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
+int algorithm_config_alloc(pcm_device_t device, struct algorithm_config **config) {
     if (!device)
         return PCM_ERROR;
 

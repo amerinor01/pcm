@@ -18,12 +18,12 @@ int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
 
 size_t htsim_flow_max_regfile_size_get() { return HTSIM_MAX_REGFILE_SIZE; }
 
-int htsim_flow_destroy(flow_t *flow) {
+int htsim_flow_destroy(pcm_flow_t flow) {
     free(flow->backend_ctx);
     return PCM_SUCCESS;
 }
 
-int htsim_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
+int htsim_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     (void)traffic_gen_fn;
     flow->backend_ctx = calloc(1, sizeof(struct htsim_flow));
     if (!flow->backend_ctx) {

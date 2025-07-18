@@ -16,12 +16,12 @@ int main(int argc, char **argv) {
     int test_duration = atoi(argv[2]);
     char *algo_name = argv[3];
 
-    device_t *dev_ctx;
+    pcm_device_t dev_ctx;
     EXIT_ON_ERR(device_init("pthread", &dev_ctx), PCM_SUCCESS);
 
     pcm_handle_t pcmc;
     EXIT_ON_ERR(device_pcmc_init(dev_ctx, algo_name, &pcmc), 0);
-    flow_t **flows = calloc(num_flows, sizeof(flow_t *));
+    pcm_flow_t *flows = calloc(num_flows, sizeof(pcm_flow_t));
     if (!flows) {
         fprintf(stderr, "Failed to allocate memory for flow pointers\n");
         exit(EXIT_FAILURE);

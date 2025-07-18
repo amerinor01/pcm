@@ -26,11 +26,11 @@ struct generic_metadata {
 // Forward declaration
 struct signal_attr;
 
-typedef void (*signal_accumulation_op_fn)(flow_t *, const struct signal_attr *,
+typedef void (*signal_accumulation_op_fn)(pcm_flow_t, const struct signal_attr *,
                                           pcm_uint);
-typedef bool (*signal_trigger_check_fn)(const flow_t *,
+typedef bool (*signal_trigger_check_fn)(const pcm_flow_t,
                                         const struct signal_attr *);
-typedef void (*signal_trigger_arm_fn)(flow_t *, const struct signal_attr *);
+typedef void (*signal_trigger_arm_fn)(pcm_flow_t, const struct signal_attr *);
 
 extern signal_trigger_arm_fn flow_signal_trigger_arm_no_op;
 extern signal_accumulation_op_fn flow_signal_accumulation_no_op;
@@ -65,7 +65,7 @@ typedef int (*pcmc_init_function_t)(pcm_handle_t);
 #define ALGO_CONF_MAX_VARS 16
 
 struct algorithm_config {
-    struct device *device;
+    pcm_device_t device;
     bool active;
     pcm_addr_mask_t matching_rule_mask;
     struct slist_entry list_entry;
@@ -82,10 +82,10 @@ struct algorithm_config {
 struct flow_plugin_ops {
     struct control_ops {
         size_t (*max_regfile_size_get)();
-        int (*create)(flow_t *, traffic_gen_fn_t);
-        int (*destroy)(flow_t *);
-        bool (*is_ready)(const flow_t *);
-        pcm_uint (*time_get)(const flow_t *);
+        int (*create)(pcm_flow_t, traffic_gen_fn_t);
+        int (*destroy)(pcm_flow_t);
+        bool (*is_ready)(const pcm_flow_t);
+        pcm_uint (*time_get)(const pcm_flow_t);
     } control;
 
     struct datapath_ops {
@@ -117,7 +117,7 @@ struct flow_plugin_ops {
 };
 
 struct flow {
-    device_t *device;
+    pcm_device_t device;
     pcm_addr_t addr;
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
@@ -155,7 +155,7 @@ struct device {
     struct scheduler scheduler;
 };
 
-int algorithm_config_alloc(device_t *device, struct algorithm_config **config);
+int algorithm_config_alloc(pcm_device_t device, struct algorithm_config **config);
 int algorithm_config_destroy(struct algorithm_config *config);
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
                                        pcm_addr_mask_t matching_rule_mask);
@@ -182,13 +182,13 @@ int algorithm_config_var_float_set(struct algorithm_config *config,
                                    size_t user_index, pcm_float initial_value);
 int algorithm_config_compile(struct algorithm_config *config,
                              const char *algo_name);
-int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow);
-int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow);
+int device_scheduler_flow_add(struct scheduler *scheduler, pcm_flow_t flow);
+int device_scheduler_flow_remove(struct scheduler *scheduler, pcm_flow_t flow);
 const struct algorithm_config *
-device_flow_id_to_config_match(const device_t *device, pcm_addr_t id);
+device_flow_id_to_config_match(const pcm_device_t device, pcm_addr_t id);
 
-void flow_triggers_arm(flow_t *flow);
-bool flow_handler_invoke_on_trigger(flow_t *flow);
+void flow_triggers_arm(pcm_flow_t flow);
+bool flow_handler_invoke_on_trigger(pcm_flow_t flow);
 
 #ifdef __cplusplus
 } /* extern "C" */

@@ -11,8 +11,8 @@
 #include "fairpullqueue.h"
 #include "htsim_pcm_pacer.hpp"
 // #include "datacenter/logsim-interface.h"
-#include "htsim_pcm_packet.hpp"
 #include "htsim_pcm_device.hpp"
+#include "htsim_pcm_packet.hpp"
 #include "network.h"
 #include "pcm_network.h"
 #include "trigger.h"
@@ -54,7 +54,7 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
   public:
     PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger, EventList &eventList,
            uint64_t rtt, uint64_t bdp, uint64_t queueDrainTime, int hops,
-           PcmDevice &pcmDevice, bool pcm_ignore);
+           std::shared_ptr<pcm::Device> pcmDevice, bool pcm_ignore);
     // PcmSrc(PcmLogger *logger, TrafficLogger* pktLogger, EventList& eventList,
     // uint64_t rtt=timeFromUs(5.25), uint64_t bdp=63000);
     ~PcmSrc();
@@ -350,8 +350,8 @@ class PcmSrc : public PacketSink, public EventSource, public TriggerTarget {
     bool first_quick_adapt = false;
 
   private:
-    flow_t *_pcm_flow_ptr;
     bool _pcm_ignore;
+    std::unique_ptr<pcm::Flow> _pcm_flow;
 
   private:
     uint32_t _unacked;

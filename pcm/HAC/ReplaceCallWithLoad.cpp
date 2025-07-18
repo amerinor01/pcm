@@ -26,7 +26,7 @@
  * cores simultaneously) since a) this is the hardest case and b) this is how
  * the non-htsim backend works.
  *
- * The flow_t struct which is passed to alorithm_main contains a pointer to the
+ * The pcm_flow_t struct which is passed to alorithm_main contains a pointer to the
  * backend_ctx, which in turn contains a pointer to the signals array.
  * */
 

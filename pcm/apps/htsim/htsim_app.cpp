@@ -6,6 +6,7 @@
 #include <iostream>
 #include <math.h>
 
+#include <algorithm>
 #include <sstream>
 #include <string.h>
 // #include "subflow_control.h"
@@ -164,7 +165,7 @@ int main(int argc, char **argv) {
     uint64_t max_queue_size = 0;
 
     std::string pcm_algo;
-    bool pcm_ignore = false;
+    bool pcm_ignore = true;
 
     int i = 1;
     filename << "logout.dat";
@@ -600,10 +601,9 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-pcm_algorithm")) {
             pcm_algo = argv[i + 1];
-            cout << "PCM algo requested " << pcm_algo << endl;
+            cout << "PCM algorithm requested " << pcm_algo << endl;
             i++;
-        } else if (!strcmp(argv[i], "-pcm_ignore")) {
-            pcm_ignore = true;
+            pcm_ignore = false;
         } else
             exit_error(argv[0]);
 
@@ -783,11 +783,10 @@ int main(int argc, char **argv) {
     ConnectionMatrix *conns = NULL;
     LogSimInterface *lgs = NULL;
 
-    PcmDevice pcm_device(eventlist, 1000, 1000);
-    pcm_handle_t pcm_algo_handler;
-    if (device_pcmc_init(pcm_device.getDevicePtr(), pcm_algo.c_str(),
-                         &pcm_algo_handler) != PCM_SUCCESS) {
-        exit(EXIT_FAILURE);
+    std::shared_ptr<pcm::Device> pcm_device = nullptr;
+    if (!pcm_ignore) {
+        std::cout << "PCM initialization requested" << std::endl;
+        pcm_device = std::make_shared<pcm::Device>(eventlist, pcm_algo, 1000, 1000);
     }
 
     if (tm_file != NULL) {
@@ -879,8 +878,10 @@ int main(int argc, char **argv) {
             cout << "Using BDP of " << bdp_local << " - Queue is " << queuesize
                  << " - Starting Window is " << actual_starting_cwnd << endl;
 
-            uecSrc = new PcmSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6,
-                                pcm_device, pcm_ignore);
+            uecSrc =
+                new PcmSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6,
+                           pcm_ignore ? nullptr : pcm_device,
+                           pcm_ignore);
 
             uecSrc->setNumberEntropies(256);
             uec_srcs.push_back(uecSrc);
@@ -1040,12 +1041,13 @@ int main(int argc, char **argv) {
         }
 
         while (eventlist.doNextEvent()) {
-            std::size_t num_finished_flows = 0;
-            for (std::size_t i = 0; i < uec_srcs.size(); ++i) {
-                num_finished_flows += uec_srcs[i]->isFlowFinished() ? 1 : 0;
-            }
-            if (num_finished_flows == uec_srcs.size()) {
-                pcm_device.stopScheduling();
+            if (!pcm_ignore) {
+                if (std::count_if(uec_srcs.begin(), uec_srcs.end(),
+                                  [](const PcmSrc *src) {
+                                      return src->isFlowFinished();
+                                  }) == static_cast<long>(uec_srcs.size())) {
+                    pcm_device->stopScheduling();
+                }
             }
         }
 
@@ -1147,8 +1149,6 @@ int main(int argc, char **argv) {
     }
     for (int i = 0; i < 10; i++)
         cout << "Hop " << i << " Count " << counts[i] << endl;
-
-    device_pcmc_destroy(pcm_algo_handler);
 }
 
 string ntoa(double n) {

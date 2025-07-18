@@ -12,7 +12,7 @@
 extern const char *htsim_flow_plugin_name;
 
 struct htsim_flow {
-    flow_t *flow;
+    pcm_flow_t flow;
     pcm_uint signals[ALGO_CONF_MAX_NUM_SIGNALS];
     pcm_uint thresholds[ALGO_CONF_MAX_NUM_SIGNALS];
     pcm_uint controls[ALGO_CONF_MAX_NUM_CONTROLS];

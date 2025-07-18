@@ -13,11 +13,6 @@
 #include "../impl.h"
 #include "../util.h"
 
-// expose htsim time to PCM
-#include "htsim_pcm_time_wrapper_c.h"
-EventList *pcm_root_event_list = nullptr;
-extern "C" uint64_t htsim_now(void) { return pcm_root_event_list->now(); }
-
 #define timeInf 0
 
 // Static Parameters
@@ -67,23 +62,13 @@ int PcmSrc::adjust_packet_counts = 1;
 RouteStrategy PcmSrc::_route_strategy = NOT_SET;
 RouteStrategy PcmSink::_route_strategy = NOT_SET;
 
-PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger,
-               EventList &eventList, uint64_t rtt, uint64_t bdp,
-               uint64_t queueDrainTime, int hops, PcmDevice &pcmDevice,
-               bool pcmIgnore)
-    : EventSource(eventList, "uec"), _logger(logger), _flow(pktLogger),
-      _pcm_ignore(pcmIgnore) {
+PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger, EventList &eventList, uint64_t rtt,
+               uint64_t bdp, uint64_t queueDrainTime, int hops,
+               std::shared_ptr<pcm::Device> pcmDevice, bool pcmIgnore)
+    : EventSource(eventList, "uec"), _logger(logger), _flow(pktLogger), _pcm_ignore(pcmIgnore) {
 
-    // expose htsim time to PCM
-    if (!pcm_root_event_list) {
-        pcm_root_event_list = &eventList;
-    } else {
-        assert(pcm_root_event_list == &eventList);
-    }
-
-    if (flow_create(pcmDevice.getDevicePtr(), &_pcm_flow_ptr, NULL) !=
-        PCM_SUCCESS) {
-        LOG_FATAL("Failed to create PCM flow on htsim::PcmSrc");
+    if (!_pcm_ignore) {
+        _pcm_flow = std::make_unique<pcm::Flow>(pcmDevice);
     }
 
     _mss = Packet::data_packet_size();
@@ -103,21 +88,17 @@ PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger,
 
     _base_rtt = ((_hop_count * LINK_DELAY_MODERN) +
                  ((PKT_SIZE_MODERN + 64) * 8 / LINK_SPEED_MODERN * _hop_count) +
-                 +(_hop_count * LINK_DELAY_MODERN) +
-                 (64 * 8 / LINK_SPEED_MODERN * _hop_count)) *
+                 +(_hop_count * LINK_DELAY_MODERN) + (64 * 8 / LINK_SPEED_MODERN * _hop_count)) *
                 1000;
 
     if (precision_ts != 1) {
-        _base_rtt =
-            (((_base_rtt + precision_ts - 1) / precision_ts) * precision_ts);
+        _base_rtt = (((_base_rtt + precision_ts - 1) / precision_ts) * precision_ts);
     }
 
-    _target_rtt =
-        _base_rtt * ((target_rtt_percentage_over_base + 1) / 100.0 + 1);
+    _target_rtt = _base_rtt * ((target_rtt_percentage_over_base + 1) / 100.0 + 1);
 
     if (precision_ts != 1) {
-        _target_rtt =
-            (((_target_rtt + precision_ts - 1) / precision_ts) * precision_ts);
+        _target_rtt = (((_target_rtt + precision_ts - 1) / precision_ts) * precision_ts);
     }
 
     _rtt = _base_rtt;
@@ -149,17 +130,17 @@ PcmSrc::PcmSrc(PcmLogger *logger, TrafficLogger *pktLogger,
     _maxcwnd = starting_cwnd * 1;
     _cwnd = starting_cwnd;
 
-    // Mikhail: Dirty!
-    __flow_control_set(_pcm_flow_ptr, 0, starting_cwnd);
+    if (!_pcm_ignore) {
+        _pcm_flow->cwndReset(starting_cwnd);
+    }
 
     _consecutive_low_rtt = 0;
     target_window = _cwnd;
     _target_based_received = true;
 
-    cout << "Link Delay " << LINK_DELAY_MODERN << " - Link Speed "
-         << LINK_SPEED_MODERN << " - Pkt Size " << PKT_SIZE_MODERN
-         << " - Base RTT " << _base_rtt << " - Target RTT is " << _target_rtt
-         << " - BDP " << _bdp << " - CWND " << _cwnd << " - Hops " << _hop_count
+    cout << "Link Delay " << LINK_DELAY_MODERN << " - Link Speed " << LINK_SPEED_MODERN
+         << " - Pkt Size " << PKT_SIZE_MODERN << " - Base RTT " << _base_rtt << " - Target RTT is "
+         << _target_rtt << " - BDP " << _bdp << " - CWND " << _cwnd << " - Hops " << _hop_count
          << " - Stop Pacing " << stop_pacing_after_rtt << endl;
 
     _max_good_entropies = 10; // TODO: experimental value
@@ -192,21 +173,19 @@ PcmSrc::~PcmSrc() {
     if (COLLECT_DATA) {
         // RTT
         std::string file_name =
-            PROJECT_ROOT_PATH /
-            ("sim/output/rtt/rtt" + _name + "_" + std::to_string(tag) + ".txt");
+            PROJECT_ROOT_PATH / ("sim/output/rtt/rtt" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFile(file_name, std::ios_base::app);
 
         for (const auto &p : _list_rtt) {
-            MyFile << get<0>(p) << "," << get<1>(p) << "," << get<2>(p) << ","
-                   << get<3>(p) << "," << get<4>(p) << "," << get<5>(p)
-                   << std::endl;
+            MyFile << get<0>(p) << "," << get<1>(p) << "," << get<2>(p) << "," << get<3>(p) << ","
+                   << get<4>(p) << "," << get<5>(p) << std::endl;
         }
 
         MyFile.close();
 
         // CWD
-        file_name = PROJECT_ROOT_PATH / ("sim/output/cwd/cwd" + _name + "_" +
-                                         std::to_string(tag) + ".txt");
+        file_name =
+            PROJECT_ROOT_PATH / ("sim/output/cwd/cwd" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileCWD(file_name, std::ios_base::app);
 
         for (const auto &p : _list_cwd) {
@@ -216,8 +195,8 @@ PcmSrc::~PcmSrc() {
         MyFileCWD.close();
 
         // Unacked
-        file_name = PROJECT_ROOT_PATH / ("sim/output/unacked/unacked" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/unacked/unacked" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileUnack(file_name, std::ios_base::app);
 
         for (const auto &p : _list_unacked) {
@@ -227,8 +206,8 @@ PcmSrc::~PcmSrc() {
         MyFileUnack.close();
 
         // NACK
-        file_name = PROJECT_ROOT_PATH / ("sim/output/nack/nack" + _name + "_" +
-                                         std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/nack/nack" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileNack(file_name, std::ios_base::app);
 
         for (const auto &p : _list_nack) {
@@ -239,9 +218,8 @@ PcmSrc::~PcmSrc() {
 
         // BTS
         if (_list_bts.size() > 0) {
-            file_name =
-                PROJECT_ROOT_PATH / ("sim/output/bts/bts" + _name + "_" +
-                                     std::to_string(tag) + ".txt");
+            file_name = PROJECT_ROOT_PATH /
+                        ("sim/output/bts/bts" + _name + "_" + std::to_string(tag) + ".txt");
             std::ofstream MyFileBTS(file_name, std::ios_base::app);
 
             for (const auto &p : _list_bts) {
@@ -252,8 +230,8 @@ PcmSrc::~PcmSrc() {
         }
 
         // Acked Bytes
-        file_name = PROJECT_ROOT_PATH / ("sim/output/acked/acked" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/acked/acked" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileAcked(file_name, std::ios_base::app);
 
         for (const auto &p : _list_acked_bytes) {
@@ -263,8 +241,8 @@ PcmSrc::~PcmSrc() {
         MyFileAcked.close();
 
         // Acked ECN
-        file_name = PROJECT_ROOT_PATH / ("sim/output/ecn_rtt/ecn_rtt" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/ecn_rtt/ecn_rtt" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileEcnRTT(file_name, std::ios_base::app);
 
         for (const auto &p : _list_ecn_rtt) {
@@ -274,8 +252,8 @@ PcmSrc::~PcmSrc() {
         MyFileEcnRTT.close();
 
         // ECN Received
-        file_name = PROJECT_ROOT_PATH / ("sim/output/ecn/ecn" + _name + "_" +
-                                         std::to_string(tag) + ".txt");
+        file_name =
+            PROJECT_ROOT_PATH / ("sim/output/ecn/ecn" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileEcnReceived(file_name, std::ios_base::app);
 
         for (const auto &p : _list_ecn_received) {
@@ -285,9 +263,8 @@ PcmSrc::~PcmSrc() {
         MyFileEcnReceived.close();
 
         // Acked Trimmed
-        file_name =
-            PROJECT_ROOT_PATH / ("sim/output/trimmed_rtt/trimmed_rtt" + _name +
-                                 "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH / ("sim/output/trimmed_rtt/trimmed_rtt" + _name + "_" +
+                                         std::to_string(tag) + ".txt");
         std::ofstream MyFileTrimmedRTT(file_name, std::ios_base::app);
 
         for (const auto &p : _list_trimmed_rtt) {
@@ -297,8 +274,8 @@ PcmSrc::~PcmSrc() {
         MyFileTrimmedRTT.close();
 
         // Fast Increase
-        file_name = PROJECT_ROOT_PATH / ("sim/output/fasti/fasti" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/fasti/fasti" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileFastInc(file_name, std::ios_base::app);
 
         for (const auto &p : _list_fast_increase_event) {
@@ -308,8 +285,8 @@ PcmSrc::~PcmSrc() {
         MyFileFastInc.close();
 
         // Fast Decrease
-        file_name = PROJECT_ROOT_PATH / ("sim/output/fastd/fastd" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/fastd/fastd" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileFastDec(file_name, std::ios_base::app);
 
         for (const auto &p : _list_fast_decrease) {
@@ -319,8 +296,8 @@ PcmSrc::~PcmSrc() {
         MyFileFastDec.close();
 
         // Medium Increase
-        file_name = PROJECT_ROOT_PATH / ("sim/output/mediumi/mediumi" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/mediumi/mediumi" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileMediumInc(file_name, std::ios_base::app);
 
         for (const auto &p : _list_medium_increase_event) {
@@ -330,8 +307,8 @@ PcmSrc::~PcmSrc() {
         MyFileMediumInc.close();
 
         // Case 1
-        file_name = PROJECT_ROOT_PATH / ("sim/output/case1/case1" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/case1/case1" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileCase1(file_name, std::ios_base::app);
 
         for (const auto &p : count_case_1) {
@@ -341,8 +318,8 @@ PcmSrc::~PcmSrc() {
         MyFileCase1.close();
 
         // Case 2
-        file_name = PROJECT_ROOT_PATH / ("sim/output/case2/case2" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/case2/case2" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileCase2(file_name, std::ios_base::app);
 
         for (const auto &p : count_case_2) {
@@ -352,8 +329,8 @@ PcmSrc::~PcmSrc() {
         MyFileCase2.close();
 
         // Case 3
-        file_name = PROJECT_ROOT_PATH / ("sim/output/case3/case3" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/case3/case3" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileCase3(file_name, std::ios_base::app);
 
         for (const auto &p : count_case_3) {
@@ -363,8 +340,8 @@ PcmSrc::~PcmSrc() {
         MyFileCase3.close();
 
         // Case 4
-        file_name = PROJECT_ROOT_PATH / ("sim/output/case4/case4" + _name +
-                                         "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/case4/case4" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileCase4(file_name, std::ios_base::app);
 
         for (const auto &p : count_case_4) {
@@ -374,9 +351,8 @@ PcmSrc::~PcmSrc() {
         MyFileCase4.close();
 
         // Sending Rate
-        file_name =
-            PROJECT_ROOT_PATH / ("sim/output/sending_rate/sending_rate" +
-                                 _name + "_" + std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH / ("sim/output/sending_rate/sending_rate" + _name + "_" +
+                                         std::to_string(tag) + ".txt");
         std::ofstream MyFileSendingRate(file_name, std::ios_base::app);
 
         for (const auto &p : list_sending_rate) {
@@ -386,9 +362,8 @@ PcmSrc::~PcmSrc() {
         MyFileSendingRate.close();
 
         // ECN RATE
-        file_name =
-            PROJECT_ROOT_PATH / ("sim/output/ecn_rate/ecn_rate" + _name + "_" +
-                                 std::to_string(tag) + ".txt");
+        file_name = PROJECT_ROOT_PATH /
+                    ("sim/output/ecn_rate/ecn_rate" + _name + "_" + std::to_string(tag) + ".txt");
         std::ofstream MyFileECNRate(file_name, std::ios_base::app);
 
         for (const auto &p : list_ecn_rate) {
@@ -397,54 +372,43 @@ PcmSrc::~PcmSrc() {
 
         MyFileECNRate.close();
     }
-    if (flow_destroy(_pcm_flow_ptr) != PCM_SUCCESS) {
-        LOG_FATAL("Failed to destroy PCM flow on htsim::PcmSrc");
-    }
 }
 
 // Start the flow
 void PcmSrc::doNextEvent() { startflow(); }
 
 // Triggers for connection matrixes
-void PcmSrc::set_end_trigger(Trigger &end_trigger) {
-    _end_trigger = &end_trigger;
-}
+void PcmSrc::set_end_trigger(Trigger &end_trigger) { _end_trigger = &end_trigger; }
 
 // Update Network Parameters
 void PcmSrc::updateParams() {
     if (src_dc != dest_dc) {
         _hop_count = 9;
         _base_rtt =
-            ((((_hop_count - 2) * LINK_DELAY_MODERN) +
-              (_interdc_delay / 1000) * 2) +
+            ((((_hop_count - 2) * LINK_DELAY_MODERN) + (_interdc_delay / 1000) * 2) +
              ((PKT_SIZE_MODERN + 64) * 8 / LINK_SPEED_MODERN * _hop_count) +
-             +(_hop_count * LINK_DELAY_MODERN) +
-             (64 * 8 / LINK_SPEED_MODERN * _hop_count)) *
+             +(_hop_count * LINK_DELAY_MODERN) + (64 * 8 / LINK_SPEED_MODERN * _hop_count)) *
             1000;
     } else {
         _hop_count = 6;
         _base_rtt =
             ((_hop_count * LINK_DELAY_MODERN) +
              ((PKT_SIZE_MODERN + 64) * 8 / LINK_SPEED_MODERN * _hop_count) +
-             +(_hop_count * LINK_DELAY_MODERN) +
-             (64 * 8 / LINK_SPEED_MODERN * _hop_count)) *
+             +(_hop_count * LINK_DELAY_MODERN) + (64 * 8 / LINK_SPEED_MODERN * _hop_count)) *
             1000;
     }
 
     if (precision_ts != 1) {
-        _base_rtt =
-            (((_base_rtt + precision_ts - 1) / precision_ts) * precision_ts);
+        _base_rtt = (((_base_rtt + precision_ts - 1) / precision_ts) * precision_ts);
     }
 
     int time_to_drain_queue = _switch_queue_size * 8 / LINK_SPEED_MODERN * 1000;
 
     _target_rtt =
-        _base_rtt + time_to_drain_queue *
-                        ((target_rtt_percentage_over_base + 1) / 100.0 + 1);
+        _base_rtt + time_to_drain_queue * ((target_rtt_percentage_over_base + 1) / 100.0 + 1);
 
     if (precision_ts != 1) {
-        _target_rtt =
-            (((_target_rtt + precision_ts - 1) / precision_ts) * precision_ts);
+        _target_rtt = (((_target_rtt + precision_ts - 1) / precision_ts) * precision_ts);
     }
 
     _rtt = _base_rtt;
@@ -504,13 +468,11 @@ void PcmSrc::updateParams() {
         generic_pacer = new PcmPacer(eventlist(), *this);
         pacer_start_time = eventlist().now();
         pacing_delay = ((4160 * 8) / ((_cwnd * 8) / (_base_rtt / 1000)));
-        cout << "Setting the pacing delay1 " << _cwnd << " "
-             << (_base_rtt / 1000) << " to " << pacing_delay << " at "
-             << GLOBAL_TIME / 1000 << endl;
+        cout << "Setting the pacing delay1 " << _cwnd << " " << (_base_rtt / 1000) << " to "
+             << pacing_delay << " at " << GLOBAL_TIME / 1000 << endl;
         // pacing_delay -= (4160 * 8 / LINK_SPEED_MODERN);
-        cout << "Setting the pacing delay2 " << _cwnd << " "
-             << (_base_rtt / 1000) << " to " << pacing_delay << " at "
-             << GLOBAL_TIME / 1000 << endl;
+        cout << "Setting the pacing delay2 " << _cwnd << " " << (_base_rtt / 1000) << " to "
+             << pacing_delay << " at " << GLOBAL_TIME / 1000 << endl;
         pacing_delay *= 1000; // ps
     }
 }
@@ -538,11 +500,12 @@ void PcmSrc::update_rtx_time() {
 void PcmSrc::mark_received(PcmAck &pkt) {
     // cummulative ack
     if (pkt.seqno() == 1) {
-        while (
-            !_sent_packets.empty() &&
-            (_sent_packets[0].seqno <= pkt.ackno() || _sent_packets[0].acked)) {
+        while (!_sent_packets.empty() &&
+               (_sent_packets[0].seqno <= pkt.ackno() || _sent_packets[0].acked)) {
             _sent_packets.erase(_sent_packets.begin());
-            flow_signals_update(_pcm_flow_ptr, PCM_SIG_ACK, 1);
+            if (!_pcm_ignore) {
+                _pcm_flow->signalUpdate(PCM_SIG_ACK, 1);
+            }
         }
         update_rtx_time();
         return;
@@ -558,7 +521,9 @@ void PcmSrc::mark_received(PcmAck &pkt) {
         // shouldn't cause harm either
         do {
             _sent_packets.erase(_sent_packets.begin());
-            flow_signals_update(_pcm_flow_ptr, PCM_SIG_ACK, 1);
+            if (!_pcm_ignore) {
+                _pcm_flow->signalUpdate(PCM_SIG_ACK, 1);
+            }
         } while (!_sent_packets.empty() && _sent_packets[0].acked);
     } else {
         assert(i < _sent_packets.size());
@@ -589,7 +554,9 @@ void PcmSrc::mark_received(PcmAck &pkt) {
                 _rtx_timeout_pending = true;
             }
         }
-        flow_signals_update(_pcm_flow_ptr, PCM_SIG_ACK, 1);
+        if (!_pcm_ignore) {
+            _pcm_flow->signalUpdate(PCM_SIG_ACK, 1);
+        }
     }
     update_rtx_time();
 }
@@ -609,9 +576,7 @@ void PcmSrc::add_ack_path(const Route *rt) {
     }
 }
 
-void PcmSrc::set_traffic_logger(TrafficLogger *pktlogger) {
-    _flow.set_logger(pktlogger);
-}
+void PcmSrc::set_traffic_logger(TrafficLogger *pktlogger) { _flow.set_logger(pktlogger); }
 
 void PcmSrc::reduce_cwnd(uint64_t amount) {
     if (_cwnd >= amount + _mss) {
@@ -681,13 +646,12 @@ void PcmSrc::quick_adapt(bool trimmed) {
                      (eventlist().now() - previous_window_end + _base_rtt));*/
 
             // Update window and ignore count
-            cout << "Before Update Saved CWD is " << saved_acked_bytes << " "
-                 << endl;
+            cout << "Before Update Saved CWD is " << saved_acked_bytes << " " << endl;
             if (send_size <= _bdp) {
                 // saved_acked_bytes =
                 //         saved_acked_bytes * (_bdp / (double)send_size);
-                cout << "BDP " << _bdp << " - Send Size " << send_size
-                     << " - Ratio " << (_bdp / (double)send_size) << endl;
+                cout << "BDP " << _bdp << " - Send Size " << send_size << " - Ratio "
+                     << (_bdp / (double)send_size) << endl;
             }
 
             _cwnd = max((double)(saved_acked_bytes * bonus_drop),
@@ -715,8 +679,7 @@ void PcmSrc::quick_adapt(bool trimmed) {
 
             if (algorithm_type == "intersmartt" && _hop_count > 6) {
                 _cwnd = _cwnd =
-                    max((double)(saved_acked_bytes * bonus_drop * qa_mult),
-                        (double)_mss);
+                    max((double)(saved_acked_bytes * bonus_drop * qa_mult), (double)_mss);
                 // ignore_for = (get_unacked() / qa_mult / (double)_mss);
             }
 
@@ -725,8 +688,7 @@ void PcmSrc::quick_adapt(bool trimmed) {
             // Reset counters, update logs.
             count_received = 0;
             need_quick_adapt = false;
-            _list_fast_decrease.push_back(
-                std::make_pair(eventlist().now() / 1000, 1));
+            _list_fast_decrease.push_back(std::make_pair(eventlist().now() / 1000, 1));
 
             // Update x_gain after large incasts. We want to limit its effect if
             // we move to much smaller windows.
@@ -743,12 +705,10 @@ void PcmSrc::quick_adapt(bool trimmed) {
             if (use_pacing && generic_pacer == NULL) {
                 generic_pacer = new PcmPacer(eventlist(), *this);
                 pacer_start_time = eventlist().now();
-                pacing_delay =
-                    ((4160 * 8) / ((_cwnd * 8) / (_base_rtt / 1000)));
+                pacing_delay = ((4160 * 8) / ((_cwnd * 8) / (_base_rtt / 1000)));
                 // pacing_delay -= (4160 * 8 / LINK_SPEED_MODERN);
-                cout << "Setting the pacing delay " << _cwnd << " "
-                     << (_base_rtt / 1000) << " to " << pacing_delay << " at "
-                     << GLOBAL_TIME / 1000 << endl;
+                cout << "Setting the pacing delay " << _cwnd << " " << (_base_rtt / 1000) << " to "
+                     << pacing_delay << " at " << GLOBAL_TIME / 1000 << endl;
                 pacing_delay *= 1000; // ps
             }
 
@@ -756,17 +716,14 @@ void PcmSrc::quick_adapt(bool trimmed) {
 
             total_pkt = 0;
             total_nack = 0;
-            cout << "Using Fast Drop2 - Flow " << from << "@" << to << "@"
-                 << tag << ", Ecn " << 1 << ", CWND " << _cwnd
-                 << ", Saved Acked " << saved_acked_bytes << " (dropping to "
+            cout << "Using Fast Drop2 - Flow " << from << "@" << to << "@" << tag << ", Ecn " << 1
+                 << ", CWND " << _cwnd << ", Saved Acked " << saved_acked_bytes << " (dropping to "
                  << max((double)(saved_acked_bytes * bonus_drop),
                         saved_acked_bytes * bonus_drop + _mss)
-                 << " - bonus1 " << bonus_drop << " -> "
-                 << (saved_acked_bytes * bonus_drop) << " and "
-                 << (saved_acked_bytes * bonus_drop + _mss)
-                 << ") - Previous Window " << previous_window_end / 1000
-                 << " - Next Window " << next_window_end / 1000 << "// Time "
-                 << eventlist().now() / 1000 << endl;
+                 << " - bonus1 " << bonus_drop << " -> " << (saved_acked_bytes * bonus_drop)
+                 << " and " << (saved_acked_bytes * bonus_drop + _mss) << ") - Previous Window "
+                 << previous_window_end / 1000 << " - Next Window " << next_window_end / 1000
+                 << "// Time " << eventlist().now() / 1000 << endl;
         }
     }
 }
@@ -780,11 +737,12 @@ void PcmSrc::processNack(PcmNack &pkt) {
     acked_bytes += 64;
     saved_trimmed_bytes += 64;
 
-    cout << "Just NA CK from " << from << " at " << eventlist().now() / 1000
-         << " - " << pkt.is_failed << endl;
+    cout << "Just NA CK from " << from << " at " << eventlist().now() / 1000 << " - "
+         << pkt.is_failed << endl;
 
     // Reduce Window Or Do Fast Drop
-    if (algorithm_type != "mprdma" && _pcm_ignore) {
+
+    if (algorithm_type != "mprdma") {
         if (use_fast_drop) {
             if (count_received >= ignore_for) {
                 if (eventlist().now() > next_qa) {
@@ -811,17 +769,17 @@ void PcmSrc::processNack(PcmNack &pkt) {
     }
     check_limits_cwnd();
 
-    flow_signals_update(_pcm_flow_ptr, PCM_SIG_NACK, 1);
     if (!_pcm_ignore) {
-        _cwnd = flow_cwnd_get(_pcm_flow_ptr); // overwrite CWND with pcm
+        _pcm_flow->signalUpdate(PCM_SIG_NACK, 1);
+        _cwnd = _pcm_flow->cwndGet();
         check_limits_cwnd();
+        _pcm_flow->cwndReset(_cwnd);
     }
 
     _list_cwd.push_back(std::make_pair(eventlist().now() / 1000, _cwnd));
     _consecutive_no_ecn = 0;
     _consecutive_low_rtt = 0;
-    _received_ecn.push_back(
-        std::make_tuple(eventlist().now(), true, _mss, _target_rtt + 10000));
+    _received_ecn.push_back(std::make_tuple(eventlist().now(), true, _mss, _target_rtt + 10000));
 
     if (!pkt.is_failed) {
         _list_nack.push_back(std::make_pair(eventlist().now() / 1000, 1));
@@ -1028,21 +986,17 @@ void PcmSrc::processBts(PcmPacket *pkt) {
     counter_consecutive_good_bytes = 0;
     _consecutive_no_ecn = 0;
     _consecutive_low_rtt = 0;
-    _received_ecn.push_back(
-        std::make_tuple(eventlist().now(), true, _mss, _target_rtt + 10000));
+    _received_ecn.push_back(std::make_tuple(eventlist().now(), true, _mss, _target_rtt + 10000));
     //_list_nack.push_back(std::make_pair(eventlist().now() / 1000, 1));
-    bool marked = pkt->flags() &
-                  ECN_CE; // ECN was marked on data packet and echoed on ACK
+    bool marked = pkt->flags() & ECN_CE; // ECN was marked on data packet and echoed on ACK
 
     if (pkt->_queue_full) {
-        cout << "BTS " << from << " - Queue is full - Level "
-             << pkt->queue_status << " - " << eventlist().now() / 1000
-             << " - Name " << pkt->switch_name.c_str() << endl;
+        cout << "BTS " << from << " - Queue is full - Level " << pkt->queue_status << " - "
+             << eventlist().now() / 1000 << " - Name " << pkt->switch_name.c_str() << endl;
         double reduce_by = exp_avg_bts / 64.0 * _mss;
         // reduce_by = 0;
         if (marked) {
-            cout << "Using ExpAvg " << reduce_by << " and " << exp_avg_bts
-                 << endl;
+            cout << "Using ExpAvg " << reduce_by << " and " << exp_avg_bts << endl;
             reduce_cwnd(uint64_t((_mss - reduce_by)));
         } else {
             reduce_cwnd(uint64_t(_mss));
@@ -1053,12 +1007,9 @@ void PcmSrc::processBts(PcmPacket *pkt) {
 
         _list_bts.push_back(std::make_pair(eventlist().now() / 1000, 1));
     } else {
-        cout << "BTS " << from << " - Warning - Level " << pkt->queue_status
-             << " - Reduce "
-             << (uint64_t)(_mss * (pkt->queue_status / 64.0) *
-                           ((double)_cwnd / _bdp))
-             << " (" << (double)_cwnd / _bdp << ") - "
-             << eventlist().now() / 1000 << " - Name "
+        cout << "BTS " << from << " - Warning - Level " << pkt->queue_status << " - Reduce "
+             << (uint64_t)(_mss * (pkt->queue_status / 64.0) * ((double)_cwnd / _bdp)) << " ("
+             << (double)_cwnd / _bdp << ") - " << eventlist().now() / 1000 << " - Name "
              << pkt->switch_name.c_str() << endl;
 
         _list_bts.push_back(std::make_pair(eventlist().now() / 1000, 1));
@@ -1070,8 +1021,7 @@ void PcmSrc::processBts(PcmPacket *pkt) {
 
         if (exp_avg_route >= 512 || false) {
             uint64_t value_d =
-                (uint64_t)(1 * (_mss * (pkt->queue_status / 64.0) *
-                                ((double)(_cwnd) / _bdp)));
+                (uint64_t)(1 * (_mss * (pkt->queue_status / 64.0) * ((double)(_cwnd) / _bdp)));
             if (value_d >= _mss) {
                 reduce_cwnd((uint64_t)(_mss));
             } else {
@@ -1112,14 +1062,12 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
     simtime_picosec ts = pkt.ts();
 
     consecutive_nack = 0;
-    bool marked = pkt.flags() &
-                  ECN_ECHO; // ECN was marked on data packet and echoed on ACK
+    bool marked = pkt.flags() & ECN_ECHO; // ECN was marked on data packet and echoed on ACK
 
     if (COLLECT_DATA && marked) {
         std::string file_name =
-            PROJECT_ROOT_PATH /
-            ("sim/output/ecn/ecn" + std::to_string(pkt.from) + "_" +
-             std::to_string(pkt.to) + ".txt");
+            PROJECT_ROOT_PATH / ("sim/output/ecn/ecn" + std::to_string(pkt.from) + "_" +
+                                 std::to_string(pkt.to) + ".txt");
         std::ofstream MyFile(file_name, std::ios_base::app);
 
         MyFile << eventlist().now() / 1000 << "," << marked << std::endl;
@@ -1131,21 +1079,22 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
     if (precision_ts == 1) {
         now_time = eventlist().now();
     } else {
-        now_time = (((eventlist().now() + precision_ts - 1) / precision_ts) *
-                    precision_ts);
+        now_time = (((eventlist().now() + precision_ts - 1) / precision_ts) * precision_ts);
     }
     uint64_t newRtt = now_time - ts;
-    flow_signals_update(_pcm_flow_ptr, PCM_SIG_RTT,
-                        newRtt); // TODO: make sure that it's ok to cast here!!
+
+    if (!_pcm_ignore) {
+        _pcm_flow->signalUpdate(PCM_SIG_RTT, newRtt);
+    }
+
     mark_received(pkt);
 
     if (use_pacing && generic_pacer != NULL /*&& did_qa*/ &&
         ((eventlist().now() - last_pac_change) > _base_rtt / 20)) {
         pacing_delay = (4160 * 8) / ((_cwnd * 8.0) / (_base_rtt / 1000.0));
         //  pacing_delay -= (4160 * 8 / 80);
-        cout << "Setting the pacing delay update " << _cwnd << " "
-             << (_base_rtt / 1000) << " to " << pacing_delay << " at "
-             << GLOBAL_TIME / 1000 << endl;
+        cout << "Setting the pacing delay update " << _cwnd << " " << (_base_rtt / 1000) << " to "
+             << pacing_delay << " at " << GLOBAL_TIME / 1000 << endl;
         pacing_delay *= 1000; // ps
         generic_pacer->cancel();
         // generic_pacer->schedule_send(pacing_delay);
@@ -1154,11 +1103,12 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
 
     count_total_ack++;
     if (marked) {
-        _list_ecn_received.push_back(
-            std::make_pair(eventlist().now() / 1000, 1));
+        _list_ecn_received.push_back(std::make_pair(eventlist().now() / 1000, 1));
         count_total_ecn++;
         consecutive_good_medium = 0;
-        flow_signals_update(_pcm_flow_ptr, PCM_SIG_ECN, 1);
+        if (!_pcm_ignore) {
+            _pcm_flow->signalUpdate(PCM_SIG_ECN, 1);
+        }
     }
 
     if (from == 0 && count_total_ack % 10 == 0) {
@@ -1176,15 +1126,12 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
     }
 
     if (COLLECT_DATA) {
-        _received_ecn.push_back(
-            std::make_tuple(eventlist().now(), marked, _mss, newRtt));
-        _list_rtt.push_back(std::make_tuple(
-            eventlist().now() / 1000, newRtt / 1000, pkt.seqno(), pkt.ackno(),
-            _base_rtt / 1000, _target_rtt / 1000));
+        _received_ecn.push_back(std::make_tuple(eventlist().now(), marked, _mss, newRtt));
+        _list_rtt.push_back(std::make_tuple(eventlist().now() / 1000, newRtt / 1000, pkt.seqno(),
+                                            pkt.ackno(), _base_rtt / 1000, _target_rtt / 1000));
     }
 
-    if (newRtt > _base_rtt * quickadapt_lossless_rtt && marked &&
-        queue_type == "lossless_input") {
+    if (newRtt > _base_rtt * quickadapt_lossless_rtt && marked && queue_type == "lossless_input") {
 
         simulateTrimEvent(dynamic_cast<PcmAck &>(pkt));
     }
@@ -1195,8 +1142,7 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
             f_flow_over_hook(pkt);
         }
 
-        cout << "Flow " << nodename() << " finished at "
-             << timeAsMs(eventlist().now()) << endl;
+        cout << "Flow " << nodename() << " finished at " << timeAsMs(eventlist().now()) << endl;
         cout << "Flow " << nodename() << "completion time is "
              << timeAsMs(eventlist().now() - _flow_start_time) << endl;
 
@@ -1226,8 +1172,9 @@ void PcmSrc::processAck(PcmAck &pkt, bool force_marked) {
         if (_pcm_ignore) {
             adjust_window(ts, marked, newRtt);
         } else {
-            _cwnd = flow_cwnd_get(_pcm_flow_ptr); // overwrite CWND with pcm
+            _cwnd = _pcm_flow->cwndGet();
             check_limits_cwnd();
+            _pcm_flow->cwndReset(_cwnd);
         }
 
         acked_bytes += _mss;
@@ -1292,8 +1239,8 @@ void PcmSrc::receivePacket(Packet &pkt) {
         pkt.free();
         return;
     case UECNACK:
-        cout << "\nNACK at " << GLOBAL_TIME / 1000 << " " << from << "@" << to
-             << "@" << tag << " - " << pkt.is_failed << endl;
+        cout << "\nNACK at " << GLOBAL_TIME / 1000 << " " << from << "@" << to << "@" << tag
+             << " - " << pkt.is_failed << endl;
         // fflush(stdout);
         total_nack++;
         if (_trimming_enabled) {
@@ -1304,17 +1251,15 @@ void PcmSrc::receivePacket(Packet &pkt) {
         }
         break;
     default:
-        std::cout << "unknown packet receive with type code: " << pkt.type()
-                  << "\n";
+        std::cout << "unknown packet receive with type code: " << pkt.type() << "\n";
         return;
     }
     if (get_unacked() < _cwnd && _rtx_timeout_pending) {
         eventlist().sourceIsPendingRel(*this, 1000);
     }
 
-    std::cout << "[" << from << ":" << to
-              << "] PCM TIME=" << eventlist().now() / 1000 << " cwnd=" << _cwnd
-              << std::endl;
+    std::cout << "[" << from << ":" << to << "] PCM TIME=" << eventlist().now() / 1000
+              << " cwnd=" << _cwnd << std::endl;
 }
 
 void PcmSrc::fast_increase() {
@@ -1335,8 +1280,7 @@ void PcmSrc::fast_increase() {
     }
 
     increasing = true;
-    _list_fast_increase_event.push_back(
-        std::make_pair(eventlist().now() / 1000, 1));
+    _list_fast_increase_event.push_back(std::make_pair(eventlist().now() / 1000, 1));
 }
 
 void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
@@ -1351,8 +1295,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
     }
 
     if (ecn) {
-        if (saved_acked_bytes != 0 && ecn &&
-            (algorithm_type == "intersmartt")) {
+        if (saved_acked_bytes != 0 && ecn && (algorithm_type == "intersmartt")) {
             //_cwnd = min(_cwnd, (uint32_t)(saved_acked_bytes * bonus_drop));
         }
     }
@@ -1376,8 +1319,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
        %lu\n", from, GLOBAL_TIME / 1000, ecn, exp_avg_ecn,
            counter_consecutive_good_bytes, target_window); */
 
-    if (algorithm_type == "intersmartt" ||
-        algorithm_type == "intersmartt_new") {
+    if (algorithm_type == "intersmartt" || algorithm_type == "intersmartt_new") {
         if (!ecn && current_ecn_rate <= 0 && GLOBAL_TIME > _base_rtt * 10) {
             counter_consecutive_good_bytes += _mss;
         } else {
@@ -1387,8 +1329,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
             increasing = false;
         }
     } else {
-        if (rtt <= (_base_rtt + (_mss * 8 / LINK_SPEED_MODERN * 5 * 1000)) &&
-            !ecn) {
+        if (rtt <= (_base_rtt + (_mss * 8 / LINK_SPEED_MODERN * 5 * 1000)) && !ecn) {
             counter_consecutive_good_bytes += _mss;
         } else {
             target_window = _cwnd;
@@ -1436,8 +1377,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
             if (t_last_decrease == 0) {
                 t_last_decrease = eventlist().now();
             }
-            bool time_enough =
-                (eventlist().now() - t_last_decrease) > _base_rtt;
+            bool time_enough = (eventlist().now() - t_last_decrease) > _base_rtt;
 
             if (count_received < ignore_for && ecn) {
                 return;
@@ -1448,63 +1388,53 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 return;
             }
 
-            if ((increasing ||
-                 counter_consecutive_good_bytes > target_window) &&
+            if ((increasing || counter_consecutive_good_bytes > target_window) &&
                 use_fast_increase) {
                 fast_increase();
                 // Case 1 RTT Based Increase
             } else if (!ecn && rtt < _target_rtt) {
 
-                _cwnd +=
-                    (min(uint32_t((((_target_rtt - rtt) / (double)rtt) *
-                                   y_gain * _mss * (_mss / (double)_cwnd))),
-                         uint32_t(_mss))) *
-                    reaction_delay;
+                _cwnd += (min(uint32_t((((_target_rtt - rtt) / (double)rtt) * y_gain * _mss *
+                                        (_mss / (double)_cwnd))),
+                              uint32_t(_mss))) *
+                         reaction_delay;
 
                 if (!disable_case_4) {
-                    _cwnd +=
-                        ((double)_mss / _cwnd) * x_gain * _mss * reaction_delay;
+                    _cwnd += ((double)_mss / _cwnd) * x_gain * _mss * reaction_delay;
                 }
 
                 if (COLLECT_DATA) {
                     _list_medium_increase_event.push_back(
                         std::make_pair(eventlist().now() / 1000, 1));
-                    count_case_1.push_back(
-                        std::make_pair(eventlist().now() / 1000, 1));
+                    count_case_1.push_back(std::make_pair(eventlist().now() / 1000, 1));
                 }
                 //  Case 2 Hybrid Based Decrease || RTT Decrease
             } else if (ecn && rtt > _target_rtt) {
                 if (can_decrease_exp_avg) {
                     _cwnd -= reaction_delay *
-                             min(((w_gain *
-                                   ((rtt - (double)_target_rtt) / rtt) * _mss) +
+                             min(((w_gain * ((rtt - (double)_target_rtt) / rtt) * _mss) +
                                   _cwnd / (double)_bdp * z_gain * _mss),
                                  (double)_mss);
                 }
                 if (COLLECT_DATA) {
-                    count_case_2.push_back(
-                        std::make_pair(eventlist().now() / 1000, 1));
+                    count_case_2.push_back(std::make_pair(eventlist().now() / 1000, 1));
                 }
                 //  Case 3 Gentle Decrease (Window based)
             } else if (ecn && rtt < _target_rtt) {
                 if (can_decrease_exp_avg) {
-                    reduce_cwnd(static_cast<double>(_cwnd) / _bdp * _mss *
-                                z_gain * reaction_delay);
+                    reduce_cwnd(static_cast<double>(_cwnd) / _bdp * _mss * z_gain * reaction_delay);
                     if (COLLECT_DATA) {
-                        count_case_3.push_back(
-                            std::make_pair(eventlist().now() / 1000, 1));
+                        count_case_3.push_back(std::make_pair(eventlist().now() / 1000, 1));
                     }
                 }
                 //  Case 4
             } else if (!ecn && rtt > _target_rtt) {
                 // Do nothing but fairness
                 if (!disable_case_4) {
-                    _cwnd +=
-                        ((double)_mss / _cwnd) * x_gain * _mss * reaction_delay;
+                    _cwnd += ((double)_mss / _cwnd) * x_gain * _mss * reaction_delay;
                 }
                 if (COLLECT_DATA) {
-                    count_case_4.push_back(
-                        std::make_pair(eventlist().now() / 1000, 1));
+                    count_case_4.push_back(std::make_pair(eventlist().now() / 1000, 1));
                 }
             }
             // Delay Logic, Version C Logic
@@ -1515,11 +1445,9 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
 
             x_gain = (_bdp / 100 * initial_x_gain) / _mss;
             z_gain = initial_z_gain;
-            cout << "X Gain updated is " << x_gain << " - z gain is " << z_gain
-                 << endl;
-            cout << "Flow3 " << from << " - Time " << GLOBAL_TIME / 1000
-                 << " vs End " << ecn_rtt_end / 1000 << " - First ECN "
-                 << is_first_ecn << " " << endl;
+            cout << "X Gain updated is " << x_gain << " - z gain is " << z_gain << endl;
+            cout << "Flow3 " << from << " - Time " << GLOBAL_TIME / 1000 << " vs End "
+                 << ecn_rtt_end / 1000 << " - First ECN " << is_first_ecn << " " << endl;
 
             if (current_ecn_rate > previous_ecn_rate) {
                 last_phantom_increase = eventlist().now();
@@ -1527,20 +1455,17 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
 
             if (eventlist().now() > ecn_rtt_end) {
                 previous_ecn_rate = current_ecn_rate;
-                current_ecn_rate =
-                    ((double)pkt_with_ecn_rtt) / total_pkt_seen_rtt * 100;
+                current_ecn_rate = ((double)pkt_with_ecn_rtt) / total_pkt_seen_rtt * 100;
                 ecn_rtt_end = eventlist().now() + ecn_rate_period;
-                cout << "Flow " << from << " - ECN vs TOT " << pkt_with_ecn_rtt
-                     << " " << total_pkt_seen_rtt << endl;
+                cout << "Flow " << from << " - ECN vs TOT " << pkt_with_ecn_rtt << " "
+                     << total_pkt_seen_rtt << endl;
                 pkt_with_ecn_rtt = 0;
                 total_pkt_seen_rtt = 0;
                 count_add_from_zero_ecn = 0;
-                list_ecn_rate.push_back(
-                    std::make_pair(eventlist().now() / 1000, current_ecn_rate));
+                list_ecn_rate.push_back(std::make_pair(eventlist().now() / 1000, current_ecn_rate));
 
                 phantom_size_calc =
-                    (current_ecn_rate / 100) * (kmax_double - kmin_double) +
-                    kmin_double;
+                    (current_ecn_rate / 100) * (kmax_double - kmin_double) + kmin_double;
                 is_first_ecn = true;
                 last_freeze = eventlist().now();
                 if (pkt_with_ecn_rtt == 0) {
@@ -1555,36 +1480,35 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 if (current_ecn_rate >= 30) {
                     if (current_ecn_rate >= previous_ecn_rate) {
                         cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
-                             << " - Above 30 - Decrease - Current Rate "
-                             << current_ecn_rate << " vs " << previous_ecn_rate
-                             << " - Scaling " << scaling_factor << endl;
+                             << " - Above 30 - Decrease - Current Rate " << current_ecn_rate
+                             << " vs " << previous_ecn_rate << " - Scaling " << scaling_factor
+                             << endl;
                     } else {
                         cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
-                             << " - Above 30 - Increase - Current Rate "
-                             << current_ecn_rate << " vs " << previous_ecn_rate
-                             << " - Scaling " << scaling_factor << endl;
+                             << " - Above 30 - Increase - Current Rate " << current_ecn_rate
+                             << " vs " << previous_ecn_rate << " - Scaling " << scaling_factor
+                             << endl;
                     }
                 } else {
                     if (current_ecn_rate >= previous_ecn_rate) {
                         cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
-                             << " - Below 30 - Decrease - Current Rate "
-                             << current_ecn_rate << " vs " << previous_ecn_rate
-                             << " - Scaling " << scaling_factor << endl;
+                             << " - Below 30 - Decrease - Current Rate " << current_ecn_rate
+                             << " vs " << previous_ecn_rate << " - Scaling " << scaling_factor
+                             << endl;
                     } else {
                         cout << "Flow2 " << from << " " << GLOBAL_TIME / 1000
-                             << " - Below 30 - Increase - Current Rate "
-                             << current_ecn_rate << " vs " << previous_ecn_rate
-                             << " - Scaling " << scaling_factor << endl;
+                             << " - Below 30 - Increase - Current Rate " << current_ecn_rate
+                             << " vs " << previous_ecn_rate << " - Scaling " << scaling_factor
+                             << endl;
                     }
                 }
             }
 
             if (ecn) {
                 // Quick Adapt if the ECN rate is above a certain %
-                if (current_ecn_rate > 65 ||
-                    (_hop_count < 9 && rtt > _base_rtt * 2.2)) {
-                    cout << "ECN Rate HIGH " << current_ecn_rate << " - Time "
-                         << GLOBAL_TIME / 1000 << endl;
+                if (current_ecn_rate > 65 || (_hop_count < 9 && rtt > _base_rtt * 2.2)) {
+                    cout << "ECN Rate HIGH " << current_ecn_rate << " - Time " << GLOBAL_TIME / 1000
+                         << endl;
                     if (eventlist().now() > next_qa) {
                         need_quick_adapt = true;
                         quick_adapt(true);
@@ -1602,31 +1526,26 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 pkt_with_ecn_rtt++;
 
                 if (eventlist().now() > last_qa_event + _base_rtt) {
-                    if (current_ecn_rate > 30 &&
-                        current_ecn_rate >= previous_ecn_rate) {
-                        cout << "From2 " << from << " - Time "
-                             << GLOBAL_TIME / 1000 << " - Current Rate "
-                             << current_ecn_rate << " vs " << previous_ecn_rate
-                             << " - Phantom Queue Size " << phantom_size_calc
+                    if (current_ecn_rate > 30 && current_ecn_rate >= previous_ecn_rate) {
+                        cout << "From2 " << from << " - Time " << GLOBAL_TIME / 1000
+                             << " - Current Rate " << current_ecn_rate << " vs "
+                             << previous_ecn_rate << " - Phantom Queue Size " << phantom_size_calc
                              << " - Pkts " << count_add_from_zero_ecn << endl;
                         _cwnd -= 4160 * initial_z_gain / 100;
                         //_cwnd -= ((x_gain / 1) * _mss * ((double)_mss /
                         //_cwnd)) * scaling_factor;
-                        cout << "Decrease above " << from << " 30 at "
-                             << GLOBAL_TIME / 1000 << endl;
-                    } else if (current_ecn_rate > 30 &&
-                               current_ecn_rate <= previous_ecn_rate) {
-                        _cwnd += (((double)_mss / _cwnd) * (x_gain)*_mss) *
-                                 scaling_factor;
-                        cout << "Increase above " << from << " 30 at "
-                             << GLOBAL_TIME / 1000 << endl;
+                        cout << "Decrease above " << from << " 30 at " << GLOBAL_TIME / 1000
+                             << endl;
+                    } else if (current_ecn_rate > 30 && current_ecn_rate <= previous_ecn_rate) {
+                        _cwnd += (((double)_mss / _cwnd) * (x_gain)*_mss) * scaling_factor;
+                        cout << "Increase above " << from << " 30 at " << GLOBAL_TIME / 1000
+                             << endl;
                     }
                 }
                 last_ecn_seen = eventlist().now();
             }
 
-            if (eventlist().now() > last_ecn_seen + (_base_rtt * 1.0) ||
-                current_ecn_rate < 30) {
+            if (eventlist().now() > last_ecn_seen + (_base_rtt * 1.0) || current_ecn_rate < 30) {
 
                 if (eventlist().now() > last_ecn_seen + (_base_rtt * 1.0)) {
                     // current_ecn_rate = 0;
@@ -1639,11 +1558,9 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                 //     (_base_rtt * 2), (eventlist().now() > (_base_rtt * 3)),
                 //     rtt < near_base_rtt, last_phantom_increase);
 
-                if (use_fast_increase &&
-                    eventlist().now() > last_ecn_seen + (_base_rtt * 10.5) &&
+                if (use_fast_increase && eventlist().now() > last_ecn_seen + (_base_rtt * 10.5) &&
                     rtt < near_base_rtt &&
-                    eventlist().now() >
-                        last_phantom_increase + (_base_rtt * 2) &&
+                    eventlist().now() > last_phantom_increase + (_base_rtt * 2) &&
                     (eventlist().now() > (_base_rtt * 3))) {
 
                     fast_increase();
@@ -1653,8 +1570,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                     }
 
                     if (current_ecn_rate > previous_ecn_rate) {
-                        if (eventlist().now() >
-                            next_increase_at + _base_rtt / 2) {
+                        if (eventlist().now() > next_increase_at + _base_rtt / 2) {
                             increasing_for *= 2;
                             increasing_for = max(increasing_for, 16);
                             next_increase_at = eventlist().now();
@@ -1665,11 +1581,9 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                     }
 
                     if (current_ecn_rate > previous_ecn_rate) {
-                        gent_dec_amount =
-                            (x_gain / 2.5) * _mss * ((double)_mss / _cwnd);
-                        gent_dec_amount += (x_gain / 2.5) * _mss *
-                                           ((double)_mss / _cwnd) *
-                                           ((double)_cwnd) / _bdp;
+                        gent_dec_amount = (x_gain / 2.5) * _mss * ((double)_mss / _cwnd);
+                        gent_dec_amount +=
+                            (x_gain / 2.5) * _mss * ((double)_mss / _cwnd) * ((double)_cwnd) / _bdp;
                         /* gent_dec_amount =
                                 ((double)_mss) *
                                 (((double)_cwnd) / _bdp * (z_gain / 1)); */
@@ -1679,9 +1593,7 @@ void PcmSrc::adjust_window(simtime_picosec ts, bool ecn, simtime_picosec rtt) {
                     } else {
                         // printf("Increase below %d 30 at %lu\n", from,
                         //        GLOBAL_TIME / 1000);
-                        _cwnd +=
-                            (((double)_mss / _cwnd) * (x_gain / 1) * _mss) *
-                            scaling_factor;
+                        _cwnd += (((double)_mss / _cwnd) * (x_gain / 1) * _mss) * scaling_factor;
                     }
                 }
             }
@@ -1718,8 +1630,7 @@ void PcmSrc::drop_old_received() {
     if (true) {
         if (eventlist().now() > _target_rtt) {
             uint64_t lower_thresh = eventlist().now() - (_target_rtt * 1);
-            while (!_received_ecn.empty() &&
-                   std::get<0>(_received_ecn.front()) < lower_thresh) {
+            while (!_received_ecn.empty() && std::get<0>(_received_ecn.front()) < lower_thresh) {
                 _received_ecn.pop_front();
             }
         }
@@ -1770,12 +1681,10 @@ bool PcmSrc::ecn_congestion() {
 
 const string &PcmSrc::nodename() { return _nodename; }
 
-void PcmSrc::connect(Route *routeout, Route *routeback, PcmSink &sink,
-                     simtime_picosec starttime) {
+void PcmSrc::connect(Route *routeout, Route *routeback, PcmSink &sink, simtime_picosec starttime) {
     if (_route_strategy == SINGLE_PATH || _route_strategy == ECMP_FIB ||
         _route_strategy == ECMP_FIB_ECN || _route_strategy == REACTIVE_ECN ||
-        _route_strategy == ECMP_RANDOM2_ECN ||
-        _route_strategy == ECMP_RANDOM_ECN) {
+        _route_strategy == ECMP_RANDOM2_ECN || _route_strategy == ECMP_RANDOM_ECN) {
         assert(routeout);
         _route = routeout;
     }
@@ -1795,9 +1704,8 @@ void PcmSrc::startflow() {
     ideal_x = x_gain;
     _flow_start_time = eventlist().now();
 
-    cout << "Starting Flow from " << from << " to " << to << " tag " << tag
-         << " - RTT " << _base_rtt << " - Target " << _target_rtt << " - Time "
-         << GLOBAL_TIME / 1000 << endl;
+    cout << "Starting Flow from " << from << " to " << to << " tag " << tag << " - RTT "
+         << _base_rtt << " - Target " << _target_rtt << " - Time " << GLOBAL_TIME / 1000 << endl;
     send_packets();
 }
 
@@ -1872,8 +1780,8 @@ void PcmSrc::send_packets() {
         }
 
         uint64_t data_seq = 0;
-        PcmPacket *p = PcmPacket::newpkt(_flow, *_route, _highest_sent + 1,
-                                         data_seq, _mss, false, _dstaddr);
+        PcmPacket *p =
+            PcmPacket::newpkt(_flow, *_route, _highest_sent + 1, data_seq, _mss, false, _dstaddr);
 
         p->set_route(*_route);
         int crt = choose_route();
@@ -1902,10 +1810,11 @@ void PcmSrc::send_packets() {
         HostQueue *q = dynamic_cast<HostQueue *>(sink);
         assert(q);
         uint32_t service_time = q->serviceTime(*p);
-        _sent_packets.push_back(
-            PcmSentPacket(eventlist().now() + service_time + _rto, p->seqno(),
-                          false, false, false));
-        flow_signals_update(_pcm_flow_ptr, PCM_SIG_DATA_TX, _mss);
+        _sent_packets.push_back(PcmSentPacket(eventlist().now() + service_time + _rto, p->seqno(),
+                                              false, false, false));
+        if (!_pcm_ignore) {
+            _pcm_flow->signalUpdate(PCM_SIG_DATA_TX, _mss);
+        }
         if (generic_pacer != NULL && use_pacing) {
             generic_pacer->just_sent();
             _paced_packet = false;
@@ -1932,8 +1841,7 @@ void permute_sequence_uec(vector<int> &seq) {
 void PcmSrc::set_paths(uint32_t no_of_paths) {
     if (_route_strategy != ECMP_FIB && _route_strategy != ECMP_FIB_ECN &&
         _route_strategy != ECMP_FIB2_ECN && _route_strategy != REACTIVE_ECN &&
-        _route_strategy != ECMP_RANDOM_ECN &&
-        _route_strategy != ECMP_RANDOM2_ECN) {
+        _route_strategy != ECMP_RANDOM_ECN && _route_strategy != ECMP_RANDOM2_ECN) {
         cout << "Set paths uec (path_count) called with wrong route "
                 "strategy "
              << _route_strategy << endl;
@@ -2053,19 +1961,15 @@ void PcmSrc::apply_timeout_penalty() {
     }
 }
 
-void PcmSrc::rtx_timer_hook(simtime_picosec now, simtime_picosec period) {
-    retransmit_packet();
-}
+void PcmSrc::rtx_timer_hook(simtime_picosec now, simtime_picosec period) { retransmit_packet(); }
 
 void PcmSrc::track_sending_rate() {
     if (eventlist().now() > last_track_ts + tracking_period) {
-        double rate = ((double)tracking_bytes * 8.0 /
-                       ((eventlist().now() - last_track_ts) / 1000));
+        double rate = ((double)tracking_bytes * 8.0 / ((eventlist().now() - last_track_ts) / 1000));
         // std::cout << "[DEBUG] tracking bytes: " << tracking_bytes <<
         // std::endl; std::cout << "[DEBUG] Sending rate: " << rate << " bps" <<
         // std::endl;
-        list_sending_rate.push_back(
-            std::make_pair(eventlist().now() / 1000, rate));
+        list_sending_rate.push_back(std::make_pair(eventlist().now() / 1000, rate));
         tracking_bytes = 0;
         last_track_ts = eventlist().now();
     }
@@ -2097,8 +2001,8 @@ bool PcmSrc::resend_packet(std::size_t idx) {
     _rto_margin = _rtt / 2;
 
     _unacked += _mss;
-    PcmPacket *p = PcmPacket::newpkt(_flow, *_route, _sent_packets[idx].seqno,
-                                     0, _mss, true, _dstaddr);
+    PcmPacket *p =
+        PcmPacket::newpkt(_flow, *_route, _sent_packets[idx].seqno, 0, _mss, true, _dstaddr);
     p->set_ts(eventlist().now());
 
     p->set_route(*_route);
@@ -2122,7 +2026,9 @@ bool PcmSrc::resend_packet(std::size_t idx) {
         --_nack_rtx_pending;
         _sent_packets[idx].nacked = false;
     }
-    flow_signals_update(_pcm_flow_ptr, PCM_SIG_DATA_TX, _mss);
+    if (!_pcm_ignore) {
+        _pcm_flow->signalUpdate(PCM_SIG_DATA_TX, _mss);
+    }
     _sent_packets[idx].timer = eventlist().now() + service_time + _rto;
     _sent_packets[idx].timedOut = false;
     update_rtx_time();
@@ -2157,20 +2063,14 @@ void PcmSrc::retransmit_packet() {
  * PcmSink *
  **********/
 
-PcmSink::PcmSink() : DataReceiver("sink"), _cumulative_ack{0}, _drops{0} {
-    _nodename = "uecsink";
-}
+PcmSink::PcmSink() : DataReceiver("sink"), _cumulative_ack{0}, _drops{0} { _nodename = "uecsink"; }
 
-void PcmSink::set_end_trigger(Trigger &end_trigger) {
-    _end_trigger = &end_trigger;
-}
+void PcmSink::set_end_trigger(Trigger &end_trigger) { _end_trigger = &end_trigger; }
 
-void PcmSink::send_nack(simtime_picosec ts, bool marked, PcmAck::seq_t seqno,
-                        PcmAck::seq_t ackno, const Route *rt, int path_id,
-                        bool is_failed) {
+void PcmSink::send_nack(simtime_picosec ts, bool marked, PcmAck::seq_t seqno, PcmAck::seq_t ackno,
+                        const Route *rt, int path_id, bool is_failed) {
 
-    PcmNack *nack =
-        PcmNack::newpkt(_src->_flow, *_route, seqno, ackno, 0, _srcaddr);
+    PcmNack *nack = PcmNack::newpkt(_src->_flow, *_route, seqno, ackno, 0, _srcaddr);
     nack->is_failed = is_failed;
 
     // printf("Sending NACK at %lu\n", GLOBAL_TIME);
@@ -2231,8 +2131,7 @@ void PcmSink::receivePacket(Packet &pkt) {
         }
         break;
     default:
-        std::cout << "unknown packet receive with type code: " << pkt.type()
-                  << "\n";
+        std::cout << "unknown packet receive with type code: " << pkt.type() << "\n";
         pkt.free();
 
         return;
@@ -2249,8 +2148,7 @@ void PcmSink::receivePacket(Packet &pkt) {
 
     // packet was trimmed
     if (pkt.header_only() && pkt._is_trim) {
-        send_nack(ts, marked, seqno, ackno, _paths.at(crt_path), pkt.pathid(),
-                  pkt.is_failed);
+        send_nack(ts, marked, seqno, ackno, _paths.at(crt_path), pkt.pathid(), pkt.is_failed);
         pkt.flow().logTraffic(pkt, *this, TrafficLogger::PKT_RCVDESTROY);
         p->free();
         // printf("NACKR %d@%d@%d - Time %lu\n", from, to, tag,
@@ -2283,9 +2181,8 @@ void PcmSink::receivePacket(Packet &pkt) {
         // received?
         if (_received.empty()) {
             _received.push_front(seqno);
-            _drops += (1000 + seqno - _cumulative_ack - 1) /
-                      1000; // TODO: figure out what is this
-                            // calculating exactly
+            _drops += (1000 + seqno - _cumulative_ack - 1) / 1000; // TODO: figure out what is this
+                                                                   // calculating exactly
         } else if (seqno > _received.back()) {
             _received.push_back(seqno);
         } else {
@@ -2307,13 +2204,11 @@ void PcmSink::receivePacket(Packet &pkt) {
     int32_t path_id = p->pathid();
     /* printf("NORMALACK %d@%d@%d - Time %lu\n", from, to, tag,
            GLOBAL_TIME / 1000); */
-    send_ack(ts, marked, seqno, ackno, _paths.at(crt_path), pkt.get_route(),
-             path_id);
+    send_ack(ts, marked, seqno, ackno, _paths.at(crt_path), pkt.get_route(), path_id);
 }
 
-void PcmSink::send_ack(simtime_picosec ts, bool marked, PcmAck::seq_t seqno,
-                       PcmAck::seq_t ackno, const Route *rt,
-                       const Route *inRoute, int path_id) {
+void PcmSink::send_ack(simtime_picosec ts, bool marked, PcmAck::seq_t seqno, PcmAck::seq_t ackno,
+                       const Route *rt, const Route *inRoute, int path_id) {
 
     PcmAck *ack = 0;
 
@@ -2440,15 +2335,12 @@ void PcmSink::set_paths(uint32_t no_of_paths) {
  * PcmRtxTimerScanner *
  **********************/
 
-PcmRtxTimerScanner::PcmRtxTimerScanner(simtime_picosec scanPeriod,
-                                       EventList &eventlist)
+PcmRtxTimerScanner::PcmRtxTimerScanner(simtime_picosec scanPeriod, EventList &eventlist)
     : EventSource(eventlist, "RtxScanner"), _scanPeriod{scanPeriod} {
     eventlist.sourceIsPendingRel(*this, 0);
 }
 
-void PcmRtxTimerScanner::registerPcm(PcmSrc &uecsrc) {
-    _uecs.push_back(&uecsrc);
-}
+void PcmRtxTimerScanner::registerPcm(PcmSrc &uecsrc) { _uecs.push_back(&uecsrc); }
 
 void PcmRtxTimerScanner::doNextEvent() {
     simtime_picosec now = eventlist().now();

@@ -9,7 +9,7 @@
 
 // Flow thread: emulate constant bandwidth, drops, NACKs, RTOs
 void *app_flow_traffic_gen_fn(void *arg) {
-    flow_t *flow = arg;
+    pcm_flow_t flow = arg;
 
     unsigned int rnd = (unsigned int)time(NULL);
     const int pkts_per_ms = (TGEN_BANDWIDTH_BPS / 8 / 1000) / TGEN_PACKET_SIZE;

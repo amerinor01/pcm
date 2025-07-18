@@ -3,12 +3,12 @@
 
 size_t pthrd_flow_max_regfile_size_get() { return PTHRD_MAX_REGFILE_SIZE; }
 
-bool pthrd_flow_is_ready(const flow_t *flow) {
+bool pthrd_flow_is_ready(const pcm_flow_t flow) {
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
     return flow_ctx->running;
 }
 
-int pthrd_flow_destroy(flow_t *flow) {
+int pthrd_flow_destroy(pcm_flow_t flow) {
     int ret = PCM_SUCCESS;
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
 
@@ -23,7 +23,7 @@ int pthrd_flow_destroy(flow_t *flow) {
     return ret;
 }
 
-int pthrd_flow_create(flow_t *flow, traffic_gen_fn_t traffic_gen_fn) {
+int pthrd_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     flow->backend_ctx = calloc(1, sizeof(struct pthrd_flow));
     if (!flow->backend_ctx) {
         LOG_CRIT("failed to allocate new pthread flow context");
