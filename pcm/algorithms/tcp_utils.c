@@ -2,28 +2,28 @@
 
 PCM_FORCE_INLINE void tcp_fast_recovery_exit(ALGO_CTX_ARGS, pcm_uint *cur_cwnd,
                                              pcm_uint *num_acks) {
-    *cur_cwnd = get_local_state_uint(VAR_SSTHRESH);
+    *cur_cwnd = get_var_uint(VAR_SSTHRESH);
     (*num_acks)--;
-    set_local_state_uint(VAR_IN_FAST_RECOV, 0);
+    set_var_uint(VAR_IN_FAST_RECOV, 0);
 }
 
 PCM_FORCE_INLINE void tcp_timeout_recovery(ALGO_CTX_ARGS, pcm_uint *cur_cwnd) {
-    set_local_state_uint(VAR_SSTHRESH, TCP_RTO_RECOVERY_SSTHRESH(*cur_cwnd));
+    set_var_uint(VAR_SSTHRESH, TCP_RTO_RECOVERY_SSTHRESH(*cur_cwnd));
     *cur_cwnd = 1;
-    set_local_state_uint(VAR_IN_FAST_RECOV, 0);
+    set_var_uint(VAR_IN_FAST_RECOV, 0);
 }
 
 PCM_FORCE_INLINE void tcp_slow_start(ALGO_CTX_ARGS, pcm_uint *cur_cwnd,
                                      pcm_uint *acks_to_consume) {
     pcm_uint to_ssthresh =
-        MIN(*acks_to_consume, get_local_state_uint(VAR_SSTHRESH) - *cur_cwnd);
+        MIN(*acks_to_consume, get_var_uint(VAR_SSTHRESH) - *cur_cwnd);
     *cur_cwnd += to_ssthresh;
     *acks_to_consume -= to_ssthresh;
 }
 
 PCM_FORCE_INLINE void tcp_cong_avoid(ALGO_CTX_ARGS, pcm_uint *cur_cwnd,
                                      pcm_uint *acks_to_consume) {
-    pcm_uint tot_acked = get_local_state_uint(VAR_TOT_ACKED);
+    pcm_uint tot_acked = get_var_uint(VAR_TOT_ACKED);
 
     if (tot_acked >= *cur_cwnd) {
         /* If credits accumulated at a higher w, apply them gently now. */
@@ -38,5 +38,5 @@ PCM_FORCE_INLINE void tcp_cong_avoid(ALGO_CTX_ARGS, pcm_uint *cur_cwnd,
     }
     *acks_to_consume = 0;
 
-    set_local_state_uint(VAR_TOT_ACKED, tot_acked);
+    set_var_uint(VAR_TOT_ACKED, tot_acked);
 }

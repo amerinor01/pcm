@@ -40,8 +40,8 @@ int algorithm_main() {
 
     pcm_uint cwnd = get_control(CTRL_CWND) / MSS;
 
-    pcm_uint ssthresh = get_local_state(VAR_SSTHRESH);
-    pcm_uint tot_acked = get_local_state(VAR_TOT_ACKED) + num_acks;
+    pcm_uint ssthresh = get_var(VAR_SSTHRESH);
+    pcm_uint tot_acked = get_var(VAR_TOT_ACKED) + num_acks;
 
     pcm_uint num_acks_consumed = 0;
 
@@ -111,8 +111,8 @@ int algorithm_main() {
 
     update_signal(SIG_ACK, -num_acks_consumed);
     set_control(CTRL_CWND, cwnd / MSS);
-    set_local_state(VAR_TOT_ACKED, tot_acked);
-    set_local_state(VAR_SSTHRESH, ssthresh);
+    set_var(VAR_TOT_ACKED, tot_acked);
+    set_var(VAR_SSTHRESH, ssthresh);
 
     return PCM_SUCCESS;
 }

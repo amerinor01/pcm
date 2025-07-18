@@ -3,141 +3,114 @@
 #include "assert.h"
 #include "pcm.h"
 
-static inline void dcqcn_rate_to_cwnd(ALGO_CTX_ARGS,
-                                      struct dcqcn_state_snapshot *state) {
+static PCM_FORCE_INLINE void dcqcn_rate_to_cwnd(ALGO_CTX_ARGS,
+                                                pcm_uint *cwnd_cur) {
     // Original DCQCN is a rate based, we use RTT to convert rate to cwnd
     // cwnd [bytes] = rate_cur [Gbytes/second] * brtt [picoseconds] * to_bytes
-    state->cwnd =
-        (pcm_float)state->rate_cur * (pcm_float)state->consts.brtt / 1000.;
+    *cwnd_cur = get_var_float(VAR_CUR_RATE) * CONST_BRTT / 1000.;
 }
 
-static inline void dcqcn_rate_decrease(ALGO_CTX_ARGS,
-                                       struct dcqcn_state_snapshot *state) {
+static PCM_FORCE_INLINE void dcqcn_rate_decrease(ALGO_CTX_ARGS,
+                                                 pcm_uint *cwnd_cur) {
     /* record old rate as target rate */
-    state->rate_target = state->rate_cur;
+    set_var_float(VAR_TGT_RATE, get_var_float(VAR_CUR_RATE));
     /* multiplicative decrease factor */
-    state->rate_cur = (pcm_float)state->rate_cur * (1.0 - 0.5 * state->alpha);
+    set_var_float(VAR_CUR_RATE, get_var_float(VAR_CUR_RATE) *
+                                    (1.0 - 0.5 * get_var_float(VAR_ALPHA)));
     /* update alpha */
-    state->alpha =
-        (1 - state->consts.gamma) * state->alpha + state->consts.gamma;
-    dcqcn_rate_to_cwnd(ALGO_CTX_PASS, state);
+    set_var_float(VAR_ALPHA,
+                  (1 - CONST_GAMMA) * get_var_float(VAR_ALPHA) + CONST_GAMMA);
+    dcqcn_rate_to_cwnd(ALGO_CTX_PASS, cwnd_cur);
 }
 
-static inline void dcqcn_rate_increase(ALGO_CTX_ARGS,
-                                       struct dcqcn_state_snapshot *state) {
+static PCM_FORCE_INLINE void dcqcn_rate_increase(ALGO_CTX_ARGS,
+                                                 pcm_uint *cwnd_cur) {
     uint32_t min_counter;
-    if (MAX(state->rate_increase_timer_evts, state->byte_counter_evts) <
-        state->consts.fr_steps) {
+    if (MAX(get_var_uint(VAR_RATE_INCREASE_EVTS),
+            get_var_uint(VAR_BYTE_COUNTER_EVTS)) < CONST_FR_STEPS) {
         /* Fast Recovery */
         // in fast recovery we are approaching last cached target rate.
-    } else if ((min_counter = MIN(state->rate_increase_timer_evts,
-                                  state->byte_counter_evts)) >
-               state->consts.fr_steps) {
+    } else if ((min_counter = MIN(get_var_uint(VAR_RATE_INCREASE_EVTS),
+                                  get_var_uint(VAR_BYTE_COUNTER_EVTS))) >
+               CONST_FR_STEPS) {
         /* Hyper Increase */
-        state->rate_target += min_counter * state->consts.rhai;
+        set_var_float(VAR_TGT_RATE,
+                      get_var_float(VAR_TGT_RATE) + min_counter * CONST_RHAI);
     } else {
         /* Additive Increase */
-        state->rate_target += state->consts.rai;
+        set_var_float(VAR_TGT_RATE, get_var_float(VAR_TGT_RATE) + CONST_RAI);
     }
 
-    state->rate_cur = (state->rate_target + state->rate_cur) / 2;
+    set_var_float(VAR_CUR_RATE,
+                  (get_var_float(VAR_TGT_RATE) + get_var_float(VAR_CUR_RATE)) /
+                      2);
 
-    dcqcn_rate_to_cwnd(ALGO_CTX_PASS, state);
+    dcqcn_rate_to_cwnd(ALGO_CTX_PASS, cwnd_cur);
 }
 
 int algorithm_main() {
-    struct dcqcn_state_snapshot state = {0};
-
-    state.alpha = get_local_state_float(DCQCN_LOCAL_STATE_IDX_ALPHA);
-    state.rate_increase_timer_evts =
-        get_local_state_uint(DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS);
-    state.byte_counter_evts =
-        get_local_state_uint(DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS);
-    state.rate_cur = get_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_CUR);
-    state.rate_target =
-        get_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_TARGET);
-
-    state.cwnd = get_control(DCQCN_CTRL_IDX_CWND);
-
-    state.consts.brtt = get_constant_uint(DCQCN_CONST_BRTT);
-    state.consts.rai = get_constant_uint(DCQCN_CONST_RAI);
-    state.consts.rhai = get_constant_uint(DCQCN_CONST_RHAI);
-    state.consts.fr_steps = get_constant_uint(DCQCN_CONST_FR_STEPS);
-    state.consts.gamma = get_constant_float(DCQCN_CONST_GAMMA);
+    pcm_uint cur_cwnd = get_control(CTRL_CWND);
 
     // As a negative signal, ECN's always have higher priority that any other
     // timer
-    pcm_uint num_ecns = get_signal(DCQCN_SIG_IDX_ECN);
+    pcm_uint num_ecns = get_signal(SIG_ECN);
     if (num_ecns) {
-        dcqcn_rate_decrease(ALGO_CTX_PASS, &state);
+        dcqcn_rate_decrease(ALGO_CTX_PASS, &cur_cwnd);
         // we keep track of any excessive ECNs received, so
         // remaining ECN's can be processed immediately by this handler
         // TODO 1: implement reaction to all ECNs here to avoid costly handler
         // re-invocation
         // TODO 2: investigate:
-        // update_signal(DCQCN_SIG_IDX_ECN, num_ecns);
-        update_signal(DCQCN_SIG_IDX_ECN, -1);
+        // update_signal(SIG_ECN, num_ecns);
+        update_signal(SIG_ECN, -1);
         if (num_ecns - 1 > 0) {
             // disable all timers to avoid rate increase as we haven't consumed
             // all ECNs yet
-            set_signal(DCQCN_SIG_IDX_RATE_INCREASE_TIMER, 0);
-            set_signal(DCQCN_SIG_IDX_TX_BURST, 0);
-            set_signal(DCQCN_SIG_IDX_ALPHA_TIMER, 0);
+            set_signal(SIG_RATE_INCREASE_TIMER, 0);
+            set_signal(SIG_TX_BURST, 0);
+            set_signal(SIG_ALPHA_TIMER, 0);
         } else {
             // this is last (or the only) ECN that was received, arm rate
             // increase timers
-            set_local_state_int(DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS, 0);
-            set_local_state_int(DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS, 0);
-            set_signal(DCQCN_SIG_IDX_RATE_INCREASE_TIMER, 1);
-            set_signal(DCQCN_SIG_IDX_TX_BURST, 1);
-            set_signal(DCQCN_SIG_IDX_ALPHA_TIMER, 1);
+            set_var_int(VAR_RATE_INCREASE_EVTS, 0);
+            set_var_int(VAR_BYTE_COUNTER_EVTS, 0);
+            set_signal(SIG_RATE_INCREASE_TIMER, 1);
+            set_signal(SIG_TX_BURST, 1);
+            set_signal(SIG_ALPHA_TIMER, 1);
         }
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_CUR, state.rate_cur);
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_TARGET,
-                              state.rate_target);
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_ALPHA, state.alpha);
-        set_control(DCQCN_CTRL_IDX_CWND, state.cwnd);
-        goto exit;
+
+        goto save_cwnd_and_exit;
     }
 
     size_t trigger_id = get_signal_invoke_trigger_user_index();
     switch (trigger_id) {
-    case DCQCN_SIG_IDX_RATE_INCREASE_TIMER:
-        state.rate_increase_timer_evts++;
-        dcqcn_rate_increase(ALGO_CTX_PASS, &state);
-        set_local_state_int(DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS,
-                            state.rate_increase_timer_evts);
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_CUR, state.rate_cur);
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_TARGET,
-                              state.rate_target);
-        set_signal(DCQCN_SIG_IDX_RATE_INCREASE_TIMER, PCM_SIG_REARM);
-        set_control(DCQCN_CTRL_IDX_CWND, state.cwnd);
+    case SIG_RATE_INCREASE_TIMER:
+        set_var_uint(VAR_RATE_INCREASE_EVTS,
+                     get_var_uint(VAR_RATE_INCREASE_EVTS) + 1);
+        dcqcn_rate_increase(ALGO_CTX_PASS, &cur_cwnd);
+        set_signal(SIG_RATE_INCREASE_TIMER, PCM_SIG_REARM);
         break;
 
-    case DCQCN_SIG_IDX_TX_BURST:
-        state.byte_counter_evts++;
-        dcqcn_rate_increase(ALGO_CTX_PASS, &state);
-        set_local_state_int(DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS,
-                            state.byte_counter_evts);
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_CUR, state.rate_cur);
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_RATE_TARGET,
-                              state.rate_target);
-        set_signal(DCQCN_SIG_IDX_TX_BURST, PCM_SIG_REARM);
-        set_control(DCQCN_CTRL_IDX_CWND, state.cwnd);
+    case SIG_TX_BURST:
+        set_var_uint(VAR_BYTE_COUNTER_EVTS,
+                     get_var_uint(VAR_BYTE_COUNTER_EVTS) + 1);
+        dcqcn_rate_increase(ALGO_CTX_PASS, &cur_cwnd);
+        set_signal(SIG_TX_BURST, PCM_SIG_REARM);
         break;
 
-    case DCQCN_SIG_IDX_ALPHA_TIMER:
-        state.alpha = (1 - state.consts.gamma) * state.alpha;
-        set_local_state_float(DCQCN_LOCAL_STATE_IDX_ALPHA, state.alpha);
-        set_signal(DCQCN_SIG_IDX_ALPHA_TIMER, PCM_SIG_REARM);
-        break;
+    case SIG_ALPHA_TIMER:
+        set_var_float(VAR_ALPHA, (1 - CONST_GAMMA) * get_var_float(VAR_ALPHA));
+        set_signal(SIG_ALPHA_TIMER, PCM_SIG_REARM);
+        goto exit;
 
     default:
         return PCM_ERROR;
     }
 
+save_cwnd_and_exit:
+    set_control(CTRL_CWND, cur_cwnd);
 exit:
-    // printf(
+    // fprintf(stderr,
     //     "DCQCN post-control: ctx=%p trigger_id=%d num_ecns=%llu rate_tgt=%lf
     //     " "rate_cur=%lf " "alpha=%lf cwnd=%llu\n", ctx, trigger_id, num_ecns,
     //     state.rate_target, state.rate_cur, state.alpha, state.cwnd);

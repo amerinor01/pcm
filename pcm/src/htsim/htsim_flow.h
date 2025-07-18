@@ -16,8 +16,7 @@ struct htsim_flow {
     pcm_uint signals[ALGO_CONF_MAX_NUM_SIGNALS];
     pcm_uint thresholds[ALGO_CONF_MAX_NUM_SIGNALS];
     pcm_uint controls[ALGO_CONF_MAX_NUM_CONTROLS];
-    pcm_uint local_state[ALGO_CONF_MAX_LOCAL_STATE_VARS];
-    pcm_uint constants[ALGO_CONF_MAX_NUM_CONSTANTS];
+    pcm_uint vars[ALGO_CONF_MAX_VARS];
     uint64_t start_ts;
 };
 

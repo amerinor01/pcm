@@ -31,26 +31,26 @@ int __swift_pcmc_init(pcm_handle_t new_handle) {
                                                     new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_ACKED, new_handle), PCM_SUCCESS);
+    EXIT_ON_ERR(register_var_pcmc(VAR_ACKED, new_handle), PCM_SUCCESS);
     EXIT_ON_ERR(
-        register_local_state_initial_value_pcmc(VAR_ACKED, 0, new_handle),
+        register_var_initial_value_pcmc(VAR_ACKED, 0, new_handle),
         PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_T_LAST_DECREASE, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_T_LAST_DECREASE, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(VAR_T_LAST_DECREASE, 0,
+    EXIT_ON_ERR(register_var_initial_value_pcmc(VAR_T_LAST_DECREASE, 0,
                                                         new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_RTX_CNT, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_RTX_CNT, new_handle),
                 PCM_SUCCESS);
     EXIT_ON_ERR(
-        register_local_state_initial_value_pcmc(VAR_RTX_CNT, 0, new_handle),
+        register_var_initial_value_pcmc(VAR_RTX_CNT, 0, new_handle),
         PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_RTT_ESTIM, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_RTT_ESTIM, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(
+    EXIT_ON_ERR(register_var_initial_value_pcmc(
                     VAR_RTT_ESTIM, FABRIC_BRTT, new_handle),
                 PCM_SUCCESS);
 

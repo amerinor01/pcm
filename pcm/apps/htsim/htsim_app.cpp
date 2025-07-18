@@ -23,15 +23,10 @@
 #include <filesystem>
 // #include "vl2_topology.h"
 
-#include "algo_utils.h"
-#include "dcqcn.h"
 #include "htsim_pcm_device.hpp"
 #include "htsim_pcm_src.hpp"
 #include "pcm.h"
 #include "pcm_network.h"
-#include "smartt.h"
-#include "swift.h"
-#include "tcp.h"
 
 // Fat Tree topology was modified to work with this script, others won't work
 // correctly

@@ -29,11 +29,11 @@
 #define FAST_RECOVERY_DEFINE(algo_name, ssthresh_comp)                         \
     static PCM_FORCE_INLINE void algo_name##_fast_recovery(                    \
         ALGO_CTX_ARGS, pcm_uint *cur_cwnd) {                                   \
-        if (!get_local_state(VAR_IN_FAST_RECOV)) {                             \
+        if (!get_var(VAR_IN_FAST_RECOV)) {                                     \
             pcm_uint new_ssthresh = (pcm_uint)ssthresh_comp(*cur_cwnd);        \
             *cur_cwnd = new_ssthresh + 3;                                      \
-            set_local_state_uint(VAR_SSTHRESH, new_ssthresh);                  \
-            set_local_state_uint(VAR_IN_FAST_RECOV, 1);                        \
+            set_var_uint(VAR_SSTHRESH, new_ssthresh);                          \
+            set_var_uint(VAR_IN_FAST_RECOV, 1);                                \
         }                                                                      \
     }
 

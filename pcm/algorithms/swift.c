@@ -24,14 +24,13 @@ static PCM_FORCE_INLINE pcm_float swift_target_delay(ALGO_CTX_ARGS,
 static PCM_FORCE_INLINE void
 swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks, pcm_uint rtt_sample,
                    bool can_decrease, pcm_uint *cur_cwnd) {
-    set_local_state_uint(VAR_RETX_CNT, 0);
-    set_local_state_uint(VAR_ACKED,
-                         get_local_state(VAR_ACKED) + num_acks * MSS);
+    set_var_uint(VAR_RETX_CNT, 0);
+    set_var_uint(VAR_ACKED, get_var(VAR_ACKED) + num_acks * MSS);
     pcm_float target_delay = swift_target_delay(ALGO_CTX_PASS, *cur_cwnd);
 
     if (rtt_sample < target_delay) {
         /* Additive Increase */
-        *cur_cwnd += MSS * AI * (get_local_state_uint(VAR_ACKED) / *cur_cwnd);
+        *cur_cwnd += MSS * AI * (get_var_uint(VAR_ACKED) / *cur_cwnd);
         // Note: we DO NOT support FP fractional cwnd (yet)
         // if (state->cwnd >= 1) {
         //    state->cwnd += AI * state->tot_acked / state->cwnd;
@@ -50,18 +49,17 @@ swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks, pcm_uint rtt_sample,
 
 static PCM_FORCE_INLINE void swift_rtt_estimate(ALGO_CTX_ARGS,
                                                 pcm_uint rtt_sample) {
-    if (get_local_state_uint(VAR_RTT_ESTIM) > 0) {
-        set_local_state_uint(VAR_RTT_ESTIM,
-                             7 * get_local_state_uint(VAR_RTT_ESTIM) / 8 +
-                                 rtt_sample / 8);
+    if (get_var_uint(VAR_RTT_ESTIM) > 0) {
+        set_var_uint(VAR_RTT_ESTIM,
+                     7 * get_var_uint(VAR_RTT_ESTIM) / 8 + rtt_sample / 8);
     } else {
-        set_local_state_uint(VAR_RTT_ESTIM, rtt_sample);
+        set_var_uint(VAR_RTT_ESTIM, rtt_sample);
     }
 }
 
 static PCM_FORCE_INLINE void
 swift_nack_recovery(ALGO_CTX_ARGS, bool can_decrease, pcm_uint *cur_cwnd) {
-    set_local_state_uint(VAR_RETX_CNT, 0);
+    set_var_uint(VAR_RETX_CNT, 0);
     if (can_decrease) {
         *cur_cwnd = (pcm_float)(*cur_cwnd) * (1.0 - MAX_MDF);
     }
@@ -70,8 +68,8 @@ swift_nack_recovery(ALGO_CTX_ARGS, bool can_decrease, pcm_uint *cur_cwnd) {
 // TODO: test me in RTO-based simulation
 static PCM_FORCE_INLINE void
 swift_timeout_recovery(ALGO_CTX_ARGS, bool can_decrease, pcm_uint *cur_cwnd) {
-    set_local_state_uint(VAR_RETX_CNT, get_local_state_uint(VAR_RETX_CNT) + 1);
-    if (get_local_state_uint(VAR_RETX_CNT) >= RETX_RESET_THRESH) {
+    set_var_uint(VAR_RETX_CNT, get_var_uint(VAR_RETX_CNT) + 1);
+    if (get_var_uint(VAR_RETX_CNT) >= RETX_RESET_THRESH) {
         *cur_cwnd = MSS; // minimum possible cwnd
     } else if (can_decrease) {
         *cur_cwnd = (pcm_float)(*cur_cwnd) * (1.0 - MAX_MDF);
@@ -95,8 +93,8 @@ int algorithm_main() {
     pcm_uint cur_cwnd = get_control(CTRL_CWND);
     pcm_uint prev_cwnd = cur_cwnd;
 
-    bool can_decrease = (t_now - get_local_state_uint(VAR_T_LAST_DECREASE)) >=
-                        get_local_state(VAR_RTT_ESTIM);
+    bool can_decrease =
+        (t_now - get_var_uint(VAR_T_LAST_DECREASE)) >= get_var(VAR_RTT_ESTIM);
 
     /*
      * Note: for some reason htsim computes RTT estimation after computing
@@ -125,8 +123,8 @@ int algorithm_main() {
      * and reset RTT measurement
      */
     if (cur_cwnd < prev_cwnd) {
-        set_local_state_uint(VAR_T_LAST_DECREASE, t_now);
-        set_local_state_uint(VAR_ACKED, 0);
+        set_var_uint(VAR_T_LAST_DECREASE, t_now);
+        set_var_uint(VAR_ACKED, 0);
     }
 
     // if (cur_cwnd >= 1.0) {

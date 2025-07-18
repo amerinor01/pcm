@@ -46,8 +46,7 @@ int algorithm_config_alloc(device_t *device, struct algorithm_config **config) {
     slist_insert_tail(&new_config->list_entry, &device->configs_list);
     slist_init(&new_config->signals_list);
     slist_init(&new_config->controls_list);
-    slist_init(&new_config->local_state_list);
-    slist_init(&new_config->constants_list);
+    slist_init(&new_config->var_list);
     new_config->active = false;
 
     LOG_DBG("[dev=%p] allocated new config=%p", device, new_config);
@@ -77,10 +76,7 @@ int algorithm_config_destroy(struct algorithm_config *config) {
                    config->num_signals);
     ATTR_LIST_FREE(&config->controls_list, struct control_attr,
                    config->num_controls);
-    ATTR_LIST_FREE(&config->local_state_list, struct local_state_attr,
-                   config->num_local_states);
-    ATTR_LIST_FREE(&config->constants_list, struct constant_attr,
-                   config->num_constants);
+    ATTR_LIST_FREE(&config->var_list, struct var_attr, config->num_vars);
 
     if (shared_symbol_close(config->dlopen_handle) != PCM_SUCCESS) {
         LOG_CRIT("[dev=%p conf=%p] failed to close handler dlopen object",
@@ -181,10 +177,8 @@ int algorithm_config_activate(struct algorithm_config *config) {
         return PCM_ERROR;
     }
     config->active = true;
-    LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu "
-            "num_constants=%zu",
-            config->device, config, config->num_signals, config->num_controls,
-            config->num_constants);
+    LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu",
+            config->device, config, config->num_signals, config->num_controls);
     return PCM_SUCCESS;
 }
 
@@ -294,79 +288,38 @@ int algorithm_config_control_initial_value_set(struct algorithm_config *config,
     return PCM_SUCCESS;
 }
 
-int algorithm_config_local_state_add(struct algorithm_config *config,
-                                     size_t user_index) {
-    ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->local_state_list,
-                                       struct local_state_attr, user_index);
-    struct local_state_attr *attr;
-    ATTR_LIST_ITEM_ALLOC(&config->local_state_list, user_index,
-                         config->num_local_states,
-                         ALGO_CONF_MAX_LOCAL_STATE_VARS, attr);
+int algorithm_config_var_add(struct algorithm_config *config,
+                             size_t user_index) {
+    ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->var_list, struct var_attr,
+                                       user_index);
+    struct var_attr *attr;
+    ATTR_LIST_ITEM_ALLOC(&config->var_list, user_index, config->num_vars,
+                         ALGO_CONF_MAX_VARS, attr);
     return PCM_SUCCESS;
 }
 
-int algorithm_config_local_state_uint_set(struct algorithm_config *config,
-                                          size_t user_index,
-                                          pcm_uint initial_value) {
-    struct local_state_attr *attr;
-    ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
-                       user_index, initial_value, attr);
+int algorithm_config_var_uint_set(struct algorithm_config *config,
+                                  size_t user_index, pcm_uint initial_value) {
+    struct var_attr *attr;
+    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, user_index,
+                       initial_value, attr);
     return PCM_SUCCESS;
 }
 
-int algorithm_config_local_state_int_set(struct algorithm_config *config,
-                                         size_t user_index,
-                                         pcm_int initial_value) {
-    struct local_state_attr *attr;
+int algorithm_config_var_int_set(struct algorithm_config *config,
+                                 size_t user_index, pcm_int initial_value) {
+    struct var_attr *attr;
     pcm_uint encoded_val = encode_pcm_int(initial_value);
-    ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
-                       user_index, encoded_val, attr);
+    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, user_index,
+                       encoded_val, attr);
     return PCM_SUCCESS;
 }
 
-int algorithm_config_local_state_float_set(struct algorithm_config *config,
-                                           size_t user_index,
-                                           pcm_float initial_value) {
-    struct local_state_attr *attr;
+int algorithm_config_var_float_set(struct algorithm_config *config,
+                                   size_t user_index, pcm_float initial_value) {
+    struct var_attr *attr;
     pcm_uint encoded_val = encode_pcm_float(initial_value);
-    ATTR_LIST_ITEM_SET(&config->local_state_list, struct local_state_attr,
-                       user_index, encoded_val, attr);
-    return PCM_SUCCESS;
-}
-
-int algorithm_config_constant_add(struct algorithm_config *config,
-                                  size_t user_index) {
-    ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->constants_list,
-                                       struct constant_attr, user_index);
-    struct constant_attr *attr;
-    ATTR_LIST_ITEM_ALLOC(&config->constants_list, user_index,
-                         config->num_constants, ALGO_CONF_MAX_NUM_CONSTANTS,
-                         attr);
-    return PCM_SUCCESS;
-}
-
-int algorithm_config_constant_uint_set(struct algorithm_config *config,
-                                       size_t user_index, pcm_uint value) {
-    struct constant_attr *attr;
-    ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
-                       user_index, value, attr);
-    return PCM_SUCCESS;
-}
-
-int algorithm_config_constant_int_set(struct algorithm_config *config,
-                                      size_t user_index, pcm_int value) {
-    struct constant_attr *attr;
-    pcm_uint encoded_val = encode_pcm_int(value);
-    ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
-                       user_index, encoded_val, attr);
-    return PCM_SUCCESS;
-}
-
-int algorithm_config_constant_float_set(struct algorithm_config *config,
-                                        size_t user_index, pcm_float value) {
-    struct constant_attr *attr;
-    pcm_uint encoded_val = encode_pcm_float(value);
-    ATTR_LIST_ITEM_SET(&config->constants_list, struct constant_attr,
-                       user_index, encoded_val, attr);
+    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, user_index,
+                       encoded_val, attr);
     return PCM_SUCCESS;
 }

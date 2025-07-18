@@ -3,114 +3,81 @@
 #include "pcm.h"
 
 int __dcqcn_pcmc_init(pcm_handle_t new_handle) {
-    EXIT_ON_ERR(register_signal_pcmc(PCM_SIG_ECN, PCM_SIG_ACCUM_SUM, DCQCN_SIG_IDX_ECN,
+    EXIT_ON_ERR(register_signal_pcmc(PCM_SIG_ECN, PCM_SIG_ACCUM_SUM, SIG_ECN,
                                      new_handle),
                 PCM_SUCCESS);
     EXIT_ON_ERR(
-        register_signal_invoke_trigger_pcmc(DCQCN_SIG_IDX_ECN, 1, new_handle),
+        register_signal_invoke_trigger_pcmc(SIG_ECN, 1, new_handle),
         PCM_SUCCESS);
 
     EXIT_ON_ERR(register_signal_pcmc(PCM_SIG_ELAPSED_TIME, PCM_SIG_ACCUM_SUM,
-                                     DCQCN_SIG_IDX_ALPHA_TIMER, new_handle),
+                                     SIG_ALPHA_TIMER, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_signal_invoke_trigger_pcmc(DCQCN_SIG_IDX_ALPHA_TIMER,
+    EXIT_ON_ERR(register_signal_invoke_trigger_pcmc(SIG_ALPHA_TIMER,
                                                     DEFAULT_DCQCN_ALPHA_TIMER,
                                                     new_handle),
                 PCM_SUCCESS);
 
     EXIT_ON_ERR(register_signal_pcmc(PCM_SIG_ELAPSED_TIME, PCM_SIG_ACCUM_SUM,
-                                     DCQCN_SIG_IDX_RATE_INCREASE_TIMER,
+                                     SIG_RATE_INCREASE_TIMER,
                                      new_handle),
                 PCM_SUCCESS);
     EXIT_ON_ERR(register_signal_invoke_trigger_pcmc(
-                    DCQCN_SIG_IDX_RATE_INCREASE_TIMER,
+                    SIG_RATE_INCREASE_TIMER,
                     DEFAULT_DCQCN_RATE_INCREASE_TIMER, new_handle),
                 PCM_SUCCESS);
 
     EXIT_ON_ERR(register_signal_pcmc(PCM_SIG_DATA_TX, PCM_SIG_ACCUM_SUM,
-                                     DCQCN_SIG_IDX_TX_BURST, new_handle),
+                                     SIG_TX_BURST, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_signal_invoke_trigger_pcmc(DCQCN_SIG_IDX_TX_BURST,
+    EXIT_ON_ERR(register_signal_invoke_trigger_pcmc(SIG_TX_BURST,
                                                     DEFAULT_DCQCN_BYTE_COUNTER,
                                                     new_handle),
                 PCM_SUCCESS);
 
     EXIT_ON_ERR(
-        register_local_state_pcmc(DCQCN_LOCAL_STATE_IDX_ALPHA, new_handle),
+        register_var_pcmc(VAR_ALPHA, new_handle),
         PCM_SUCCESS);
     EXIT_ON_ERR(
-        register_local_state_initial_value_float_pcmc(
-            DCQCN_LOCAL_STATE_IDX_ALPHA, DEFAULT_DCQCN_ALPHA_INIT, new_handle),
+        register_var_initial_value_float_pcmc(
+            VAR_ALPHA, DEFAULT_DCQCN_ALPHA_INIT, new_handle),
         PCM_SUCCESS);
 
     EXIT_ON_ERR(
-        register_local_state_pcmc(DCQCN_LOCAL_STATE_IDX_RATE_CUR, new_handle),
+        register_var_pcmc(VAR_CUR_RATE, new_handle),
         PCM_SUCCESS);
     EXIT_ON_ERR(
-        register_local_state_initial_value_float_pcmc(
-            DCQCN_LOCAL_STATE_IDX_RATE_CUR, FABRIC_LINK_RATE_GBPS, new_handle),
+        register_var_initial_value_float_pcmc(
+            VAR_CUR_RATE, FABRIC_LINK_RATE_GBPS, new_handle),
         PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(DCQCN_LOCAL_STATE_IDX_RATE_TARGET,
+    EXIT_ON_ERR(register_var_pcmc(VAR_TGT_RATE,
                                           new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_float_pcmc(
-                    DCQCN_LOCAL_STATE_IDX_RATE_TARGET, FABRIC_LINK_RATE_GBPS,
+    EXIT_ON_ERR(register_var_initial_value_float_pcmc(
+                    VAR_TGT_RATE, FABRIC_LINK_RATE_GBPS,
                     new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(
-                    DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(
+                    VAR_RATE_INCREASE_EVTS, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
-                    DCQCN_LOCAL_STATE_IDX_RATE_INCREASE_EVTS, 0, new_handle),
+    EXIT_ON_ERR(register_var_initial_value_int_pcmc(
+                    VAR_RATE_INCREASE_EVTS, 0, new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(
-                    DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(
+                    VAR_BYTE_COUNTER_EVTS, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_int_pcmc(
-                    DCQCN_LOCAL_STATE_IDX_BYTE_COUNTER_EVTS, 0, new_handle),
+    EXIT_ON_ERR(register_var_initial_value_int_pcmc(
+                    VAR_BYTE_COUNTER_EVTS, 0, new_handle),
                 PCM_SUCCESS);
 
     EXIT_ON_ERR(
-        register_control_pcmc(PCM_CTRL_CWND, DCQCN_CTRL_IDX_CWND, new_handle),
+        register_control_pcmc(PCM_CTRL_CWND, CTRL_CWND, new_handle),
         PCM_SUCCESS);
     EXIT_ON_ERR(register_control_initial_value_pcmc(
-                    DCQCN_CTRL_IDX_CWND, FABRIC_MAX_CWND, new_handle),
-                PCM_SUCCESS);
-
-    struct dcqcn_state_snapshot state = {0};
-    state.consts.brtt = FABRIC_BRTT;
-    state.consts.rai = DEFAULT_DCQCN_RAI;
-    state.consts.rhai = DEFAULT_DCQCN_RHAI;
-    state.consts.fr_steps = DEFAULT_DCQCN_FR_STEPS;
-    state.consts.gamma = DEFAULT_DCQCN_GAMMA;
-
-    EXIT_ON_ERR(register_constant_pcmc(DCQCN_CONST_BRTT, new_handle), PCM_SUCCESS);
-    EXIT_ON_ERR(register_constant_value_uint_pcmc(
-                    DCQCN_CONST_BRTT, state.consts.brtt, new_handle),
-                PCM_SUCCESS);
-
-    EXIT_ON_ERR(register_constant_pcmc(DCQCN_CONST_RAI, new_handle), PCM_SUCCESS);
-    EXIT_ON_ERR(register_constant_value_uint_pcmc(DCQCN_CONST_RAI,
-                                                  state.consts.rai, new_handle),
-                PCM_SUCCESS);
-
-    EXIT_ON_ERR(register_constant_pcmc(DCQCN_CONST_RHAI, new_handle), PCM_SUCCESS);
-    EXIT_ON_ERR(register_constant_value_uint_pcmc(
-                    DCQCN_CONST_RHAI, state.consts.rhai, new_handle),
-                PCM_SUCCESS);
-
-    EXIT_ON_ERR(register_constant_pcmc(DCQCN_CONST_FR_STEPS, new_handle),
-                PCM_SUCCESS);
-    EXIT_ON_ERR(register_constant_value_uint_pcmc(
-                    DCQCN_CONST_FR_STEPS, state.consts.fr_steps, new_handle),
-                PCM_SUCCESS);
-
-    EXIT_ON_ERR(register_constant_pcmc(DCQCN_CONST_GAMMA, new_handle), PCM_SUCCESS);
-    EXIT_ON_ERR(register_constant_value_float_pcmc(
-                    DCQCN_CONST_GAMMA, state.consts.gamma, new_handle),
+                    CTRL_CWND, FABRIC_MAX_CWND, new_handle),
                 PCM_SUCCESS);
 
     return PCM_SUCCESS;

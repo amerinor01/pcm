@@ -27,21 +27,21 @@ int __tcp_pcmc_init(pcm_handle_t new_handle) {
         register_control_initial_value_pcmc(CTRL_CWND, 2048, new_handle),
         PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_SSTHRESH, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_SSTHRESH, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(VAR_SSTHRESH, UINT_MAX,
+    EXIT_ON_ERR(register_var_initial_value_pcmc(VAR_SSTHRESH, UINT_MAX,
                                                         new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_TOT_ACKED, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_TOT_ACKED, new_handle),
                 PCM_SUCCESS);
     EXIT_ON_ERR(
-        register_local_state_initial_value_pcmc(VAR_TOT_ACKED, 0, new_handle),
+        register_var_initial_value_pcmc(VAR_TOT_ACKED, 0, new_handle),
         PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_IN_FAST_RECOV, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_IN_FAST_RECOV, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(VAR_IN_FAST_RECOV, 0,
+    EXIT_ON_ERR(register_var_initial_value_pcmc(VAR_IN_FAST_RECOV, 0,
                                                         new_handle),
                 PCM_SUCCESS);
 
@@ -55,26 +55,26 @@ int __dctcp_pcmc_init(pcm_handle_t new_handle) {
                                      new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_EPOCH_DELIVERED, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_EPOCH_DELIVERED, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(VAR_EPOCH_DELIVERED, 0,
+    EXIT_ON_ERR(register_var_initial_value_pcmc(VAR_EPOCH_DELIVERED, 0,
                                                         new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_EPOCH_ECN_DELIVERED, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_EPOCH_ECN_DELIVERED, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(VAR_EPOCH_ECN_DELIVERED,
+    EXIT_ON_ERR(register_var_initial_value_pcmc(VAR_EPOCH_ECN_DELIVERED,
                                                         0, new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_EPOCH_TO_DELIVER, new_handle),
+    EXIT_ON_ERR(register_var_pcmc(VAR_EPOCH_TO_DELIVER, new_handle),
                 PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_pcmc(VAR_EPOCH_TO_DELIVER,
+    EXIT_ON_ERR(register_var_initial_value_pcmc(VAR_EPOCH_TO_DELIVER,
                                                         2048, new_handle),
                 PCM_SUCCESS);
 
-    EXIT_ON_ERR(register_local_state_pcmc(VAR_ALPHA, new_handle), PCM_SUCCESS);
-    EXIT_ON_ERR(register_local_state_initial_value_float_pcmc(VAR_ALPHA, 1.0,
+    EXIT_ON_ERR(register_var_pcmc(VAR_ALPHA, new_handle), PCM_SUCCESS);
+    EXIT_ON_ERR(register_var_initial_value_float_pcmc(VAR_ALPHA, 1.0,
                                                               new_handle),
                 PCM_SUCCESS);
 

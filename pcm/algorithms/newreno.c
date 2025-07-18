@@ -1,7 +1,7 @@
 #include <assert.h>
 
-#include "newreno.h"
 #include "fabric_params.h"
+#include "newreno.h"
 #include "tcp_utils.h"
 
 #define TCP_NEW_RENO_SSTHRESH(cur_cwnd) (TCP_RTO_RECOVERY_SSTHRESH(cur_cwnd))
@@ -37,14 +37,14 @@ int algorithm_main() {
      */
     assert(get_signal(SIG_ACK));
     acks_to_consume = num_acks;
-    if (get_local_state(VAR_IN_FAST_RECOV) && acks_to_consume > 0)
+    if (get_var(VAR_IN_FAST_RECOV) && acks_to_consume > 0)
         tcp_fast_recovery_exit(ALGO_CTX_PASS, &cur_cwnd, &acks_to_consume);
 
     /*
      * Fallback to rate increase
      */
-    if (!get_local_state(VAR_IN_FAST_RECOV) && acks_to_consume > 0) {
-        if (cur_cwnd < get_local_state(VAR_SSTHRESH)) {
+    if (!get_var(VAR_IN_FAST_RECOV) && acks_to_consume > 0) {
+        if (cur_cwnd < get_var(VAR_SSTHRESH)) {
             tcp_slow_start(ALGO_CTX_PASS, &cur_cwnd, &acks_to_consume);
         }
         if (acks_to_consume) {
