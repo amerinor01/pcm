@@ -786,7 +786,9 @@ int main(int argc, char **argv) {
     std::shared_ptr<pcm::Device> pcm_device = nullptr;
     if (!pcm_ignore) {
         std::cout << "PCM initialization requested" << std::endl;
-        pcm_device = std::make_shared<pcm::Device>(eventlist, pcm_algo, 1000, 1000);
+        pcm_device = std::make_shared<pcm::Device>(
+            eventlist, pcm_algo, pcm::Device::default_handlerDelayPs,
+            pcm::Device::default_schedulerPollDelayPs);
     }
 
     if (tm_file != NULL) {
@@ -878,10 +880,8 @@ int main(int argc, char **argv) {
             cout << "Using BDP of " << bdp_local << " - Queue is " << queuesize
                  << " - Starting Window is " << actual_starting_cwnd << endl;
 
-            uecSrc =
-                new PcmSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6,
-                           pcm_ignore ? nullptr : pcm_device,
-                           pcm_ignore);
+            uecSrc = new PcmSrc(NULL, NULL, eventlist, rtt, bdp, 100, 6,
+                                pcm_ignore ? nullptr : pcm_device, pcm_ignore);
 
             uecSrc->setNumberEntropies(256);
             uec_srcs.push_back(uecSrc);

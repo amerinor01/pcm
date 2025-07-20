@@ -6,9 +6,11 @@
 #include <string>
 #include <string_view>
 
+// htsim
 #include "config.h"
 #include "eventlist.h"
 
+// PCM
 #include "../impl.h"
 
 namespace pcm {
@@ -16,7 +18,7 @@ namespace pcm {
 class DeviceException final : public std::runtime_error {
   public:
     explicit DeviceException(std::string_view message)
-        : std::runtime_error(std::string{"Htsim PCM Error: "} + std::string{message}) {
+        : std::runtime_error{std::string{"Htsim PCM Error: "} + std::string{message}} {
         std::cerr << what() << std::endl;
         exit(EXIT_FAILURE);
     }
@@ -26,58 +28,18 @@ class Device final : public EventSource {
 
     // expose time to htsim datapath plugin in PCM
   public:
-    [[nodiscard]] static uint64_t getSimulationTime() noexcept;
+    [[nodiscard]] static uint64_t getSimulationTime();
 
-  private:
-    static void setEventList(EventList *eventList);
+    static const uint64_t default_handlerDelayPs = 1000;
+    static const uint64_t default_schedulerPollDelayPs = 1000;
 
   public:
-    explicit Device(EventList &eventList, std::string_view pcmAlgoName,
-                    simtime_picosec handlerDelay, simtime_picosec pollDelay)
-        : EventSource{eventList, "Device"}, _pcm_algo_name{pcmAlgoName},
-          _handler_delay{handlerDelay}, _poll_delay{pollDelay} {
+    explicit Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picosec handlerDelay,
+                    simtime_picosec pollDelay);
 
-        setEventList(&eventList);
+    ~Device();
 
-        if (device_init("htsim", &_pcm_device_ptr) != PCM_SUCCESS)
-            throw DeviceException{"Failed to initialize PCM device"};
-
-        if (device_pcmc_init(_pcm_device_ptr, _pcm_algo_name.c_str(), &_pcm_algo_handler) !=
-            PCM_SUCCESS)
-            throw DeviceException{"Failed to initialize PCMC with algorithm " + _pcm_algo_name};
-
-        _next_sched = eventlist().now() + _poll_delay;
-        eventlist().sourceIsPending(*this, _next_sched);
-    }
-
-    ~Device() {
-        // We can't throw exceptions from this constructor
-        if (device_pcmc_destroy(_pcm_algo_handler) != PCM_SUCCESS) {
-            std::cerr << "Failed to destroy PCMC handler" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-        if (device_destroy(_pcm_device_ptr) != PCM_SUCCESS) {
-            std::cout << "Failed to destroy PCM device" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-    }
-
-    void doNextEvent() {
-        if (eventlist().now() != _next_sched)
-            throw DeviceException{"Current time is not equal to the _next_sched time"};
-
-        _next_sched = eventlist().now() + _poll_delay; // penalize call to sched progress
-        int progress_result = device_scheduler_progress(_pcm_device_ptr);
-        if (progress_result < 0)
-            throw DeviceException{"Failed to progress device scheduler"};
-        if (progress_result)
-            _next_sched += _handler_delay; // if handler execution happened,
-                                           // penalize it as well
-
-        // Scheduler clocks itself
-        eventlist().sourceIsPending(*this, _next_sched);
-    }
-
+    void doNextEvent();
     void stopScheduling() noexcept {
         _next_sched = 0;
         eventlist().cancelPendingSource(*this);
@@ -85,12 +47,15 @@ class Device final : public EventSource {
 
     [[nodiscard]] pcm_device_t getDevicePtr() const noexcept { return _pcm_device_ptr; }
 
+    static void setEventList(EventList *eventList);
+
   private:
+  private:
+    std::string _pcm_algo_name;
     simtime_picosec _handler_delay;
     simtime_picosec _poll_delay;
     pcm_device_t _pcm_device_ptr;
     pcm_handle_t _pcm_algo_handler;
-    std::string _pcm_algo_name;
     simtime_picosec _next_sched;
 };
 
@@ -117,9 +82,7 @@ class Flow final { // Prevent inheritance if not intended
 
     void cwndReset(pcm_uint new_cwnd) noexcept { __flow_control_set(_pcm_flow_ptr, 0, new_cwnd); }
 
-    void signalUpdate(pcm_signal_t sig, pcm_uint val) noexcept {
-        flow_signals_update(_pcm_flow_ptr, sig, val);
-    }
+    void signalUpdate(pcm_signal_t sig, pcm_uint val) noexcept { flow_signals_update(_pcm_flow_ptr, sig, val); }
 
   private:
     pcm_flow_t _pcm_flow_ptr{};

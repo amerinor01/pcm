@@ -1,8 +1,7 @@
 #include "htsim_pcm_src.hpp"
 
 PcmPacer::PcmPacer(EventList &event_list, PcmSrc &flow)
-        : EventSource(event_list, "generic_pacer"), flow(&flow),
-          _interpacket_delay(0) {
+    : EventSource(event_list, "generic_pacer"), _interpacket_delay(0), flow(&flow) {
     _last_send = eventlist().now();
 }
 
