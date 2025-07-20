@@ -4,15 +4,12 @@
 #include "fabric_params.h"
 #include "tcp_utils.h"
 
-#define DCTCP_SSTHRESH(cur_cwnd)                                               \
-    (MAX(cur_cwnd * (1.0 - get_var_float(VAR_ALPHA) / 2.0), 2U))
+#define DCTCP_SSTHRESH(cur_cwnd) (MAX(cur_cwnd * (1.0 - get_var_float(VAR_ALPHA) / 2.0), 2U))
 FAST_RECOVERY_DEFINE(dctcp, DCTCP_SSTHRESH);
 
-static PCM_FORCE_INLINE void dctcp_alpha_update(ALGO_CTX_ARGS,
-                                                pcm_uint num_acks) {
+static PCM_FORCE_INLINE void dctcp_alpha_update(ALGO_CTX_ARGS, pcm_uint num_acks) {
     pcm_uint delivered = get_var_uint(VAR_EPOCH_DELIVERED) + num_acks;
-    pcm_uint delivered_ecn =
-        get_var_uint(VAR_EPOCH_ECN_DELIVERED) + get_signal(SIG_ECN);
+    pcm_uint delivered_ecn = get_var_uint(VAR_EPOCH_ECN_DELIVERED) + get_signal(SIG_ECN);
 
     /*
      * Note: Linux DCTCP detects it based on reaching seq number that at the
@@ -24,8 +21,7 @@ static PCM_FORCE_INLINE void dctcp_alpha_update(ALGO_CTX_ARGS,
     if (delivered >= get_var_uint(VAR_EPOCH_TO_DELIVER)) {
         // alpha = (1 - g) * alpha + g * F
         pcm_float F = (pcm_float)delivered_ecn / (pcm_float)delivered;
-        set_var_float(VAR_ALPHA,
-                      (1 - GAMMA) * get_var_float(VAR_ALPHA) + GAMMA * F);
+        set_var_float(VAR_ALPHA, (1 - GAMMA) * get_var_float(VAR_ALPHA) + GAMMA * F);
         set_var_uint(VAR_EPOCH_DELIVERED, 0);
         set_var_uint(VAR_EPOCH_ECN_DELIVERED, 0);
         update_signal(SIG_ECN, -get_signal(SIG_ECN));
