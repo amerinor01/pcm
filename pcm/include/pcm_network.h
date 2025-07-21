@@ -18,7 +18,7 @@ int device_init(const char *device_name, pcm_device_t *out);
 int device_pcmc_init(pcm_device_t dev_ctx, const char *algo_name,
                      pcm_handle_t *algo_handler);
 int device_pcmc_destroy(pcm_handle_t algo_handler);
-bool device_scheduler_progress(pcm_device_t device);
+bool device_scheduler_progress(pcm_device_t device, pcm_flow_t *triggered_flow);
 
 int flow_create(pcm_device_t device, pcm_flow_t *flow,
                 traffic_gen_fn_t traffic_gen_fn);

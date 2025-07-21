@@ -1,6 +1,5 @@
 #include <assert.h>
 
-#include "fabric_params.h"
 #include "newreno.h"
 #include "tcp_utils.h"
 
@@ -11,7 +10,7 @@ FAST_RECOVERY_DEFINE(tcp, TCP_NEW_RENO_SSTHRESH);
  * @brief Naive implementation of TCP Reno-like congestion window control.
  */
 int algorithm_main() {
-    pcm_uint cur_cwnd = get_control(CTRL_CWND) / FABRIC_LINK_MSS;
+    pcm_uint cur_cwnd = get_control(CTRL_CWND) / MSS;
     pcm_uint num_acks = get_signal(SIG_ACK);
 
     /*
@@ -54,7 +53,7 @@ int algorithm_main() {
 
 adjust_cwnd:
     update_signal(SIG_ACK, -(num_acks - acks_to_consume));
-    set_control(CTRL_CWND, cur_cwnd * FABRIC_LINK_MSS);
+    set_control(CTRL_CWND, cur_cwnd * MSS);
 
     return PCM_SUCCESS;
 }

@@ -91,8 +91,9 @@ int device_pcmc_init(pcm_device_t dev_ctx, const char *algo_name,
 
     *algo_handler = new_handle;
 
-    LOG_INFO("[dev=%p config=%p] algorithm %s registered and activated\n",
-             dev_ctx, new_handle, algo_name);
+    LOG_INFO(
+        "[dev=%p config=%p] pcmc for algorithm %s registered and activated",
+        dev_ctx, new_handle, algo_name);
 
     return PCM_SUCCESS;
 }
@@ -103,6 +104,8 @@ int device_pcmc_destroy(pcm_handle_t algo_handler) {
 
     if (deregister_pcmc(algo_handler) != PCM_SUCCESS)
         return PCM_ERROR;
+
+    LOG_INFO("[config=%p] pcmc destroyed", algo_handler);
 
     return PCM_SUCCESS;
 }
@@ -262,19 +265,22 @@ static void *device_scheduler_thread_fn(void *arg) {
     return NULL;
 }
 
-bool device_scheduler_progress(pcm_device_t device) {
+bool device_scheduler_progress(pcm_device_t device,
+                               pcm_flow_t *triggered_flow) {
     if (slist_empty(&device->scheduler.flow_list))
         return false;
 
     if (device->scheduler.progress.cur_flow == NULL)
         device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;
 
-    pcm_flow_t flow = container_of(device->scheduler.progress.cur_flow, struct flow,
-                                flow_list_entry);
+    pcm_flow_t flow = container_of(device->scheduler.progress.cur_flow,
+                                   struct flow, flow_list_entry);
 
     bool triggered = false;
-    if (flow_handler_invoke_on_trigger(flow))
+    if (flow_handler_invoke_on_trigger(flow)) {
+        *triggered_flow = flow;
         triggered = true;
+    }
 
     if (device->scheduler.progress.cur_flow == device->scheduler.flow_list.tail)
         device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;

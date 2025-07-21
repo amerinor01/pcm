@@ -8,7 +8,7 @@ CXXFLAGS := $(CFLAGS) -std=c++17
 LDFLAGS := -shared
 
 SRCDIR           := src
-HTSIM_SUBDIR     := $(SRCDIR)/htsim
+HTSIM_PLUGIN_SUBDIR     := $(SRCDIR)/htsim
 INCDIR           := include
 ALGODIR          := algorithms
 LIBDIR           := lib
@@ -16,7 +16,7 @@ BINDIR           := bin
 APPSDIR          := apps
 
 # Core PCM sources (C only)
-PCM_C_SRCS       := $(wildcard $(SRCDIR)/*.c) $(wildcard $(HTSIM_SUBDIR)/*.c)
+PCM_C_SRCS       := $(wildcard $(SRCDIR)/*.c) $(wildcard $(HTSIM_PLUGIN_SUBDIR)/*.c)
 PCM_CPP_SRCS     :=
 
 # Optionally Linux perf-based profiling
@@ -30,31 +30,18 @@ BUILD_HTSIM_FLOW_PLUGIN ?= 0
 ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
 
 # Root of external HTSIM simulation code
-HTSIM_ROOT_DIR ?= ../../HTSIM/sim/
+HTSIM_BUILD_DIR ?= ../../uec-transport-simulation-code-main/htsim/sim/
 
-PCM_CPP_SRCS := $(wildcard $(HTSIM_SUBDIR)/*.cpp)
-HTSIM_PCM_LIB_CFLAGS := -DBUILD_HTSIM_FLOW_PLUGIN -I$(HTSIM_ROOT_DIR) -I$(HTSIM_ROOT_DIR)/datacenter
-HTSIM_PCM_LIB_LDLIBS := -L$(HTSIM_ROOT_DIR) -lhtsim -lstdc++
+PCM_CPP_SRCS := $(wildcard $(HTSIM_PLUGIN_SUBDIR)/*.cpp)
+HTSIM_PCM_LIB_CFLAGS := -DBUILD_HTSIM_FLOW_PLUGIN -I$(HTSIM_BUILD_DIR) -I$(HTSIM_BUILD_DIR)/datacenter
+HTSIM_PCM_LIB_LDLIBS := -L$(HTSIM_BUILD_DIR)/build/ -lhtsim -L$(HTSIM_BUILD_DIR)/build/datacenter -lhtsim_dc -lstdc++
+HTSIM_PCM_LIB_RPATH := -Wl,-rpath,$(HTSIM_BUILD_DIR)/build/ -Wl,-rpath,$(HTSIM_BUILD_DIR)/build/datacenter
 
 HTSIM_APP_SRCS := $(APPSDIR)/htsim
 HTSIM_APP_OBJS := $(HTSIM_APP_SRCS)/htsim_app.o
 HTSIM_APP_TARGET := $(BINDIR)/htsim_flow_app
 HTSIM_APP_CFLAGS := -I$(SRCDIR)/htsim/
-HTSIM_APP_PREREQ_OBJS := \
-	$(HTSIM_ROOT_DIR)/libhtsim.a \
-	$(HTSIM_ROOT_DIR)/datacenter/firstfit.o \
-	$(HTSIM_ROOT_DIR)/datacenter/vl2_topology.o \
-	$(HTSIM_ROOT_DIR)/datacenter/fat_tree_topology.o \
-	$(HTSIM_ROOT_DIR)/datacenter/fat_tree_interdc_topology.o \
-	$(HTSIM_ROOT_DIR)/datacenter/fat_tree_switch.o \
-	$(HTSIM_ROOT_DIR)/datacenter/fat_tree_interdc_switch.o \
-	$(HTSIM_ROOT_DIR)/datacenter/bcube_topology.o \
-	$(HTSIM_ROOT_DIR)/datacenter/connection_matrix.o \
-	$(HTSIM_ROOT_DIR)/datacenter/oversubscribed_fat_tree_topology.o \
-	$(HTSIM_ROOT_DIR)/datacenter/shortflows.o \
-	$(HTSIM_ROOT_DIR)/datacenter/multihomed_fat_tree_topology.o \
-	$(HTSIM_ROOT_DIR)/datacenter/star_topology.o \
-	$(HTSIM_ROOT_DIR)/datacenter/logsim-interface.o
+
 endif
 
 # Gather all object files
@@ -91,14 +78,14 @@ $(SRCDIR)/%.o: $(SRCDIR)/%.c
 
 # htsim plugin C++ sources
 ifeq ($(BUILD_HTSIM_FLOW_PLUGIN),1)
-$(HTSIM_SUBDIR)/%.o: $(HTSIM_SUBDIR)/%.cpp
+$(HTSIM_PLUGIN_SUBDIR)/%.o: $(HTSIM_PLUGIN_SUBDIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(HTSIM_PCM_LIB_CFLAGS) $(PROFILING_PCM_LIB_CFLAGS) -c $< -o $@
 endif
 
 # Link into libpcm.so
 $(PCM_LIB_TARGET): $(PCM_LIB_OBJS)
 	@mkdir -p $(LIBDIR)
-	$(CC) $(LDFLAGS) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) $(HTSIM_PCM_LIB_RPATH)
 
 # -----------------------------------------------
 # Algorithm plugins
@@ -208,14 +195,14 @@ $(HTSIM_APP_SRCS)/%.o: $(HTSIM_APP_SRCS)/%.cpp
 
 $(HTSIM_APP_TARGET): $(HTSIM_APP_PREREQ_OBJS) $(HTSIM_APP_OBJS)
 	@mkdir -p $(BINDIR)
-	$(CXX) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) -L$(LIBDIR) -lpcm
+	$(CXX) -o $@ $^ $(HTSIM_PCM_LIB_LDLIBS) $(HTSIM_PCM_LIB_RPATH) -L$(LIBDIR) -lpcm
 
 endif
 
 clean:
 	@echo "Cleaning build artifacts..."
 	@find $(SRCDIR) -name '*.o' -delete
-	@find $(HTSIM_SUBDIR) -name '*.o' -delete
+	@find $(HTSIM_PLUGIN_SUBDIR) -name '*.o' -delete
 	@find $(TGEN_APP_SRCS) -name '*.o' -delete
 	@rm -f $(PCM_LIB_TARGET)
 	@rm -f $(ALGO_PLUGIN_LIBS)

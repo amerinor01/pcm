@@ -17,8 +17,9 @@ signal_accumulation_op_fn flow_signal_accumulation_no_op = NULL;
 
 pcm_uint flow_cwnd_get(const pcm_flow_t flow) {
     size_t cwnd_idx;
-    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(
-        &flow->config->controls_list, struct control_attr, PCM_CTRL_CWND, cwnd_idx);
+    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(&flow->config->controls_list,
+                                            struct control_attr, PCM_CTRL_CWND,
+                                            cwnd_idx);
     return flow->device->flow_ops.handler.control_get(flow, cwnd_idx);
 }
 
@@ -30,7 +31,8 @@ bool flow_is_ready(const pcm_flow_t flow) {
     return flow->device->flow_ops.control.is_ready(flow);
 }
 
-void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type, pcm_uint value) {
+void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type,
+                         pcm_uint value) {
     struct slist_entry *item, *prev;
     slist_foreach(&flow->config->signals_list, item, prev) {
         (void)prev; /* suppress compiler warnings */
@@ -130,6 +132,8 @@ int flow_destroy(pcm_flow_t flow) {
         ret = PCM_ERROR;
     }
 
+    LOG_INFO("[dev=%p config=%p] flow=%p destroyed", flow->config->device, flow->config, flow);
+
     free(flow);
 
     return ret;
@@ -172,6 +176,9 @@ int flow_create(pcm_device_t device, pcm_flow_t *flow,
                 new_flow, new_flow->addr);
         goto err_destroy_plugin;
     }
+
+    LOG_INFO("[dev=%p config=%p] flow=%p created", device, new_flow->config,
+             new_flow);
 
     *flow = new_flow;
 

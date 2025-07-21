@@ -1,7 +1,6 @@
 #include <assert.h>
 
 #include "dctcp.h"
-#include "fabric_params.h"
 #include "tcp_utils.h"
 
 #define DCTCP_SSTHRESH(cur_cwnd) (MAX(cur_cwnd * (1.0 - get_var_float(VAR_ALPHA) / 2.0), 2U))
@@ -38,7 +37,7 @@ static PCM_FORCE_INLINE void dctcp_alpha_update(ALGO_CTX_ARGS, pcm_uint num_acks
 }
 
 int algorithm_main() {
-    pcm_uint cur_cwnd = get_control(CTRL_CWND) / FABRIC_LINK_MSS;
+    pcm_uint cur_cwnd = get_control(CTRL_CWND) / MSS;
     pcm_uint num_acks = get_signal(SIG_ACK);
 
     /*
@@ -87,7 +86,7 @@ save_cwnd_and_exit:
     //         cur_cwnd, get_var_uint(VAR_SSTHRESH),
     //         get_var_uint(VAR_IN_FAST_RECOV), num_acks, acks_to_consume);
     update_signal(SIG_ACK, -(num_acks - acks_to_consume));
-    set_control(CTRL_CWND, cur_cwnd * FABRIC_LINK_MSS);
+    set_control(CTRL_CWND, cur_cwnd * MSS);
 
     dctcp_alpha_update(ALGO_CTX_PASS, num_acks);
 
