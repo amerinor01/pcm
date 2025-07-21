@@ -11,9 +11,9 @@ int device_scheduler_init(struct scheduler *scheduler,
 int device_scheduler_destroy(struct scheduler *scheduler);
 static void *device_scheduler_thread_fn(void *arg);
 
-int device_init(const char *flow_plugin_name, device_t **out) {
+int device_init(const char *flow_plugin_name, pcm_device_t *out) {
 
-    device_t *device = calloc(1, sizeof(*device));
+    pcm_device_t device = calloc(1, sizeof(*device));
     if (!device) {
         LOG_CRIT("failed to allocate new device");
         return PCM_ERROR;
@@ -55,7 +55,7 @@ err:
     return PCM_ERROR;
 }
 
-int device_destroy(device_t *device) {
+int device_destroy(pcm_device_t device) {
     int ret = PCM_SUCCESS;
 
     ret = device_scheduler_destroy(&device->scheduler);
@@ -77,8 +77,41 @@ int device_destroy(device_t *device) {
     return ret;
 }
 
+int device_pcmc_init(pcm_device_t dev_ctx, const char *algo_name,
+                     pcm_handle_t *algo_handler) {
+    pcm_handle_t new_handle;
+    if (register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    if (register_algorithm_pcmc(algo_name, new_handle) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    if (activate_pcmc(new_handle) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    *algo_handler = new_handle;
+
+    LOG_INFO(
+        "[dev=%p config=%p] pcmc for algorithm %s registered and activated",
+        dev_ctx, new_handle, algo_name);
+
+    return PCM_SUCCESS;
+}
+
+int device_pcmc_destroy(pcm_handle_t algo_handler) {
+    if (deactivate_pcmc(algo_handler) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    if (deregister_pcmc(algo_handler) != PCM_SUCCESS)
+        return PCM_ERROR;
+
+    LOG_INFO("[config=%p] pcmc destroyed", algo_handler);
+
+    return PCM_SUCCESS;
+}
+
 const struct algorithm_config *
-device_flow_id_to_config_match(const device_t *device, pcm_addr_t addr) {
+device_flow_id_to_config_match(const pcm_device_t device, pcm_addr_t addr) {
     struct slist_entry *item, *prev;
     slist_foreach(&device->configs_list, item, prev) {
         (void)prev; /* suppress complier warning */
@@ -148,7 +181,7 @@ int device_scheduler_destroy(struct scheduler *scheduler) {
     return ret;
 }
 
-int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
+int device_scheduler_flow_add(struct scheduler *scheduler, pcm_flow_t flow) {
     if (scheduler->progress_auto &&
         pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
         return PCM_ERROR;
@@ -162,7 +195,7 @@ int device_scheduler_flow_add(struct scheduler *scheduler, flow_t *flow) {
     return PCM_SUCCESS;
 }
 
-int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
+int device_scheduler_flow_remove(struct scheduler *scheduler, pcm_flow_t flow) {
     if (scheduler->progress_auto &&
         pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
         return PCM_ERROR;
@@ -171,7 +204,7 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, flow_t *flow) {
     bool found = false;
     slist_foreach(&scheduler->flow_list, item, prev) {
         (void)prev; /* suppress complier warning */
-        if (container_of(item, flow_t, flow_list_entry) == flow) {
+        if (container_of(item, struct flow, flow_list_entry) == flow) {
             slist_remove(&scheduler->flow_list, item, prev);
             found = true;
             if (!scheduler->progress_auto)
@@ -211,7 +244,7 @@ static void *device_scheduler_thread_fn(void *arg) {
         struct slist_entry *item, *prev;
         slist_foreach(&scheduler->flow_list, item, prev) {
             (void)prev; /* suppress complier warning */
-            flow_t *flow = container_of(item, flow_t, flow_list_entry);
+            pcm_flow_t flow = container_of(item, struct flow, flow_list_entry);
             if (flow_handler_invoke_on_trigger(flow)) {
                 num_triggers++;
             }
@@ -232,19 +265,22 @@ static void *device_scheduler_thread_fn(void *arg) {
     return NULL;
 }
 
-bool device_scheduler_progress(device_t *device) {
+bool device_scheduler_progress(pcm_device_t device,
+                               pcm_flow_t *triggered_flow) {
     if (slist_empty(&device->scheduler.flow_list))
         return false;
 
     if (device->scheduler.progress.cur_flow == NULL)
         device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;
 
-    flow_t *flow = container_of(device->scheduler.progress.cur_flow, flow_t,
-                                flow_list_entry);
+    pcm_flow_t flow = container_of(device->scheduler.progress.cur_flow,
+                                   struct flow, flow_list_entry);
 
     bool triggered = false;
-    if (flow_handler_invoke_on_trigger(flow))
+    if (flow_handler_invoke_on_trigger(flow)) {
+        *triggered_flow = flow;
         triggered = true;
+    }
 
     if (device->scheduler.progress.cur_flow == device->scheduler.flow_list.tail)
         device->scheduler.progress.cur_flow = device->scheduler.flow_list.head;

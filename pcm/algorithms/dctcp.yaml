@@ -1,0 +1,65 @@
+algorithm:
+  name: dctcp
+  description: "DCTCP (Data Center TCP) congestion control algorithm"
+
+constants:
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MSS"
+    description: "Maximum segment size"
+  - name: GAMMA
+    type: float
+    value: 0.00390625
+    description: "DCTCP alpha update parameter (1/256)"
+
+signals:
+  - name: ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: RTO
+    type: PCM_SIG_RTO
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+
+controls:
+  - name: CWND
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_LINK_MSS"
+
+variables:
+  - name: SSTHRESH
+    initial_value: 4294967295
+    type: uint
+    description: "Slow start threshold"
+  - name: TOT_ACKED
+    initial_value: 0
+    type: uint
+    description: "Total acknowledged bytes"
+  - name: IN_FAST_RECOV
+    initial_value: 0
+    type: uint
+    description: "Fast recovery state flag"
+  - name: EPOCH_DELIVERED
+    initial_value: 0
+    type: uint
+    description: "Packets delivered in current epoch"
+  - name: EPOCH_ECN_DELIVERED
+    initial_value: 0
+    type: uint
+    description: "ECN-marked packets delivered in current epoch"
+  - name: EPOCH_TO_DELIVER
+    initial_value: "FABRIC_LINK_MSS"
+    type: uint
+    description: "Target packets to deliver per epoch"
+  - name: ALPHA
+    initial_value: 1.0
+    type: float
+    description: "DCTCP alpha parameter for multiplicative decrease"
