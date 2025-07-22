@@ -33,30 +33,30 @@ static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
         /* Open group leader (cycles) */                                       \
         fd_cycles = perf_event_open(&pe_cycles, 0, -1, -1, 0);                 \
         if (fd_cycles == -1)                                                   \
-            LOG_FATAL("prof perf_event_open (cycles)");                        \
+            PCM_LOG_FATAL("prof perf_event_open (cycles)");                    \
                                                                                \
         /* Open instructions in group */                                       \
         fd_instr = perf_event_open(&pe_instr, 0, -1, fd_cycles, 0);            \
         if (fd_instr == -1)                                                    \
-            LOG_FATAL("prof perf_event_open (instructions)");                  \
+            PCM_LOG_FATAL("prof perf_event_open (instructions)");              \
                                                                                \
         /* Get IDs to map values later */                                      \
         if (ioctl(fd_cycles, PERF_EVENT_IOC_ID, &id_cycles))                   \
-            LOG_FATAL("prof ioctl PERF_EVENT_IOC_ID failed");                  \
+            PCM_LOG_FATAL("prof ioctl PERF_EVENT_IOC_ID failed");              \
         if (ioctl(fd_instr, PERF_EVENT_IOC_ID, &id_instr))                     \
-            LOG_FATAL("prof ioctl PERF_EVENT_IOC_ID failed");                  \
+            PCM_LOG_FATAL("prof ioctl PERF_EVENT_IOC_ID failed");              \
                                                                                \
         if (ioctl(fd_cycles, PERF_EVENT_IOC_RESET, PERF_IOC_FLAG_GROUP))       \
-            LOG_FATAL("prof ioctl PERF_EVENT_IOC_RESET failed");               \
+            PCM_LOG_FATAL("prof ioctl PERF_EVENT_IOC_RESET failed");           \
                                                                                \
         if (ioctl(fd_cycles, PERF_EVENT_IOC_ENABLE, PERF_IOC_FLAG_GROUP))      \
-            LOG_FATAL("prof ioctl PERF_EVENT_IOC_ENABLE failed");              \
+            PCM_LOG_FATAL("prof ioctl PERF_EVENT_IOC_ENABLE failed");          \
     }
 
 #define PERF_PROF_REGION_END(report, region_name)                              \
     {                                                                          \
         if (ioctl(fd_cycles, PERF_EVENT_IOC_DISABLE, PERF_IOC_FLAG_GROUP))     \
-            LOG_FATAL("prof ioctl PERF_EVENT_IOC_DISABLE failed");             \
+            PCM_LOG_FATAL("prof ioctl PERF_EVENT_IOC_DISABLE failed");         \
                                                                                \
         struct {                                                               \
             uint64_t nr;                                                       \
@@ -67,7 +67,7 @@ static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
         } data;                                                                \
                                                                                \
         if (read(fd_cycles, &data, sizeof(data)) != sizeof(data))              \
-            LOG_FATAL("prof read failed");                                     \
+            PCM_LOG_FATAL("prof read failed");                                 \
                                                                                \
         uint64_t cycles, instructions;                                         \
         for (uint64_t j = 0; j < data.nr; ++j) {                               \
@@ -79,13 +79,13 @@ static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
         }                                                                      \
                                                                                \
         if (close(fd_cycles))                                                  \
-            LOG_FATAL("prof close(fd_cycles) failed");                         \
+            PCM_LOG_FATAL("prof close(fd_cycles) failed");                     \
         if (close(fd_instr))                                                   \
-            LOG_FATAL("prof close(fd_instr) failed");                          \
+            PCM_LOG_FATAL("prof close(fd_instr) failed");                      \
                                                                                \
         if (report)                                                            \
-            LOG_PRINT("%s %lu cycles %lu instructions\n", region_name, cycles, \
-                      instructions);                                           \
+            PCM_PCM_LOG_PRINT("%s %lu cycles %lu instructions\n", region_name, \
+                              cycles, instructions);                           \
     }
 #endif
 

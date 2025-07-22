@@ -12,7 +12,7 @@ static void *device_scheduler_thread_fn(void *arg);
 int device_init(const char *flow_plugin_name, pcm_device_t *out) {
     pcm_device_t device = calloc(1, sizeof(*device));
     if (!device) {
-        LOG_CRIT("failed to allocate new device");
+        PCM_LOG_CRIT("failed to allocate new device");
         return PCM_ERROR;
     }
 
@@ -21,7 +21,7 @@ int device_init(const char *flow_plugin_name, pcm_device_t *out) {
     bool needs_progress_thread = false;
     if (flow_plugin_ops_get(flow_plugin_name, &device->flow_ops) ==
         PCM_SUCCESS) {
-        LOG_INFO("Initialized flow plugin: %s", flow_plugin_name);
+        PCM_LOG_INFO("Initialized flow plugin: %s", flow_plugin_name);
         if (!strcmp(pthrd_flow_plugin_name, flow_plugin_name)) {
             needs_progress_thread = true;
         } else {
@@ -29,12 +29,12 @@ int device_init(const char *flow_plugin_name, pcm_device_t *out) {
             needs_progress_thread = false;
         }
     } else {
-        LOG_CRIT("unknown flow backend name %s", flow_plugin_name);
+        PCM_LOG_CRIT("unknown flow backend name %s", flow_plugin_name);
         goto destroy_scheduler;
     }
 
     if (device_scheduler_init(&device->scheduler, needs_progress_thread)) {
-        LOG_CRIT("failed to initialize device scheduler");
+        PCM_LOG_CRIT("failed to initialize device scheduler");
         goto err;
     }
 
@@ -55,10 +55,10 @@ int device_destroy(pcm_device_t device) {
 
     ret = device_scheduler_destroy(&device->scheduler);
     if (ret != PCM_SUCCESS)
-        LOG_CRIT("[dev=%p] failed to destroy scheduler", device);
+        PCM_LOG_CRIT("[dev=%p] failed to destroy scheduler", device);
 
     if (!slist_empty(&device->configs_list)) {
-        LOG_CRIT("[dev=%p] algorithm config list is not empty", device);
+        PCM_LOG_CRIT("[dev=%p] algorithm config list is not empty", device);
         while (!slist_empty(&device->configs_list)) { // avoid leak
             algorithm_config_destroy(
                 container_of(slist_remove_head(&device->configs_list),
@@ -86,7 +86,7 @@ int device_pcmc_init(pcm_device_t dev_ctx, const char *algo_name,
 
     *algo_handler = new_handle;
 
-    LOG_INFO(
+    PCM_LOG_INFO(
         "[dev=%p config=%p] pcmc for algorithm %s registered and activated",
         dev_ctx, new_handle, algo_name);
 
@@ -100,7 +100,7 @@ int device_pcmc_destroy(pcm_handle_t algo_handler) {
     if (deregister_pcmc(algo_handler) != PCM_SUCCESS)
         return PCM_ERROR;
 
-    LOG_INFO("[config=%p] pcmc destroyed", algo_handler);
+    PCM_LOG_INFO("[config=%p] pcmc destroyed", algo_handler);
 
     return PCM_SUCCESS;
 }
@@ -117,8 +117,8 @@ device_flow_id_to_config_match(const pcm_device_t device, pcm_addr_t addr) {
          * logical OR.
          */
         if (config->active && (config->matching_rule_mask | addr)) {
-            LOG_DBG("[dev=%p] matched flow addr=%u to config=%p", device, addr,
-                    config);
+            PCM_LOG_DBG("[dev=%p] matched flow addr=%u to config=%p", device,
+                        addr, config);
             return config;
         }
     }
@@ -213,9 +213,9 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, pcm_flow_t flow) {
         return PCM_ERROR;
 
     if (!found) {
-        LOG_CRIT("[flow=%p addr=%u] flow was not found in the scheduler's "
-                 "flow list",
-                 flow, flow->addr);
+        PCM_LOG_CRIT("[flow=%p addr=%u] flow was not found in the scheduler's "
+                     "flow list",
+                     flow, flow->addr);
         return PCM_ERROR;
     }
 
@@ -225,7 +225,7 @@ int device_scheduler_flow_remove(struct scheduler *scheduler, pcm_flow_t flow) {
 static void *device_scheduler_thread_fn(void *arg) {
     struct scheduler *scheduler = arg;
 
-    LOG_DBG("scheduler thread started");
+    PCM_LOG_DBG("scheduler thread started");
 
     size_t num_triggers = 0;
     (void)num_triggers; // make compiler happy in non-debug case
@@ -254,8 +254,8 @@ static void *device_scheduler_thread_fn(void *arg) {
         usleep(SCHEDULER_SLEEP_US);
     }
 
-    LOG_DBG("scheduler thread finished, num_triggers=%zu, status=%d",
-            num_triggers, scheduler->progress.thread.err);
+    PCM_LOG_DBG("scheduler thread finished, num_triggers=%zu, status=%d",
+                num_triggers, scheduler->progress.thread.err);
 
     return NULL;
 }

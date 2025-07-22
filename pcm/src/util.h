@@ -4,34 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "pcm_log.h"
 #include "impl.h"
-#include "lwlog.h"
-
-#define LOG_DBG(FORMAT, ...)                                                   \
-    {                                                                          \
-        lwlog_debug(FORMAT, ##__VA_ARGS__);                                    \
-    }
-
-#define LOG_INFO(FORMAT, ...)                                                  \
-    {                                                                          \
-        lwlog_info(FORMAT, ##__VA_ARGS__);                                     \
-    }
-
-#define LOG_CRIT(FORMAT, ...)                                                  \
-    {                                                                          \
-        lwlog_crit(FORMAT, ##__VA_ARGS__);                                     \
-    }
-
-#define LOG_PRINT(FORMAT, ...)                                                 \
-    {                                                                          \
-        lwlog_info(FORMAT, ##__VA_ARGS__);                                     \
-    }
-
-#define LOG_FATAL(FORMAT, ...)                                                 \
-    {                                                                          \
-        lwlog_crit(FORMAT, ##__VA_ARGS__);                                     \
-        exit(EXIT_FAILURE);                                                    \
-    }
 
 #define container_of(ptr, type, member)                                        \
     ({                                                                         \
@@ -43,19 +17,19 @@
                              attr_ptr)                                         \
     {                                                                          \
         if ((item_counter) >= (max_items)) {                                   \
-            LOG_CRIT("[attr_list=%p] %s list storage is full", attr_list,      \
-                     #attr_list);                                              \
+            PCM_LOG_CRIT("[attr_list=%p] %s list storage is full", attr_list,  \
+                         #attr_list);                                          \
             return PCM_ERROR;                                                  \
         }                                                                      \
         if ((user_index) >= (max_items)) {                                     \
-            LOG_CRIT("[attr_list=%p] user_index exeeds %s list capacity",      \
-                     attr_list, #attr_list);                                   \
+            PCM_LOG_CRIT("[attr_list=%p] user_index exeeds %s list capacity",  \
+                         attr_list, #attr_list);                               \
             return PCM_ERROR;                                                  \
         }                                                                      \
         (attr_ptr) = calloc(1, sizeof(*(attr_ptr)));                           \
         if (!(attr_ptr)) {                                                     \
-            LOG_CRIT("[attr_list=%p] failed to allocate new attribute",        \
-                     attr_list);                                               \
+            PCM_LOG_CRIT("[attr_list=%p] failed to allocate new attribute",    \
+                         attr_list);                                           \
             return PCM_ERROR;                                                  \
         }                                                                      \
         (attr_ptr)->metadata.index = (user_index);                             \
@@ -81,8 +55,8 @@
             (void)prev; /* suppress complier warning */                        \
             if (container_of(item, attr_type, metadata.list_entry)             \
                     ->metadata.index == (user_index)) {                        \
-                LOG_CRIT("[attr_list=%p] found duplicate index=%zu",           \
-                         attr_list, user_index);                               \
+                PCM_LOG_CRIT("[attr_list=%p] found duplicate index=%zu",       \
+                             attr_list, user_index);                           \
                 return PCM_ERROR;                                              \
             }                                                                  \
         }                                                                      \
@@ -95,8 +69,8 @@
             (void)prev; /* suppress complier warning */                        \
             if (container_of(item, attr_type, metadata.list_entry)->type ==    \
                 (chk_type)) {                                                  \
-                LOG_CRIT("[attr_list=%p] found duplicate type=%d", attr_list,  \
-                         chk_type);                                            \
+                PCM_LOG_CRIT("[attr_list=%p] found duplicate type=%d",         \
+                             attr_list, chk_type);                             \
                 return PCM_ERROR;                                              \
             }                                                                  \
         }                                                                      \
@@ -122,8 +96,9 @@
                            found_attr_ptr)                                     \
     {                                                                          \
         if (slist_empty(attr_list)) {                                          \
-            LOG_CRIT("[attr_list=%p] item set on an empty list at index=%zu",  \
-                     attr_list, user_index);                                   \
+            PCM_LOG_CRIT(                                                      \
+                "[attr_list=%p] item set on an empty list at index=%zu",       \
+                attr_list, user_index);                                        \
             return PCM_ERROR;                                                  \
         }                                                                      \
         (found_attr_ptr) = NULL;                                               \
@@ -138,8 +113,9 @@
             }                                                                  \
         }                                                                      \
         if (!(found_attr_ptr)) {                                               \
-            LOG_CRIT("[attr_list=%p] failed to find attribute with index=%zu", \
-                     attr_list, user_index);                                   \
+            PCM_LOG_CRIT(                                                      \
+                "[attr_list=%p] failed to find attribute with index=%zu",      \
+                attr_list, user_index);                                        \
             return PCM_ERROR;                                                  \
         }                                                                      \
         (found_attr_ptr)->metadata.value = val;                                \
@@ -230,7 +206,7 @@ static inline pcm_uint encode_pcm_int(pcm_int x) {
 static inline struct timespec clock_gettime_now() {
     struct timespec now_ts;
     if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
-        LOG_FATAL("clock_gettime failed");
+        PCM_LOG_FATAL("clock_gettime failed");
     }
     return now_ts;
 }
@@ -483,8 +459,8 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
             pcm_uint now = time_diff_fn(flow_ctx->start_ts, time_now_fn());    \
             /* we assume that now is always larger than timer value */         \
             if (now - timer >= threshold) {                                    \
-                LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d", diff,   \
-                        timer, threshold);                                     \
+                PCM_LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d",     \
+                            diff, timer, threshold);                           \
                 return true;                                                   \
             }                                                                  \
         }                                                                      \

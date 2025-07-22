@@ -1,8 +1,7 @@
 #ifndef _ALGO_UTILS_H_
 #define _ALGO_UTILS_H_
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <stdio.h> // all handlers can call to printf to debug
 
 #define MAX(a, b)                                                              \
     ({                                                                         \
@@ -26,15 +25,5 @@
     })
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
-
-#define EXIT_ON_ERR(call, success_errcode)                                     \
-    do {                                                                       \
-        int _err = (call);                                                     \
-        if (_err != success_errcode) {                                         \
-            fprintf(stderr, "Call '%s' failed with code %d at %s:%d\n", #call, \
-                    _err, __FILE__, __LINE__);                                 \
-            exit(EXIT_FAILURE);                                                \
-        }                                                                      \
-    } while (0)
 
 #endif /* _ALGO_UTILS_H_ */

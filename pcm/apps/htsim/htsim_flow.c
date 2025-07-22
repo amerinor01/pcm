@@ -10,7 +10,7 @@ const char *htsim_flow_plugin_name = "htsim";
 
 int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     (void)flow_ops;
-    LOG_CRIT("PCM library was build without htsim support");
+    PCM_LOG_CRIT("PCM library was build without htsim support");
     return PCM_ERROR;
 }
 
@@ -27,7 +27,7 @@ int htsim_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     (void)traffic_gen_fn;
     flow->backend_ctx = calloc(1, sizeof(struct htsim_flow));
     if (!flow->backend_ctx) {
-        LOG_CRIT("failed to allocate new pthread flow context");
+        PCM_LOG_CRIT("failed to allocate new pthread flow context");
         return PCM_ERROR;
     }
 
@@ -40,7 +40,7 @@ int htsim_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->var_list, struct var_attr,
                               flow_ctx->vars);
 
-    LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d", flow->config,
+    PCM_LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d", flow->config,
             flow, flow->addr);
 
     // Initialize time related signals before traffic generation starts

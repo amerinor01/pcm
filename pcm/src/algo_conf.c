@@ -8,25 +8,25 @@ static int shared_symbol_open(const char *lib_name, char *fn_name,
 
     *so_handle = dlopen(lib_name, RTLD_NOW | RTLD_LOCAL);
     if (!(*so_handle)) {
-        LOG_CRIT("dlopen(%s) failed with %s", lib_name, dlerror());
+        PCM_LOG_CRIT("dlopen(%s) failed with %s", lib_name, dlerror());
         return PCM_ERROR;
     }
 
     *fn_ptr = dlsym(*so_handle, fn_name);
     if (!(*fn_ptr)) {
         dlclose(*so_handle);
-        LOG_CRIT("dlsym(%s) failed with %s", fn_name, dlerror());
+        PCM_LOG_CRIT("dlsym(%s) failed with %s", fn_name, dlerror());
         return PCM_ERROR;
     }
 
-    LOG_DBG("dlsym(%s, %s)=%p", lib_name, fn_name, *fn_ptr);
+    PCM_LOG_DBG("dlsym(%s, %s)=%p", lib_name, fn_name, *fn_ptr);
 
     return PCM_SUCCESS;
 }
 
 static int shared_symbol_close(void *so_handle) {
     if (dlclose(so_handle)) {
-        LOG_CRIT("dlclose() failed with %s", dlerror());
+        PCM_LOG_CRIT("dlclose() failed with %s", dlerror());
         return PCM_ERROR;
     }
     return PCM_SUCCESS;
@@ -38,7 +38,7 @@ int algorithm_config_alloc(pcm_device_t device, struct algorithm_config **config
 
     struct algorithm_config *new_config = calloc(1, sizeof(*new_config));
     if (!new_config) {
-        LOG_CRIT("[dev=%p] failed to allocate new algorithm config", device);
+        PCM_LOG_CRIT("[dev=%p] failed to allocate new algorithm config", device);
         return PCM_ERROR;
     }
 
@@ -49,7 +49,7 @@ int algorithm_config_alloc(pcm_device_t device, struct algorithm_config **config
     slist_init(&new_config->var_list);
     new_config->active = false;
 
-    LOG_DBG("[dev=%p] allocated new config=%p", device, new_config);
+    PCM_LOG_DBG("[dev=%p] allocated new config=%p", device, new_config);
     *config = new_config;
 
     return PCM_SUCCESS;
@@ -68,7 +68,7 @@ int algorithm_config_destroy(struct algorithm_config *config) {
     }
 
     if (!found) {
-        LOG_CRIT("[dev=%p conf=%p] config not found", config->device, config);
+        PCM_LOG_CRIT("[dev=%p conf=%p] config not found", config->device, config);
         ret = PCM_ERROR;
     }
 
@@ -79,12 +79,12 @@ int algorithm_config_destroy(struct algorithm_config *config) {
     ATTR_LIST_FREE(&config->var_list, struct var_attr, config->num_vars);
 
     if (shared_symbol_close(config->dlopen_handle) != PCM_SUCCESS) {
-        LOG_CRIT("[dev=%p conf=%p] failed to close handler dlopen object",
+        PCM_LOG_CRIT("[dev=%p conf=%p] failed to close handler dlopen object",
                  config->device, config);
         ret = PCM_ERROR;
     }
 
-    LOG_DBG("[dev=%p] destroyed config=%p", config->device, config);
+    PCM_LOG_DBG("[dev=%p] destroyed config=%p", config->device, config);
     free(config);
 
     return ret;
@@ -93,7 +93,7 @@ int algorithm_config_destroy(struct algorithm_config *config) {
 int algorithm_config_compile(struct algorithm_config *config,
                              const char *algo_name) {
     if ((strlen(algo_name) + 1) > PCMC_MAX_LEN_ALGO_NAME) {
-        LOG_CRIT("Algorithm name length exceeds limit of %d characters",
+        PCM_LOG_CRIT("Algorithm name length exceeds limit of %d characters",
                  PCMC_MAX_LEN_ALGO_NAME);
         return PCM_ERROR;
     }
@@ -103,14 +103,14 @@ int algorithm_config_compile(struct algorithm_config *config,
     // 1. finish the PCMC handle initialization
     // open lib<algo_name>_pcmc.so and call __<algo_name>_pcmc_init()
     if (sprintf(lib_name, "lib%s_pcmc.so", algo_name) < 0) {
-        LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init library name",
+        PCM_LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init library name",
                  config->device, config);
         return PCM_ERROR;
     }
 
     char pcmc_init_fn_name[PCMC_MAX_INIT_FN_NAME];
     if (sprintf(pcmc_init_fn_name, "__%s_pcmc_init", algo_name) < 0) {
-        LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init function name",
+        PCM_LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init function name",
                  config->device, config);
         return PCM_ERROR;
     }
@@ -124,20 +124,20 @@ int algorithm_config_compile(struct algorithm_config *config,
     pcmc_init_fn = (pcmc_init_function_t)raw_fn_ptr;
 
     if (pcmc_init_fn(config) != PCM_SUCCESS) {
-        LOG_CRIT("[dev=%p conf=%p] %s failed to initialize PCMC config",
+        PCM_LOG_CRIT("[dev=%p conf=%p] %s failed to initialize PCMC config",
                  config->device, config, pcmc_init_fn_name);
         return PCM_ERROR;
     }
 
     if (shared_symbol_close(so_handle) != PCM_SUCCESS) {
-        LOG_CRIT("[dev=%p conf=%p] failed to close %s object", config->device,
+        PCM_LOG_CRIT("[dev=%p conf=%p] failed to close %s object", config->device,
                  config, lib_name);
         return PCM_ERROR;
     }
 
     // 2. Cache pointer to the algorithm entry point in the config
     if (sprintf(lib_name, "lib%s.so", algo_name) < 0) {
-        LOG_CRIT("[dev=%p conf=%p] failed to format algorithm library name",
+        PCM_LOG_CRIT("[dev=%p conf=%p] failed to format algorithm library name",
                  config->device, config);
         return PCM_ERROR;
     }
@@ -154,49 +154,49 @@ int algorithm_config_compile(struct algorithm_config *config,
 
 int algorithm_config_activate(struct algorithm_config *config) {
     if (config->active) {
-        LOG_CRIT("[dev=%p conf=%p] config activation called twice",
+        PCM_LOG_CRIT("[dev=%p conf=%p] config activation called twice",
                  config->device, config);
         return PCM_ERROR;
     }
     if (!config->algorithm_fn) {
-        LOG_CRIT("[dev=%p conf=%p] algorithm handler function must be compiled",
+        PCM_LOG_CRIT("[dev=%p conf=%p] algorithm handler function must be compiled",
                  config->device, config);
         return PCM_ERROR;
     }
     if (!config->num_signals) {
-        LOG_CRIT("[dev=%p conf=%p] at least one signal must be registered with "
+        PCM_LOG_CRIT("[dev=%p conf=%p] at least one signal must be registered with "
                  "configuration file",
                  config->device, config);
         return PCM_ERROR;
     }
     if (!config->num_controls) {
-        LOG_CRIT(
+        PCM_LOG_CRIT(
             "[dev=%p conf=%p] at least one control must be registered with "
             "configuration file",
             config->device, config);
         return PCM_ERROR;
     }
     config->active = true;
-    LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu",
+    PCM_LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu",
             config->device, config, config->num_signals, config->num_controls);
     return PCM_SUCCESS;
 }
 
 int algorithm_config_deactivate(struct algorithm_config *config) {
     if (!config->active) {
-        LOG_CRIT("[dev=%p conf=%p] config deactivation called twice",
+        PCM_LOG_CRIT("[dev=%p conf=%p] config deactivation called twice",
                  config->device, config);
         return PCM_ERROR;
     }
     config->active = false;
-    LOG_DBG("[dev=%p conf=%p] deactivated", config->device, config);
+    PCM_LOG_DBG("[dev=%p conf=%p] deactivated", config->device, config);
     return PCM_SUCCESS;
 }
 
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
                                        pcm_addr_mask_t matching_rule_mask) {
     config->matching_rule_mask = matching_rule_mask;
-    LOG_DBG("[dev=%p conf=%p] added matching rule=0x%x", config->device, config,
+    PCM_LOG_DBG("[dev=%p conf=%p] added matching rule=0x%x", config->device, config,
             matching_rule_mask);
     return PCM_SUCCESS;
 }
@@ -227,7 +227,7 @@ int algorithm_config_signal_add(struct algorithm_config *config,
         attr->accumulation_op_fn = config->device->flow_ops.datapath.max;
         break;
     default:
-        LOG_CRIT("[dev=%p conf=%p] unknown or unsupported signal accumulation "
+        PCM_LOG_CRIT("[dev=%p conf=%p] unknown or unsupported signal accumulation "
                  "type requested",
                  config->device, config);
         return PCM_ERROR;

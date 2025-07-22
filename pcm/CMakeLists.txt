@@ -60,9 +60,11 @@ set(PCM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(PCM_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(PCM_ALGO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/algorithms)
 set(PCM_APPS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/apps)
+set(PCM_MISC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/misc)
 
 # Include directories
 include_directories(${PCM_INCLUDE_DIR})
+include_directories(${PCM_MISC_DIR})
 include_directories(${PCM_ALGO_DIR})
 include_directories(${CMAKE_BINARY_DIR}/algorithms)  # For YAML-generated algorithm headers
 

@@ -14,7 +14,8 @@ int pthrd_flow_destroy(pcm_flow_t flow) {
 
     flow_ctx->running = false;
     if (pthread_join(flow_ctx->pthread_obj, NULL)) {
-        LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow, flow->addr);
+        PCM_LOG_CRIT("[flow=%p addr=%u] flow thread join failed", flow,
+                     flow->addr);
         ret = PCM_ERROR;
     }
 
@@ -26,7 +27,7 @@ int pthrd_flow_destroy(pcm_flow_t flow) {
 int pthrd_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     flow->backend_ctx = calloc(1, sizeof(struct pthrd_flow));
     if (!flow->backend_ctx) {
-        LOG_CRIT("failed to allocate new pthread flow context");
+        PCM_LOG_CRIT("failed to allocate new pthread flow context");
         return PCM_ERROR;
     }
 
@@ -44,17 +45,17 @@ int pthrd_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     flow->controls = (void *)flow_ctx->controls;
     flow->vars = (void *)flow_ctx->vars;
 
-    LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d", flow->config,
-            flow, flow->addr);
+    PCM_LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d",
+                flow->config, flow, flow->addr);
 
     if (pthread_create(&flow_ctx->pthread_obj, NULL, traffic_gen_fn,
                        (void *)flow)) {
-        LOG_CRIT("failed to start thread for flow=%p addr=%u", flow,
-                 flow->addr);
+        PCM_LOG_CRIT("failed to start thread for flow=%p addr=%u", flow,
+                     flow->addr);
         return PCM_ERROR;
     }
 
-    LOG_DBG("started thread for flow=%p addr=%u", flow, flow->addr);
+    PCM_LOG_DBG("started thread for flow=%p addr=%u", flow, flow->addr);
 
     // Initialize time related signals before traffic generation starts
     if (clock_gettime(CLOCK_MONOTONIC, &flow_ctx->start_ts))
@@ -138,12 +139,10 @@ int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     return PCM_SUCCESS;
 }
 
-__attribute__((constructor))
-void pthrd_plugin_register(void) {
+__attribute__((constructor)) void pthrd_plugin_register(void) {
     flow_plugin_register(pthrd_flow_plugin_name, pthrd_flow_ops_init);
 }
 
-__attribute__((destructor))
-void pthrd_plugin_deregister(void) {
+__attribute__((destructor)) void pthrd_plugin_deregister(void) {
     flow_plugin_deregister(pthrd_flow_plugin_name);
 }

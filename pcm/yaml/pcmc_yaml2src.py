@@ -122,7 +122,7 @@ class AlgorithmCodeGenerator:
 
     def _generate_pcmc(self) -> str:
         lines: List[str] = []
-        lines.append('#include "algo_utils.h"')
+        lines.append('#include "pcm_log.h"')
         lines.append('#include "pcm.h"')
         lines.append(f'#include "{self.algorithm_name}.h"')
         lines.append("")
@@ -133,12 +133,12 @@ class AlgorithmCodeGenerator:
             typ, accum = sig["type"], sig["accumulation"]
             name = f"SIG_{sig['name']}"
             lines.append(
-                f"    EXIT_ON_ERR(register_signal_pcmc({typ}, {accum}, {name}, new_handle), PCM_SUCCESS);"
+                f"    PCM_EXIT_ON_ERR(register_signal_pcmc({typ}, {accum}, {name}, new_handle));"
             )
             if "trigger_threshold" in sig:
                 thr = sig["trigger_threshold"]
                 lines.append(
-                    f"    EXIT_ON_ERR(register_signal_invoke_trigger_pcmc({name}, {thr}, new_handle), PCM_SUCCESS);"
+                    f"    PCM_EXIT_ON_ERR(register_signal_invoke_trigger_pcmc({name}, {thr}, new_handle));"
                 )
         lines.append("")
         lines.append("    /* Controls */")
@@ -147,11 +147,11 @@ class AlgorithmCodeGenerator:
             name = f"CTRL_{ctrl['name']}"
             init = ctrl.get("initial_value")
             lines.append(
-                f"    EXIT_ON_ERR(register_control_pcmc({typ}, {name}, new_handle), PCM_SUCCESS);"
+                f"    PCM_EXIT_ON_ERR(register_control_pcmc({typ}, {name}, new_handle));"
             )
             if init is not None:
                 lines.append(
-                    f"    EXIT_ON_ERR(register_control_initial_value_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
+                    f"    PCM_EXIT_ON_ERR(register_control_initial_value_pcmc({name}, {init}, new_handle));"
                 )
         lines.append("")
         lines.append("    /* Variables */")
@@ -160,11 +160,11 @@ class AlgorithmCodeGenerator:
             init = var.get("initial_value")
             dtype = var.get("type")
             lines.append(
-                f"    EXIT_ON_ERR(register_var_pcmc({name}, new_handle), PCM_SUCCESS);"
+                f"    PCM_EXIT_ON_ERR(register_var_pcmc({name}, new_handle));"
             )
             if init is not None:
                 lines.append(
-                    f"    EXIT_ON_ERR(register_var_initial_value_{dtype}_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
+                    f"    PCM_EXIT_ON_ERR(register_var_initial_value_{dtype}_pcmc({name}, {init}, new_handle));"
                 )
         lines.append("")
         lines.append("    return PCM_SUCCESS;")
