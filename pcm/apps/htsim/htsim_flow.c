@@ -1,12 +1,12 @@
 #include "htsim_flow.h"
-#include "../util.h"
-#ifdef BUILD_HTSIM_FLOW_PLUGIN
+#include "util.h"
+#ifdef BUILD_HTSIM_PLUGIN
 #include "htsim_pcm_time_wrapper_c.h"
 #endif
 
 const char *htsim_flow_plugin_name = "htsim";
 
-#ifndef BUILD_HTSIM_FLOW_PLUGIN
+#ifndef BUILD_HTSIM_PLUGIN
 
 int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     (void)flow_ops;
@@ -117,3 +117,13 @@ int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops) {
 }
 
 #endif
+
+__attribute__((constructor))
+void htsim_plugin_register(void) {
+    flow_plugin_register(htsim_flow_plugin_name, htsim_flow_ops_init);
+}
+
+__attribute__((destructor))
+void htsim_plugin_deregister(void) {
+    flow_plugin_deregister(htsim_flow_plugin_name);
+}

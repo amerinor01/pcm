@@ -116,6 +116,22 @@ struct flow_plugin_ops {
     } handler;
 };
 
+// Plugin registration system for datapath plugins
+#if !defined(__GNUC__) && !defined(__clang__)
+STATIC_ASSERT(0, "Plugin system requires GCC or Clang compiler for constructor/destructor attributes");
+#endif
+
+struct flow_plugin_registry_entry {
+    struct slist_entry list_entry;
+    char *name;
+    int (*init_fn)(struct flow_plugin_ops *);
+};
+
+int flow_plugin_register(const char *name, int (*init_fn)(struct flow_plugin_ops *));
+int flow_plugin_ops_get(const char *name, struct flow_plugin_ops *ops);
+int flow_plugin_deregister(const char *name);
+void flow_plugin_cleanup(void);
+
 struct flow {
     pcm_device_t device;
     pcm_addr_t addr;
