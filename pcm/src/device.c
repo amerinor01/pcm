@@ -1,7 +1,5 @@
 #include <unistd.h>
 
-#include "htsim/htsim_flow.h"
-
 #include "impl.h"
 #include "pthread_flow.h"
 #include "util.h"
@@ -12,7 +10,6 @@ int device_scheduler_destroy(struct scheduler *scheduler);
 static void *device_scheduler_thread_fn(void *arg);
 
 int device_init(const char *flow_plugin_name, pcm_device_t *out) {
-
     pcm_device_t device = calloc(1, sizeof(*device));
     if (!device) {
         LOG_CRIT("failed to allocate new device");
@@ -22,16 +19,14 @@ int device_init(const char *flow_plugin_name, pcm_device_t *out) {
     slist_init(&device->configs_list);
 
     bool needs_progress_thread = false;
-    if (!strcmp(pthrd_flow_plugin_name, flow_plugin_name)) {
-        if (pthrd_flow_ops_init(&device->flow_ops) != PCM_SUCCESS) {
-            LOG_CRIT("failed to initialize flow backend %s", flow_plugin_name);
-            goto destroy_scheduler;
-        }
-        needs_progress_thread = true;
-    } else if (!strcmp(htsim_flow_plugin_name, flow_plugin_name)) {
-        if (htsim_flow_ops_init(&device->flow_ops) != PCM_SUCCESS) {
-            LOG_CRIT("failed to initialize flow backend %s", flow_plugin_name);
-            goto destroy_scheduler;
+    if (flow_plugin_ops_get(flow_plugin_name, &device->flow_ops) ==
+        PCM_SUCCESS) {
+        LOG_INFO("Initialized flow plugin: %s", flow_plugin_name);
+        if (!strcmp(pthrd_flow_plugin_name, flow_plugin_name)) {
+            needs_progress_thread = true;
+        } else {
+            // Other plugins don't need progress thread
+            needs_progress_thread = false;
         }
     } else {
         LOG_CRIT("unknown flow backend name %s", flow_plugin_name);

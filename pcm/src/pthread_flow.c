@@ -137,3 +137,13 @@ int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     *flow_ops = pthrd_flow_ops;
     return PCM_SUCCESS;
 }
+
+__attribute__((constructor))
+void pthrd_plugin_register(void) {
+    flow_plugin_register(pthrd_flow_plugin_name, pthrd_flow_ops_init);
+}
+
+__attribute__((destructor))
+void pthrd_plugin_deregister(void) {
+    flow_plugin_deregister(pthrd_flow_plugin_name);
+}

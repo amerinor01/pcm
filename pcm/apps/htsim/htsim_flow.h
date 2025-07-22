@@ -5,7 +5,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#include "../impl.h"
+#include "impl.h"
 
 #define HTSIM_MAX_REGFILE_SIZE (sizeof(uint64_t) * 64);
 

@@ -8,9 +8,9 @@
 #include "htsim_pcm_time_wrapper_c.h"
 extern "C" uint64_t htsim_now(void) { return pcm::Device::getSimulationTime(); }
 
-// File-scope static variable for event list
 namespace pcm {
 
+// File-scope global variable for event list (exposed to PCM runtime)
 static EventList *_pcm_root_event_list = nullptr;
 
 uint64_t Device::getSimulationTime() {
@@ -66,6 +66,7 @@ void Device::doNextEvent() {
         throw DeviceException{"Current time is not equal to the _next_sched time"};
 
     _next_sched = eventlist().now() + _poll_delay; // penalize call to sched progress
+
     pcm_flow_t triggered_flow;
     auto triggered = device_scheduler_progress(_pcm_device_ptr, &triggered_flow);
     if (triggered) {
