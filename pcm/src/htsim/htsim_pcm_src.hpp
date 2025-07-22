@@ -39,15 +39,14 @@ class Src final : public UecSrc {
         // It's possible that _cwnd was clamped before entering callback
         // so we fetch it here
         _pcm_flow.cwndReset(UecSrc::_cwnd);
-
         fetchCwndUpdate();
+        cout << "[PCM flow=" << this << ", ACK]: TIME=" << eventlist().now() / 1000 << " CWND=" << _cwnd << endl;
 
         _pcm_flow.signalUpdate(PCM_SIG_ECN, skip);
         _pcm_flow.signalUpdate(PCM_SIG_DATA_TX, newly_acked_bytes);
         auto num_acked_packets = std::ceil(newly_acked_bytes / UecSrc::_mss);
         _pcm_flow.signalUpdate(PCM_SIG_ACK, num_acked_packets);
         _pcm_flow.signalUpdate(PCM_SIG_RTT, delay);
-        cout << "[PCM flow=" << this << ", ACK]: TIME=" << eventlist().now() / 1000 << " CWND=" << _cwnd << endl;
     }
 
     void updateCwndOnNack(bool skip, mem_b nacked_bytes, bool last_hop) {
@@ -58,12 +57,11 @@ class Src final : public UecSrc {
         // It's possible that _cwnd was clamped before entering callback
         // so we fetch it here
         _pcm_flow.cwndReset(UecSrc::_cwnd);
-
         fetchCwndUpdate();
+        cout << "[PCM flow=" << this << ", NACK]: TIME=" << eventlist().now() / 1000 << " CWND=" << _cwnd << endl;
 
         auto num_nacked_packets = std::ceil(nacked_bytes / UecSrc::_mss);
         _pcm_flow.signalUpdate(PCM_SIG_NACK, num_nacked_packets);
-        cout << "[PCM flow=" << this << ", NACK]: TIME=" << eventlist().now() / 1000 << " CWND=" << _cwnd << endl;
     }
 
   private:

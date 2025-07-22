@@ -24,12 +24,11 @@ class DeviceException final : public std::runtime_error {
     explicit DeviceException(std::string_view message)
         : std::runtime_error{std::string{"Htsim PCM Error: "} + std::string{message}} {
         std::cerr << what() << std::endl;
-        exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE); // for now all PCM errors are unrecoverable
     }
 };
 
 class Device final : public EventSource {
-
     // expose time to htsim datapath plugin in PCM
   public:
     [[nodiscard]] static uint64_t getSimulationTime();
