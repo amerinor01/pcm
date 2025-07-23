@@ -81,7 +81,6 @@ struct algorithm_config {
 
 struct flow_plugin_ops {
     struct control_ops {
-        size_t (*max_regfile_size_get)();
         int (*create)(pcm_flow_t, traffic_gen_fn_t);
         int (*destroy)(pcm_flow_t);
         bool (*is_ready)(const pcm_flow_t);

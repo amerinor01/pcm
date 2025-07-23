@@ -145,8 +145,7 @@ int flow_create(pcm_device_t device, pcm_flow_t *flow,
     if (!device)
         return PCM_ERROR;
 
-    pcm_flow_t new_flow = (pcm_flow_t)calloc(
-        1, sizeof(*new_flow) + device->flow_ops.control.max_regfile_size_get());
+    pcm_flow_t new_flow = (pcm_flow_t)calloc(1, sizeof(*new_flow));
     if (!new_flow) {
         PCM_LOG_CRIT("[dev=%p] failed to allocate new flow", device);
         return PCM_ERROR;
