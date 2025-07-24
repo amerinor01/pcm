@@ -295,6 +295,10 @@ def main() -> None:
            print("compiling non-optimized handler...")
        if args.verify:
            print("verifying handler...")
+    elif args.optimize or args.verify:
+        print("verify/optimize can only be used in conjunction with compile")
+    else:
+        print("Nothing to do...")
 
 
 if __name__ == "__main__":
