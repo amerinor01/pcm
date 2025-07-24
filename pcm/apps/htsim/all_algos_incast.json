@@ -1,0 +1,16 @@
+{
+  "binary": "./build/bin/htsim_flow_app",
+  "input_files": [
+    "./apps/htsim/incast_8_1MB.cm"
+  ],
+  "htsim_params": "-sender_cc_algo nscc -end 30000",
+  "run_without_pcm": true,
+  "pcm_config": "-pcm_sched_poll_delay 1000 -pcm_handler_delay 1000",
+  "pcm_algorithms": [
+    "newreno",
+    "swift", 
+    "smartt",
+    "dcqcn",
+    "dctcp"
+  ]
+}

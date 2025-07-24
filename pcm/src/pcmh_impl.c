@@ -38,52 +38,37 @@ inline void __flow_control_set(void *ctx, size_t user_index, pcm_uint val) {
         ->device->flow_ops.handler.control_set(ctx, user_index, val);
 }
 
-inline pcm_int __flow_local_state_int_get(const void *ctx, size_t user_index) {
+inline pcm_int __flow_var_int_get(const void *ctx, size_t user_index) {
     return ((struct flow *)ctx)
-        ->device->flow_ops.handler.local_state_int_get(ctx, user_index);
+        ->device->flow_ops.handler.var_int_get(ctx, user_index);
 }
 
-inline void __flow_local_state_int_set(void *ctx, size_t user_index,
+inline void __flow_var_int_set(void *ctx, size_t user_index,
                                        pcm_int val) {
     return ((struct flow *)ctx)
-        ->device->flow_ops.handler.local_state_int_set(ctx, user_index, val);
+        ->device->flow_ops.handler.var_int_set(ctx, user_index, val);
 }
 
-inline pcm_uint __flow_local_state_uint_get(const void *ctx,
+inline pcm_uint __flow_var_uint_get(const void *ctx,
                                             size_t user_index) {
     return ((struct flow *)ctx)
-        ->device->flow_ops.handler.local_state_uint_get(ctx, user_index);
+        ->device->flow_ops.handler.var_uint_get(ctx, user_index);
 }
 
-inline void __flow_local_state_uint_set(void *ctx, size_t user_index,
+inline void __flow_var_uint_set(void *ctx, size_t user_index,
                                         pcm_uint val) {
     return ((struct flow *)ctx)
-        ->device->flow_ops.handler.local_state_uint_set(ctx, user_index, val);
+        ->device->flow_ops.handler.var_uint_set(ctx, user_index, val);
 }
 
-inline pcm_float __flow_local_state_float_get(const void *ctx,
+inline pcm_float __flow_var_float_get(const void *ctx,
                                               size_t user_index) {
     return ((struct flow *)ctx)
-        ->device->flow_ops.handler.local_state_float_get(ctx, user_index);
+        ->device->flow_ops.handler.var_float_get(ctx, user_index);
 }
 
-inline void __flow_local_state_float_set(void *ctx, size_t user_index,
+inline void __flow_var_float_set(void *ctx, size_t user_index,
                                          pcm_float val) {
     return ((struct flow *)ctx)
-        ->device->flow_ops.handler.local_state_float_set(ctx, user_index, val);
-}
-
-inline pcm_int __flow_constant_int_get(const void *ctx, size_t user_index) {
-    return ((struct flow *)ctx)
-        ->device->flow_ops.handler.constant_int_get(ctx, user_index);
-}
-
-inline pcm_uint __flow_constant_uint_get(const void *ctx, size_t user_index) {
-    return ((struct flow *)ctx)
-        ->device->flow_ops.handler.constant_uint_get(ctx, user_index);
-}
-
-inline pcm_float __flow_constant_float_get(const void *ctx, size_t user_index) {
-    return ((struct flow *)ctx)
-        ->device->flow_ops.handler.constant_float_get(ctx, user_index);
+        ->device->flow_ops.handler.var_float_set(ctx, user_index, val);
 }

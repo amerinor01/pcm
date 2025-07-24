@@ -1,0 +1,107 @@
+algorithm:
+  name: smartt
+  description: "SMARTT congestion control algorithm"
+
+constants:
+  - name: FI_BRTT_TOL
+    type: float
+    value: 0.75
+    description: "Fast increase base RTT tolerance"
+  - name: BDP
+    type: uint
+    value: "FABRIC_BDP"
+    description: "Bandwidth-delay product"
+  - name: BRTT
+    type: uint
+    value: "FABRIC_BRTT"
+    description: "Base RTT"
+  - name: TRTT
+    type: uint
+    value: "FABRIC_TRTT"
+    description: "Target RTT"
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MSS"
+    description: "Maximum segment size"
+  - name: REACTION_DELAY
+    type: float
+    value: 1.0
+    description: "Reaction delay parameter"
+  - name: X_GAIN
+    type: float
+    value: 2.0
+    description: "X gain parameter"
+  - name: Y_GAIN
+    type: float
+    value: 2.5
+    description: "Y gain parameter"
+  - name: Z_GAIN
+    type: uint
+    value: 2
+    description: "Z gain parameter"
+  - name: W_GAIN
+    type: float
+    value: 0.8
+    description: "W gain parameter"
+  - name: QA_SCALING
+    type: uint
+    value: 1
+    description: "Quick adapt scaling factor"
+
+signals:
+  - name: RTT_SAMPLE
+    type: PCM_SIG_RTT
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NUM_RTO
+    type: PCM_SIG_RTO
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: ELAPSED_TIME
+    type: PCM_SIG_ELAPSED_TIME
+    accumulation: PCM_SIG_ACCUM_SUM
+
+controls:
+  - name: CWND_BYTES
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_MAX_CWND"
+
+variables:
+  - name: ACKED_BYTES
+    initial_value: 0
+    type: uint
+    description: "Total acknowledged bytes"
+  - name: BYTES_IGNORED
+    initial_value: 0
+    type: uint
+    description: "Bytes ignored during measurement"
+  - name: BYTES_TO_IGNORE
+    initial_value: 0
+    type: uint
+    description: "Bytes to ignore for next measurement"
+  - name: TRIGGER_QA
+    initial_value: 0
+    type: uint
+    description: "Quick adapt trigger flag"
+  - name: QA_DEADLINE
+    initial_value: 0
+    type: uint
+    description: "Quick adapt deadline"
+  - name: FAST_COUNT
+    initial_value: 0
+    type: uint
+    description: "Fast increase counter"
+  - name: FAST_ACTIVE
+    initial_value: 0
+    type: uint
+    description: "Fast increase active flag"

@@ -1,0 +1,45 @@
+# The PCM YAML file contains a set of top-level keys:
+# "algorithm", "parameters", "signals", "controls", "variables".
+#
+# Except the "algorithm" key that maps to a pair of values (YAML mapping node),
+# other top-level keys map to a sequences (YAML sequence nodes). 
+#
+# Optional keys are enclosed into the square brackets.
+#
+# The template below describes sequence node items in non-inlined YAML notation
+# (each item starts with a signle dash prefix).
+
+# ── Algorithm metadata (mapping node) ──
+algorithm:
+  name: <string>           # Algorithm name
+  description: <string>    # Algorithm description
+
+# ── Input signals (sequence node) ──
+signals:
+  - name: <string> # Signal name to refer in get/set/update_signal(...) calls
+    type: <enum> # See Section XYZ that defines signals
+    filter: <enum> # See Section ABC that defines signal filters
+    dtype_min_bitwidth: <uint>
+    [trigger_threshold: <uint>] # Signal can trigger handler execution 
+
+# ── Control outputs (sequence node) ──
+controls:
+  - name: <string> # Name to refer in get/set_control(...) calls
+    type: <enum>  # See Section XYZ that defines controls
+    dtype_min_bitwidth: <uint>
+    initial_value: <uint>
+
+# ── Algorithm-specific internal state variables (sequence node) ──
+[variables]:
+  - name: <string> # Name to refer in get/set_var(...) calls
+    dtype: <uint|int|float>
+    dtype_min_bitwidth: <uint>
+    initial_value: <scalar>
+
+# ── Algorithm-specific parameters (sequence node) ──
+[parameters]:
+  - name: <string> # C macro definition name to refer in the handler code
+    dtype: <uint|int|float>
+    dtype_min_bitwidth: <uint>
+    value: <scalar>
+    description: <string>

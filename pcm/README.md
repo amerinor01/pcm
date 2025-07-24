@@ -11,29 +11,86 @@
     - `htsim` - the HTSIM traffic simulation with PCM-based congestion control
 - `./analysis` - contains scripts for performance analysis
 
+## Project build
+
+### Basic Build
+```bash
+# Using Python build script
+python3 build.py
+```
+
+### HTSIM Plugin Build
+```bash
+python3 build.py --htsim --htsim-dir /path/to/htsim/sim/
+```
+
+### Debug Build with Clean
+```bash
+python3 build.py --debug --clean
+```
+
+### Full Development Build
+```bash
+python3 build.py --debug --htsim --hac --profiling --clean
+```
+
+### Build Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--debug` | Build in Debug mode | Release |
+| `--htsim` | Enable HTSIM flow plugin | OFF |
+| `--htsim-dir DIR` | Set HTSIM build directory | Auto-detect |
+| `--profiling` | Enable profiling support | OFF |
+| `--hac` | Enable HAC LLVM optimizations | OFF |
+| `--clean` | Clean build directory first | false |
+| `--install` | Install after building | false |
+| `--build-dir DIR` | Custom build directory | ./build |
+| `--jobs N` or `-j N` | Parallel build jobs | CPU count |
+
+### Manual CMake Usage
+
+```bash
+mkdir build && cd build
+
+# Basic build
+cmake ..
+
+# With all features enabled
+cmake -DCMAKE_BUILD_TYPE=Debug \
+      -DBUILD_HTSIM_PLUGIN=ON \
+      -DHTSIM_BUILD_DIR=/path/to/htsim/sim/ \
+      -DBUILD_HAC_PASS=ON \
+      -DENABLE_PROFILING=ON ..
+
+# Build with parallel jobs
+cmake --build . --parallel $(nproc)
+
+# Install
+cmake --install .
+```
+
+### Post installation process
+
+1. `export LD_LIBRARY_PATH=$(pwd)/build/lib/:$LD_LIBRARY_PATH`
+2. `export PATH=$(pwd)/build/bin/:$PATH`
+
 ## Running synthetic application
 
-1. `make` - compiles whole project into `lib` (app binary) and `bin` folders
-    - `CC=gcc make` - change compiler to GCC (default is Clang)
-2. `export LD_LIBRARY_PATH=$(pwd)/lib/:$LD_LIBRARY_PATH`
-3. `export PATH=$(pwd)/bin/:$PATH`
-4. `traffic_gen_app 1 10000000 dctcp $(pwd)/lib/libdctcp.so &> dctcp.log` runs single flow for 10 seconds (10000000 us) and outputs log into the `dctcp.log` file
-5. `python3 ./apps/traffic_gen/cwnd_parser.py dctcp.log cwnd.png` - parse log from the previous step and produces congestion window evolution plot on the screen and into `cwnd.png`:
+1. `traffic_gen_app 1 10000000 dctcp &> dctcp.log` runs single flow for 10 seconds (10000000 us) and outputs log into the `dctcp.log` file
+2. `python3 ./apps/traffic_gen/cwnd_parser.py dctcp.log cwnd.png` - parse log from the previous step and produces congestion window evolution plot on the screen and into `cwnd.png`:
 ![](dctcp_cwnd.png)
 
 ### Algorithm profiling (Linux only)
-1. `ENABLE_PROFILING=1 make` - rebuild SDK with the profiling enabled
-2. `sudo sysctl -w kernel.perf_event_paranoid=0` - enable collection of perf data without root permissions
-3. `analysis/perftest_run.sh $(pwd)/lib/ $(pwd)/perf.out` - collect performance counters for all algorithms:
+1. `sudo sysctl -w kernel.perf_event_paranoid=0` - enable collection of perf data without root permissions
+2. `analysis/perftest_run.sh $(pwd)/lib/ $(pwd)/perf.out` - collect performance counters for all algorithms:
     - first argument is path to the `.so` libraries of algorithms
     - each algorithm is logged in `$(pwd)/perf.out` directory which is created if doesn't exist
-4. `python3 ./analysis/plot_cyc_and_inst.py $(pwd)/perf.out` - generate violin plots for cycles and instructions inside the `$(pwd)/perf.out`
+3. `python3 ./analysis/plot_cyc_and_inst.py $(pwd)/perf.out` - generate violin plots for cycles and instructions inside the `$(pwd)/perf.out`
 
 ## Running htsim
 
-For now, the supported htsim version is `spcl/HTSIM` on `lgs_stable` branch.
-1. Edit root `Makefile` to supply the path to the htsim directory that contains `libhtsim.a` and all related htsim sources
-2. `BUILD_HTSIM_FLOW_PLUGIN=1 make` - Note: all warnings are coming from the htsim side
-3. `/bin/htsim_flow_app -o uec_entry -k 1 -algorithm smartt -nodes 1024 -q 4452000 -strat ecmp_host_random2_ecn -number_entropies 256 -kmin 20 -kmax 80 -target_rtt_percentage_over_base 50 -use_fast_increase 1 -use_super_fast_increase 1 -fast_drop 1 -seed 919 -queue_type composite -reuse_entropy 1 -tm ./apps/htsim/incast_8_1MB.cm -x_gain 2 -y_gain 2.5 -w_gain 2 -z_gain 0.8  -collect_data 1 -pcm_algorithm smartt -pcm_algorithm_handler $(pwd)/lib/libsmartt.so &> pcm.log`
-4. `python3 apps/htsim/htsim_pcm_cwnd_parser.py pcm.log pcm_cwnd.png`:
+For now, the supported htsim version is UEC's htsim with patches in `../uec-htsim-patch`.
+1. `htsim_flow_app -tm ./apps/htsim/incast_8_1MB.cm -sender_cc_algo nscc -end 30000 -pcm_algorithm smartt &> smartt.log`
+2. `python3 apps/htsim/htsim_pcm_cwnd_parser.py smartt.log smartt_cwnd.png`:
 ![](smartt_htsim.png)
