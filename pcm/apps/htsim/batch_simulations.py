@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
 """
-Simple HTSIM Pipeline Runner
-Usage: python3 run_htsim_pipeline.py --conf=config.json --out=results/
+HTSIM Batch Simulation Runner
+Runs multiple simulations with different baseline and PCM algorithms.
+
+Usage: python3 batch_simulations.py --conf=all_algos_core.json --out=results/
 """
 
 import argparse
@@ -83,7 +85,7 @@ def generate_plot(log_file, output_dir, test_name):
         return
 
 def main():
-    parser = argparse.ArgumentParser(description="Simple HTSIM Pipeline Runner")
+    parser = argparse.ArgumentParser(description="HTSIM Batch Simulation Runner")
     parser.add_argument('--conf', required=True, help='JSON config file')
     parser.add_argument('--out', required=True, help='Output directory')
     parser.add_argument('--plot', action='store_true', 
@@ -101,16 +103,23 @@ def main():
     binary = config.get('binary', './build/bin/htsim_flow_app')
     input_files = config['input_files']
     htsim_params = config.get('htsim_params', '').split()
+    
+    # Baseline algorithm configurations
     run_without_pcm = config.get('run_without_pcm', False)
+    baseline_config = config.get('baseline_config', '').split()
+    baseline_algorithms = config.get('baseline_algorithms', [])
+    
+    # PCM algorithm configurations  
     pcm_config = config.get('pcm_config', '').split()
     pcm_algorithms = config.get('pcm_algorithms', [])
     
     results = []
     
-    print(f"=== HTSIM Pipeline ===")
+    print(f"=== HTSIM Batch Simulation ===")
     print(f"Config: {args.conf}")
     print(f"Output: {args.out}")
     print(f"Input files: {len(input_files)}")
+    print(f"Baseline algorithms: {len(baseline_algorithms)}")
     print(f"PCM algorithms: {len(pcm_algorithms)}")
     print(f"Generate plots: {args.plot}")
     print()
@@ -118,7 +127,15 @@ def main():
     for input_file in input_files:
         file_name = Path(input_file).stem
         
-        # Run without PCM if requested
+        # Run baseline algorithms (HTSIM built-in)
+        for baseline_algo in baseline_algorithms:
+            cmd = [binary, '-tm', input_file] + htsim_params + baseline_config + [baseline_algo]
+            test_name = f"{file_name}_{baseline_algo}"
+            success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
+            results.append((test_name, success))
+            print()
+        
+        # Run without any algorithm if requested (pure HTSIM baseline)
         if run_without_pcm:
             cmd = [binary, '-tm', input_file] + htsim_params
             test_name = f"{file_name}_baseline"
@@ -127,9 +144,9 @@ def main():
             print()
         
         # Run with each PCM algorithm
-        for algo in pcm_algorithms:
-            cmd = [binary, '-tm', input_file] + htsim_params + pcm_config + ['-pcm_algorithm', algo]
-            test_name = f"{file_name}_{algo}"
+        for pcm_algo in pcm_algorithms:
+            cmd = [binary, '-tm', input_file] + htsim_params + pcm_config + ['-pcm_algorithm', pcm_algo]
+            test_name = f"{file_name}_pcm_{pcm_algo}"
             success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
             results.append((test_name, success))
             print()
@@ -140,10 +157,14 @@ def main():
     failed = total - passed
     
     print("=== Summary ===")
-    print(f"Total: {total}, Passed: {passed}, Failed: {failed}")
+    print(f"Total simulations: {total}")
+    print(f"Successful: {passed}")
+    print(f"Failed: {failed}")
+    print(f"Baseline algorithms tested: {len(baseline_algorithms)}")
+    print(f"PCM algorithms tested: {len(pcm_algorithms)}")
     
     if failed > 0:
-        print("\nFailed tests:")
+        print("\nFailed simulations:")
         for name, success in results:
             if not success:
                 print(f"  - {name}")
@@ -151,9 +172,13 @@ def main():
     # Save summary
     summary = {
         'timestamp': datetime.now().isoformat(),
-        'total': total,
-        'passed': passed,
+        'config_file': str(args.conf),
+        'total_simulations': total,
+        'successful': passed,
         'failed': failed,
+        'baseline_algorithms_tested': len(baseline_algorithms),
+        'pcm_algorithms_tested': len(pcm_algorithms),
+        'input_files': len(input_files),
         'results': [{'name': name, 'success': success} for name, success in results]
     }
     

@@ -11,6 +11,7 @@
 // htsim
 #include "config.h"
 #include "eventlist.h"
+#include "uec.h"
 
 // PCM
 #include "impl.h"
@@ -22,7 +23,8 @@ class Src;
 class DeviceException final : public std::runtime_error {
   public:
     explicit DeviceException(std::string_view message)
-        : std::runtime_error{std::string{"Htsim PCM Error: "} + std::string{message}} {
+        : std::runtime_error{std::string{"Htsim PCM Error: "} +
+                             std::string{message}} {
         std::cerr << what() << std::endl;
         exit(EXIT_FAILURE); // for now all PCM errors are unrecoverable
     }
@@ -37,8 +39,8 @@ class Device final : public EventSource {
     static const uint64_t default_schedulerPollDelayPs = 1000;
 
   public:
-    explicit Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picosec handlerDelay,
-                    simtime_picosec pollDelay);
+    explicit Device(EventList &eventList, std::string_view pcmAlgoName,
+                    simtime_picosec handlerDelay, simtime_picosec pollDelay);
 
     ~Device();
 
@@ -49,9 +51,13 @@ class Device final : public EventSource {
         eventlist().cancelPendingSource(*this);
     }
 
-    [[nodiscard]] pcm_device_t getImplPtr() const noexcept { return _pcm_device_ptr; }
+    [[nodiscard]] pcm_device_t getImplPtr() const noexcept {
+        return _pcm_device_ptr;
+    }
 
-    void registerFlow(pcm_flow_t pcm_flow_handle, pcm::Src *src) { _flow_to_src_mapping[pcm_flow_handle] = src; }
+    void registerFlow(pcm_flow_t pcm_flow_handle, pcm::Src *src) {
+        _flow_to_src_mapping[pcm_flow_handle] = src;
+    }
 
     static void setEventList(EventList *eventList);
 
@@ -67,8 +73,9 @@ class Device final : public EventSource {
 
 class Flow final {
   public:
-    explicit Flow(std::shared_ptr<const Device> device) {
-        if (device.get() and flow_create(device->getImplPtr(), &_pcm_flow_ptr, nullptr) != PCM_SUCCESS) {
+    explicit Flow(const Device &device) {
+        if (flow_create(device.getImplPtr(), &_pcm_flow_ptr, nullptr) !=
+            PCM_SUCCESS) {
             throw DeviceException{"Failed to create flow"};
         }
     }
@@ -85,13 +92,37 @@ class Flow final {
         }
     }
 
-    [[nodiscard]] pcm_flow_t getImplPtr() const noexcept { return _pcm_flow_ptr; }
-    [[nodiscard]] pcm_uint cwndGet() const noexcept { return flow_cwnd_get(_pcm_flow_ptr); }
-    void cwndReset(pcm_uint new_cwnd) noexcept { __flow_control_set(_pcm_flow_ptr, 0, new_cwnd); }
-    void signalUpdate(pcm_signal_t sig, pcm_uint val) noexcept { flow_signals_update(_pcm_flow_ptr, sig, val); }
+    [[nodiscard]] pcm_flow_t getImplPtr() const noexcept {
+        return _pcm_flow_ptr;
+    }
+    [[nodiscard]] pcm_uint cwndGet() const noexcept {
+        return flow_cwnd_get(_pcm_flow_ptr);
+    }
+    void cwndReset(pcm_uint new_cwnd) noexcept {
+        __flow_control_set(_pcm_flow_ptr, 0, new_cwnd);
+    }
+    void signalUpdate(pcm_signal_t sig, pcm_uint val) noexcept {
+        flow_signals_update(_pcm_flow_ptr, sig, val);
+    }
 
   private:
     pcm_flow_t _pcm_flow_ptr{};
+};
+
+class Nic final : public UecNIC {
+    friend pcm::Src;
+
+  public:
+    Nic(id_t src_num, EventList &eventList, linkspeed_bps linkspeed,
+        uint32_t ports, std::string_view pcmAlgoName,
+        simtime_picosec handlerDelay, simtime_picosec pollDelay)
+        : UecNIC{src_num, eventList, linkspeed, ports},
+          _pcm_device{eventList, pcmAlgoName, handlerDelay, pollDelay} {}
+
+    virtual ~Nic() = default;
+
+  private:
+    pcm::Device _pcm_device;
 };
 
 } // namespace pcm

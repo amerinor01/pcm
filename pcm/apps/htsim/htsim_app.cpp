@@ -27,7 +27,7 @@
 #include "fat_tree_switch.h"
 #include "fat_tree_topology.h"
 
-#include <htsim_pcm_device.hpp>
+#include <htsim_pcm_nic.hpp>
 #include <htsim_pcm_src.hpp>
 
 #include <list>
@@ -804,13 +804,6 @@ int main(int argc, char **argv) {
                                target_Qdelay, qa_gate, trimming_enabled);
     }
 
-    std::shared_ptr<pcm::Device> pcm_device = nullptr;
-    if (pcm_enable) {
-        pcm_device = std::make_shared<pcm::Device>(
-            eventlist, pcm_algo_name, pcm_handler_delay, pcm_sched_poll_delay);
-        std::cout << "PCM device initialization completed" << std::endl;
-    }
-
     vector<unique_ptr<UecPullPacer>> pacers;
     vector<PCIeModel *> pcie_models;
     vector<OversubscribedCC *> oversubscribed_ccs;
@@ -830,7 +823,10 @@ int main(int argc, char **argv) {
                 new OversubscribedCC(eventlist, pacer.get()));
 
         auto &nic = nics.emplace_back(
-            make_unique<UecNIC>(ix, eventlist, linkspeed, ports));
+            pcm_enable ? make_unique<pcm::Nic>(ix, eventlist, linkspeed, ports,
+                                               pcm_algo_name, pcm_handler_delay,
+                                               pcm_sched_poll_delay)
+                       : make_unique<UecNIC>(ix, eventlist, linkspeed, ports));
         if (log_nic) {
             nic_logger->monitorNic(nic.get());
         }
@@ -900,8 +896,16 @@ int main(int argc, char **argv) {
             }
 
             if (pcm_enable) {
+                // Dynamic cast to pcm::Nic since we know this was created as
+                // pcm::Nic when pcm_enable is true
+                pcm::Nic *pcm_nic =
+                    dynamic_cast<pcm::Nic *>(nics.at(src).get());
+                if (!pcm_nic) {
+                    cerr << "Error: dynamic_cast<pcm::Nic> failed" << endl;
+                    abort();
+                }
                 uec_src = new pcm::Src(traffic_logger, eventlist, std::move(mp),
-                                       *nics.at(src), ports, pcm_device);
+                                       *pcm_nic, ports);
             } else {
                 uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp),
                                      *nics.at(src), ports);
