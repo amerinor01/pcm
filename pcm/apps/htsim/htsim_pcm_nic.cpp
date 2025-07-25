@@ -16,8 +16,7 @@ static EventList *_pcm_root_event_list = nullptr;
 
 uint64_t Device::getSimulationTime() {
     if (!_pcm_root_event_list) [[unlikely]]
-        throw DeviceException{
-            "Attempt to get simulation time before device initialization"};
+        throw DeviceException{"Attempt to get simulation time before device initialization"};
     return _pcm_root_event_list->now();
 }
 
@@ -30,28 +29,25 @@ void Device::setEventList(EventList *eventList) {
     _pcm_root_event_list = eventList;
 }
 
-Device::Device(EventList &eventList, std::string_view pcmAlgoName,
-               simtime_picosec handlerDelay, simtime_picosec pollDelay)
-    : EventSource{eventList, "PcmDevice"}, _pcm_algo_name{pcmAlgoName},
-      _handler_delay{handlerDelay}, _poll_delay{pollDelay} {
+Device::Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picosec handlerDelay,
+               simtime_picosec pollDelay, DeviceSchedulerType schedType)
+    : EventSource{eventList, "PcmDevice"}, _pcm_algo_name{pcmAlgoName}, _handler_delay{handlerDelay},
+      _poll_delay{pollDelay}, _sched_type{schedType} {
 
     setEventList(&eventList);
 
     if (device_init("htsim", &_pcm_device_ptr) != PCM_SUCCESS)
         throw DeviceException{"Failed to initialize PCM device"};
 
-    if (device_pcmc_init(_pcm_device_ptr, _pcm_algo_name.c_str(),
-                         &_pcm_algo_handler) != PCM_SUCCESS)
-        throw DeviceException{"Failed to initialize PCMC with algorithm " +
-                              _pcm_algo_name};
+    if (device_pcmc_init(_pcm_device_ptr, _pcm_algo_name.c_str(), &_pcm_algo_handler) != PCM_SUCCESS)
+        throw DeviceException{"Failed to initialize PCMC with algorithm " + _pcm_algo_name};
 
-    _next_sched = eventlist().now() + _poll_delay;
-
-    std::cerr << "PCM device scheduling: now=" << eventlist().now()
-              << ", next_sched=" << _next_sched
-              << ", poll_delay=" << _poll_delay << std::endl;
-
-    eventlist().sourceIsPending(*this, _next_sched);
+    if (_sched_type == pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+        _next_sched = eventlist().now() + _poll_delay;
+        std::cerr << "PCM device scheduling: now=" << eventlist().now() << ", next_sched=" << _next_sched
+                  << ", poll_delay=" << _poll_delay << std::endl;
+        eventlist().sourceIsPending(*this, _next_sched);
+    }
 }
 
 Device::~Device() {
@@ -67,16 +63,20 @@ Device::~Device() {
 }
 
 void Device::doNextEvent() {
-    if (eventlist().now() != _next_sched)
-        throw DeviceException{
-            "Current time is not equal to the _next_sched time"};
+    if (_sched_type == pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+        if (eventlist().now() != _next_sched)
+            throw DeviceException{"Current time is not equal to the _next_sched time"};
+        _next_sched = eventlist().now() + _poll_delay; // penalize call to sched progress
+    }
 
-    _next_sched =
-        eventlist().now() + _poll_delay; // penalize call to sched progress
+    for (auto &it : _flow_to_src_mapping) {
+        auto pcm_src = static_cast<pcm::Src *>(it.second);
+        auto cwnd = pcm_src->datapathCwndGet();
+        __flow_control_set(it.first, 0, cwnd);
+    }
 
     pcm_flow_t triggered_flow;
-    auto triggered =
-        device_scheduler_progress(_pcm_device_ptr, &triggered_flow);
+    auto triggered = device_scheduler_progress(_pcm_device_ptr, &triggered_flow);
     if (triggered) {
         auto it = _flow_to_src_mapping.find(triggered_flow);
         if (it == _flow_to_src_mapping.end()) [[unlikely]]
@@ -84,20 +84,19 @@ void Device::doNextEvent() {
         auto src = it->second;
         if (!src) [[unlikely]]
             throw DeviceException{"PCM source pointer is null"};
-        src->fetchCwndUpdate();
-        _next_sched += _handler_delay; // if handler execution happened,
-                                       // penalize it as well
+        src->datapathCwndUpdate();
     }
 
-    auto num_finished_srcs = std::ranges::count_if(
-        _flow_to_src_mapping.begin(), _flow_to_src_mapping.end(),
-        [](const auto &pair) {
-            return pair.second && pair.second->isTotallyFinished();
-        });
-    if (static_cast<std::size_t>(num_finished_srcs) == _flow_to_src_mapping.size())
-        return;
-
-    eventlist().sourceIsPending(*this, _next_sched);
+    if (_sched_type == pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+        if (triggered)
+            _next_sched += _handler_delay; // if handler execution happened, penalize it as well
+        auto num_finished_srcs =
+            std::ranges::count_if(_flow_to_src_mapping.begin(), _flow_to_src_mapping.end(),
+                                  [](const auto &pair) { return pair.second && pair.second->isTotallyFinished(); });
+        if (static_cast<std::size_t>(num_finished_srcs) == _flow_to_src_mapping.size())
+            return;
+        eventlist().sourceIsPending(*this, _next_sched);
+    }
 }
 
 } // namespace pcm

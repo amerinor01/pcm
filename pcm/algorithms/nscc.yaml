@@ -1,0 +1,193 @@
+algorithm:
+  name: nscc
+  description: "UE NSCC congestion control algorithm"
+
+constants:
+  # Basic fabric constants (from fabric.yaml)
+  - name: EWMA_DELAY_ALPHA
+    type: float
+    value: 0.0125
+    description: "EWMA alpha constant"
+  - name: BDP
+    type: uint
+    value: "FABRIC_BDP"
+    description: "Bandwidth-delay product"
+  - name: BRTT
+    type: uint
+    value: "FABRIC_BRTT"
+    description: "Base RTT"
+  - name: TRTT
+    type: uint
+    value: "FABRIC_TRTT"
+    description: "Target RTT"
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MSS"
+    description: "Maximum segment size"
+  - name: FULFILL_ADJ_BYTES_THRESH
+    type: uint
+    value: !eval "8 * FABRIC_LINK_MTU"
+    description: "Fulfill adjustment bytes threshold"
+  - name: FULFILL_ADJ_TIME_THRESH
+    type: uint
+    value: "FABRIC_BRTT"
+    description: "Fulfill adjustment time threshold"  
+
+  # Reference network parameters (for scaling)
+  - name: REFERENCE_RTT_PS
+    type: uint
+    value: 12000000
+    description: "Reference RTT in picoseconds (12 microseconds)"
+  - name: REFERENCE_LINKSPEED
+    type: uint
+    value: !eval "FABRIC_LINK_RATE_GBPS * 1000000000"
+    description: "Reference link speed in bytes per second"
+  - name: REFERENCE_BDP
+    type: uint
+    value: !eval "REFERENCE_RTT_PS / 1000000000000 * REFERENCE_LINKSPEED"
+    description: "Reference bandwidth-delay product (100Gbps, 12us)"  
+
+  # Derived constants (level 1)
+  - name: TARGET_Q_DELAY
+    type: uint
+    value: !eval "TRTT - BRTT"
+    description: "Target queue delay"
+
+  
+  # Scaling factors (level 2)
+  - name: SCALING_FACTOR_A
+    type: float
+    value: !eval "BDP / REFERENCE_BDP"
+    description: "Scaling factor A for network adaptation"
+  - name: SCALING_FACTOR_B
+    type: float
+    value: !eval "TARGET_Q_DELAY / REFERENCE_RTT_PS"
+    description: "Scaling factor B for network adaptation"
+  
+  # Algorithm parameters (level 3)
+  - name: FI
+    type: float
+    value: !eval "5 * MSS * SCALING_FACTOR_A"
+    description: "Fair increase gain parameter"
+  - name: ETA
+    type: float
+    value: !eval "0.15 * MSS * SCALING_FACTOR_A"
+    description: "Eta parameter for periodic adjustments (UEC _eta)"
+  - name: PI_ALPHA
+    type: float
+    value: !eval "4.0 * MSS * SCALING_FACTOR_A * SCALING_FACTOR_B / TARGET_Q_DELAY"
+    description: "Proportional increase gain parameter (calculated like UEC _alpha)"
+  - name: FI_SCALE
+    type: float
+    value: !eval "0.25 * SCALING_FACTOR_A"
+    description: "Fast increase scale parameter (UEC _fi_scale)"
+  - name: QA_THRESHOLD
+    type: float
+    value: !eval "4 * TARGET_Q_DELAY"
+    description: "Quick adapt threshold (4 times target queue delay)"
+
+
+  # Simple constants
+  - name: FI_QDELAY_TOL
+    type: float
+    value: 1000000
+    description: "Fast increase queue delay tolerance in picoseconds"
+  - name: REACTION_DELAY
+    type: float
+    value: 1.0
+    description: "Reaction delay parameter"
+  - name: MD_GAMMA
+    type: float
+    value: 0.8
+    description: "Multiplicative decrease gain parameter"
+  - name: QA_GATE
+    type: uint
+    value: 3
+    description: "Quick adapt gate"
+
+signals:
+  - name: RTT_SAMPLE
+    type: PCM_SIG_RTT
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: IN_FLIGHT_BYTES
+    type: PCM_SIG_IN_FLIGHT
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_ACKED_BYTES
+    type: PCM_SIG_DATA_TX
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NUM_NACKED_BYTES
+    type: PCM_SIG_DATA_NACKED
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: ELAPSED_TIME
+    type: PCM_SIG_ELAPSED_TIME
+    accumulation: PCM_SIG_ACCUM_SUM
+
+controls:
+  - name: CWND_BYTES
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_MAX_CWND"
+
+variables:
+  - name: ACKED_BYTES
+    initial_value: 0
+    type: uint
+    description: "Total acknowledged bytes"
+  - name: BYTES_IGNORED
+    initial_value: 0
+    type: uint
+    description: "Bytes ignored during measurement"
+  - name: BYTES_TO_IGNORE
+    initial_value: 0
+    type: uint
+    description: "Bytes to ignore for next measurement"
+  - name: TRIGGER_QA
+    initial_value: 0
+    type: uint
+    description: "Quick adapt trigger flag"
+  - name: QA_DEADLINE
+    initial_value: 0
+    type: uint
+    description: "Quick adapt deadline"
+  - name: FAST_COUNT
+    initial_value: 0
+    type: uint
+    description: "Fast increase counter"
+  - name: FAST_ACTIVE
+    initial_value: 0
+    type: uint
+    description: "Fast increase active flag"
+  - name: AVG_Q_DELAY
+    initial_value: 0
+    type: uint
+    description: "Average round trip time"
+  - name: T_MD_LAST
+    initial_value: 0
+    type: uint
+    description: "Time of last multiplicative decrease"
+  - name: BRTT
+    initial_value: !eval "BRTT"
+    type: uint
+    description: "Time of last multiplicative decrease"
+  - name: CWND_INCREMENT_BYTES
+    initial_value: 0
+    type: uint
+    description: "Congestion window increment"
+  - name: LAST_FULFILL_ADJ_TIME
+    initial_value: 0
+    type: uint
+    description: "Last fulfill adjustment time"
+  - name: CWND_INCREMENT_RECVD_BYTES
+    initial_value: 0
+    type: uint
+    description: "Bytes achieved towards CWND inrecment"

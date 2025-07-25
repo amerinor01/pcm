@@ -1,0 +1,39 @@
+algorithm:
+  name: uec_dctcp
+  description: "UEC DCTCP congestion control algorithm"
+
+constants:
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MTU"
+    description: "Maximum segment size"
+  
+signals:
+  - name: NUM_ACKED_BYTES
+    type: PCM_SIG_DATA_TX
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_NACKED_BYTES
+    type: PCM_SIG_DATA_NACKED
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+
+controls:
+  - name: CWND_BYTES
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_MAX_CWND"
+
+variables:
+  - name: ACKED_BYTES
+    initial_value: 0
+    type: uint
+    description: "Total acknowledged bytes"

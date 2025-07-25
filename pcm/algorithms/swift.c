@@ -13,8 +13,8 @@ static PCM_FORCE_INLINE pcm_float swift_target_delay(ALGO_CTX_ARGS, pcm_uint cur
     if (fs_delay < 0.0)
         fs_delay = 0.0;
 
-    if (cur_cwnd == 0)
-        fs_delay = 0.0;
+    // if (!add_fs_delay) // SwiftSrc::targetDelay in htsim sim goes into this branch for PLB
+    //     fs_delay = 0.0; //
 
     pcm_uint hop_delay = HOP_COUNT * H;
     return BRTT + fs_delay + hop_delay;
@@ -23,17 +23,18 @@ static PCM_FORCE_INLINE pcm_float swift_target_delay(ALGO_CTX_ARGS, pcm_uint cur
 static PCM_FORCE_INLINE void swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks, pcm_uint rtt_sample, bool can_decrease,
                                                 pcm_uint *cur_cwnd) {
     set_var_uint(VAR_RETX_CNT, 0);
-    set_var_uint(VAR_ACKED, get_var(VAR_ACKED) + num_acks * MSS);
+    //set_var_uint(VAR_ACKED, get_var(VAR_ACKED) + num_acks * MSS);
     pcm_float target_delay = swift_target_delay(ALGO_CTX_PASS, *cur_cwnd);
 
     if (rtt_sample < target_delay) {
         /* Additive Increase */
-        *cur_cwnd += MSS * AI * (get_var_uint(VAR_ACKED) / *cur_cwnd);
+        //*cur_cwnd += MSS * AI * (get_var_uint(VAR_ACKED) / *cur_cwnd);
+        *cur_cwnd += (MSS * AI * num_acks * MSS) / *cur_cwnd;
         // Note: we DO NOT support FP fractional cwnd (yet)
         // if (state->cwnd >= 1) {
-        //    state->cwnd += AI * state->tot_acked / state->cwnd;
+        //    state->cwnd += (MSS * AI * num_acks * MSS) / *cur_cwnd;
         //} else {
-        //    state->cwnd += AI * state->tot_acked;
+        //    state->cwnd += AI * num_acks * MSS;
         //}
     } else {
         /* Multiplicative Decrease */
@@ -115,7 +116,7 @@ int algorithm_main() {
      */
     if (cur_cwnd < prev_cwnd) {
         set_var_uint(VAR_T_LAST_DECREASE, t_now);
-        set_var_uint(VAR_ACKED, 0);
+        //set_var_uint(VAR_ACKED, 0);
     }
 
     // if (cur_cwnd >= 1.0) {

@@ -4,8 +4,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "pcm_log.h"
 #include "impl.h"
+#include "pcm_log.h"
 
 #define container_of(ptr, type, member)                                        \
     ({                                                                         \
@@ -144,6 +144,10 @@ static inline const char *signal_type_to_string(pcm_signal_t type) {
         return "PCM_SIG_ECN";
     case PCM_SIG_RTT:
         return "PCM_SIG_RTT";
+    case PCM_SIG_IN_FLIGHT:
+        return "PCM_SIG_IN_FLIGHT";
+    case PCM_SIG_DATA_NACKED:
+        return "PCM_SIG_DATA_NACKED";
     case PCM_SIG_DATA_TX:
         return "PCM_SIG_DATA_TX";
     case PCM_SIG_ELAPSED_TIME:

@@ -125,7 +125,9 @@ typedef enum signal {
     PCM_SIG_ECN = 3,         /**< Number of ECN packets received */
     PCM_SIG_RTT = 4,         /**< RTT timestamp */
     PCM_SIG_DATA_TX = 5,     /**< Number of sent bytes */
-    PCM_SIG_ELAPSED_TIME = 6 /**< Monotonic elapsed time */
+    PCM_SIG_DATA_NACKED = 6, /**< Number of sent bytes */
+    PCM_SIG_IN_FLIGHT = 7,   /**< Number of in-flight bytes */
+    PCM_SIG_ELAPSED_TIME = 8 /**< Monotonic elapsed time */
 } pcm_signal_t;
 
 /**
