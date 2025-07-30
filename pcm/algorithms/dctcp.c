@@ -30,10 +30,10 @@ static PCM_FORCE_INLINE void dctcp_alpha_update(ALGO_CTX_ARGS, pcm_uint num_acks
         set_var_uint(VAR_EPOCH_ECN_DELIVERED, delivered_ecn);
     }
 
-    // fprintf("DCTCP: delivered=%llu ecned=%llu to_deliver=%llu alpha=%lf\n",
-    //         delivered, delivered_ecn,
-    //         get_var_uint(VAR_EPOCH_TO_DELIVER),
-    //         get_var_float(VAR_ALPHA));
+    // fprintf(stderr, "DCTCP: delivered=%llu ecned=%llu to_deliver=%llu alpha=%lf\n",
+    //          delivered, delivered_ecn,
+    //          get_var_uint(VAR_EPOCH_TO_DELIVER),
+    //          get_var_float(VAR_ALPHA));
 }
 
 int algorithm_main() {
@@ -81,10 +81,10 @@ int algorithm_main() {
 
 save_cwnd_and_exit:
     // fprintf(stderr,
-    //         "cur_cwnd=%llu ssthresh=%llu in_fr=%llu num_acks=%llu "
-    //         "acks_to_consume=%llu\n",
-    //         cur_cwnd, get_var_uint(VAR_SSTHRESH),
-    //         get_var_uint(VAR_IN_FAST_RECOV), num_acks, acks_to_consume);
+    //          "cur_cwnd=%llu ssthresh=%llu in_fr=%llu num_acks=%llu "
+    //          "acks_to_consume=%llu\n",
+    //          cur_cwnd, get_var_uint(VAR_SSTHRESH),
+    //          get_var_uint(VAR_IN_FAST_RECOV), num_acks, acks_to_consume);
     update_signal(SIG_ACK, -(num_acks - acks_to_consume));
     set_control(CTRL_CWND, cur_cwnd * MSS);
 
