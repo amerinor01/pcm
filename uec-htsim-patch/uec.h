@@ -344,7 +344,6 @@ private:
     void spendCredit(mem_b pktsize);
     UecDataPacket::seq_t _highest_sent;
     UecDataPacket::seq_t _highest_rtx_sent;
-    mem_b _in_flight;
     mem_b _bdp;
     bool _send_blocked_on_nic;
     bool _speculating;
@@ -358,6 +357,9 @@ protected:
     void (UecSrc::*updateCwndOnNack)(bool skip, mem_b nacked_bytes, bool last_hop);
     void set_cwnd_bounds();
     mem_b _cwnd;
+    simtime_picosec _rtt, _mdev, _rto, _raw_rtt;
+    simtime_picosec _base_rtt;
+    mem_b _in_flight;
 
 public:
     static linkspeed_bps _reference_network_linkspeed;
@@ -403,7 +405,7 @@ private:
     uint16_t get_avg_pktsize();
 
     // RTT estimate data for RTO and sender based CC.
-    simtime_picosec _rtt, _mdev, _rto, _raw_rtt;
+
     bool _rtx_timeout_pending;       // is the RTO running?
     simtime_picosec _rto_send_time;  // when we sent the oldest packet that the RTO is waiting on.
     simtime_picosec _rtx_timeout;    // when the RTO is currently set to expire
@@ -414,7 +416,7 @@ private:
     uint64_t _recvd_bytes;
 
     // Smarttrack sender based CC variables.
-    simtime_picosec _base_rtt;
+
     mem_b _base_bdp;
     mem_b _achieved_bytes = 0;
     // used to trigger SmartTrack fulfill
