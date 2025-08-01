@@ -45,6 +45,8 @@ def main():
     # Build options
     parser.add_argument('--debug', action='store_true',
                        help='Build in Debug mode (default: Release)')
+    parser.add_argument('--relwithdebinfo', action='store_true',
+                       help='Build in RelWithDebInfo mode (optimized with debug symbols)')
     parser.add_argument('--htsim', action='store_true',
                        help='Enable HTSIM flow plugin')
     parser.add_argument('--htsim-dir', metavar='DIR',
@@ -65,7 +67,17 @@ def main():
     args = parser.parse_args()
     
     # Set defaults
-    build_type = "Debug" if args.debug else "Release"
+    if args.debug and args.relwithdebinfo:
+        print("Error: Cannot specify both --debug and --relwithdebinfo")
+        return 1
+    
+    if args.debug:
+        build_type = "Debug"
+    elif args.relwithdebinfo:
+        build_type = "RelWithDebInfo"
+    else:
+        build_type = "Release"
+        
     build_htsim = "ON" if args.htsim else "OFF"
     enable_profiling = "ON" if args.profiling else "OFF"
     build_hac = "ON" if args.hac else "OFF"

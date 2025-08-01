@@ -32,13 +32,15 @@ static int shared_symbol_close(void *so_handle) {
     return PCM_SUCCESS;
 }
 
-int algorithm_config_alloc(pcm_device_t device, struct algorithm_config **config) {
+int algorithm_config_alloc(pcm_device_t device,
+                           struct algorithm_config **config) {
     if (!device)
         return PCM_ERROR;
 
     struct algorithm_config *new_config = calloc(1, sizeof(*new_config));
     if (!new_config) {
-        PCM_LOG_CRIT("[dev=%p] failed to allocate new algorithm config", device);
+        PCM_LOG_CRIT("[dev=%p] failed to allocate new algorithm config",
+                     device);
         return PCM_ERROR;
     }
 
@@ -68,7 +70,8 @@ int algorithm_config_destroy(struct algorithm_config *config) {
     }
 
     if (!found) {
-        PCM_LOG_CRIT("[dev=%p conf=%p] config not found", config->device, config);
+        PCM_LOG_CRIT("[dev=%p conf=%p] config not found", config->device,
+                     config);
         ret = PCM_ERROR;
     }
 
@@ -80,7 +83,7 @@ int algorithm_config_destroy(struct algorithm_config *config) {
 
     if (shared_symbol_close(config->dlopen_handle) != PCM_SUCCESS) {
         PCM_LOG_CRIT("[dev=%p conf=%p] failed to close handler dlopen object",
-                 config->device, config);
+                     config->device, config);
         ret = PCM_ERROR;
     }
 
@@ -94,7 +97,7 @@ int algorithm_config_compile(struct algorithm_config *config,
                              const char *algo_name) {
     if ((strlen(algo_name) + 1) > PCMC_MAX_LEN_ALGO_NAME) {
         PCM_LOG_CRIT("Algorithm name length exceeds limit of %d characters",
-                 PCMC_MAX_LEN_ALGO_NAME);
+                     PCMC_MAX_LEN_ALGO_NAME);
         return PCM_ERROR;
     }
 
@@ -104,14 +107,15 @@ int algorithm_config_compile(struct algorithm_config *config,
     // open lib<algo_name>_pcmc.so and call __<algo_name>_pcmc_init()
     if (sprintf(lib_name, "lib%s_pcmc.so", algo_name) < 0) {
         PCM_LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init library name",
-                 config->device, config);
+                     config->device, config);
         return PCM_ERROR;
     }
 
     char pcmc_init_fn_name[PCMC_MAX_INIT_FN_NAME];
     if (sprintf(pcmc_init_fn_name, "__%s_pcmc_init", algo_name) < 0) {
-        PCM_LOG_CRIT("[dev=%p conf=%p] failed to format PCMC init function name",
-                 config->device, config);
+        PCM_LOG_CRIT(
+            "[dev=%p conf=%p] failed to format PCMC init function name",
+            config->device, config);
         return PCM_ERROR;
     }
 
@@ -125,20 +129,20 @@ int algorithm_config_compile(struct algorithm_config *config,
 
     if (pcmc_init_fn(config) != PCM_SUCCESS) {
         PCM_LOG_CRIT("[dev=%p conf=%p] %s failed to initialize PCMC config",
-                 config->device, config, pcmc_init_fn_name);
+                     config->device, config, pcmc_init_fn_name);
         return PCM_ERROR;
     }
 
     if (shared_symbol_close(so_handle) != PCM_SUCCESS) {
-        PCM_LOG_CRIT("[dev=%p conf=%p] failed to close %s object", config->device,
-                 config, lib_name);
+        PCM_LOG_CRIT("[dev=%p conf=%p] failed to close %s object",
+                     config->device, config, lib_name);
         return PCM_ERROR;
     }
 
     // 2. Cache pointer to the algorithm entry point in the config
     if (sprintf(lib_name, "lib%s.so", algo_name) < 0) {
         PCM_LOG_CRIT("[dev=%p conf=%p] failed to format algorithm library name",
-                 config->device, config);
+                     config->device, config);
         return PCM_ERROR;
     }
 
@@ -155,18 +159,20 @@ int algorithm_config_compile(struct algorithm_config *config,
 int algorithm_config_activate(struct algorithm_config *config) {
     if (config->active) {
         PCM_LOG_CRIT("[dev=%p conf=%p] config activation called twice",
-                 config->device, config);
+                     config->device, config);
         return PCM_ERROR;
     }
     if (!config->algorithm_fn) {
-        PCM_LOG_CRIT("[dev=%p conf=%p] algorithm handler function must be compiled",
-                 config->device, config);
+        PCM_LOG_CRIT(
+            "[dev=%p conf=%p] algorithm handler function must be compiled",
+            config->device, config);
         return PCM_ERROR;
     }
     if (!config->num_signals) {
-        PCM_LOG_CRIT("[dev=%p conf=%p] at least one signal must be registered with "
-                 "configuration file",
-                 config->device, config);
+        PCM_LOG_CRIT(
+            "[dev=%p conf=%p] at least one signal must be registered with "
+            "configuration file",
+            config->device, config);
         return PCM_ERROR;
     }
     if (!config->num_controls) {
@@ -178,14 +184,15 @@ int algorithm_config_activate(struct algorithm_config *config) {
     }
     config->active = true;
     PCM_LOG_DBG("[dev=%p conf=%p] activated, num_signals=%zu num_controls=%zu",
-            config->device, config, config->num_signals, config->num_controls);
+                config->device, config, config->num_signals,
+                config->num_controls);
     return PCM_SUCCESS;
 }
 
 int algorithm_config_deactivate(struct algorithm_config *config) {
     if (!config->active) {
         PCM_LOG_CRIT("[dev=%p conf=%p] config deactivation called twice",
-                 config->device, config);
+                     config->device, config);
         return PCM_ERROR;
     }
     config->active = false;
@@ -196,20 +203,18 @@ int algorithm_config_deactivate(struct algorithm_config *config) {
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
                                        pcm_addr_mask_t matching_rule_mask) {
     config->matching_rule_mask = matching_rule_mask;
-    PCM_LOG_DBG("[dev=%p conf=%p] added matching rule=0x%x", config->device, config,
-            matching_rule_mask);
+    PCM_LOG_DBG("[dev=%p conf=%p] added matching rule=0x%x", config->device,
+                config, matching_rule_mask);
     return PCM_SUCCESS;
 }
 
 int algorithm_config_signal_add(struct algorithm_config *config,
                                 pcm_signal_t signal,
-                                pcm_signal_accum_t accum_type,
-                                size_t user_index) {
-    ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->signals_list,
-                                       struct signal_attr, user_index);
+                                pcm_signal_accum_t accum_type, size_t idx) {
+    ATTR_LIST_DUPLICATE_IDX_CHK(&config->signals_list, struct signal_attr, idx);
     struct signal_attr *attr;
-    ATTR_LIST_ITEM_ALLOC(&config->signals_list, user_index, config->num_signals,
-                         ALGO_CONF_MAX_NUM_SIGNALS, attr);
+    ATTR_LIST_ITEM_ALLOC(&config->signals_list, idx, config->num_signals,
+                         ALGO_CONF_MAX_NUM_SIGNALS, attr, true);
 
     attr->type = signal;
     attr->accum_type = accum_type;
@@ -227,9 +232,10 @@ int algorithm_config_signal_add(struct algorithm_config *config,
         attr->accumulation_op_fn = config->device->flow_ops.datapath.max;
         break;
     default:
-        PCM_LOG_CRIT("[dev=%p conf=%p] unknown or unsupported signal accumulation "
-                 "type requested",
-                 config->device, config);
+        PCM_LOG_CRIT(
+            "[dev=%p conf=%p] unknown or unsupported signal accumulation "
+            "type requested",
+            config->device, config);
         return PCM_ERROR;
     }
 
@@ -241,9 +247,9 @@ int algorithm_config_signal_add(struct algorithm_config *config,
 }
 
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
-                                        size_t user_index, pcm_uint threshold) {
+                                        size_t idx, pcm_uint threshold) {
     struct signal_attr *attr;
-    ATTR_LIST_ITEM_SET(&config->signals_list, struct signal_attr, user_index,
+    ATTR_LIST_ITEM_SET(&config->signals_list, struct signal_attr, idx,
                        threshold, attr);
     if (threshold <= 0)
         return PCM_ERROR;
@@ -266,60 +272,57 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
 }
 
 int algorithm_config_control_add(struct algorithm_config *config,
-                                 pcm_control_t control, size_t user_index) {
-    ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->controls_list,
-                                       struct control_attr, user_index);
+                                 pcm_control_t control, size_t idx) {
+    ATTR_LIST_DUPLICATE_IDX_CHK(&config->controls_list, struct control_attr,
+                                idx);
     ATTR_LIST_DUPLICATE_TYPE_CHK(&config->controls_list, struct control_attr,
                                  control);
     struct control_attr *attr;
-    ATTR_LIST_ITEM_ALLOC(&config->controls_list, user_index,
-                         config->num_controls, ALGO_CONF_MAX_NUM_CONTROLS,
-                         attr);
+    ATTR_LIST_ITEM_ALLOC(&config->controls_list, idx, config->num_controls,
+                         ALGO_CONF_MAX_NUM_CONTROLS, attr, false);
     attr->type = control;
     return PCM_SUCCESS;
 }
 
 int algorithm_config_control_initial_value_set(struct algorithm_config *config,
-                                               size_t user_index,
+                                               size_t idx,
                                                pcm_uint initial_value) {
     struct control_attr *attr;
-    ATTR_LIST_ITEM_SET(&config->controls_list, struct control_attr, user_index,
+    ATTR_LIST_ITEM_SET(&config->controls_list, struct control_attr, idx,
                        initial_value, attr);
     return PCM_SUCCESS;
 }
 
-int algorithm_config_var_add(struct algorithm_config *config,
-                             size_t user_index) {
-    ATTR_LIST_DUPLICATE_USER_INDEX_CHK(&config->var_list, struct var_attr,
-                                       user_index);
+int algorithm_config_var_add(struct algorithm_config *config, size_t idx) {
+    ATTR_LIST_DUPLICATE_IDX_CHK(&config->var_list, struct var_attr, idx);
     struct var_attr *attr;
-    ATTR_LIST_ITEM_ALLOC(&config->var_list, user_index, config->num_vars,
-                         ALGO_CONF_MAX_VARS, attr);
+    ATTR_LIST_ITEM_ALLOC(&config->var_list, idx, config->num_vars,
+                         ALGO_CONF_MAX_VARS, attr, false);
     return PCM_SUCCESS;
 }
 
-int algorithm_config_var_uint_set(struct algorithm_config *config,
-                                  size_t user_index, pcm_uint initial_value) {
+int algorithm_config_var_uint_set(struct algorithm_config *config, size_t idx,
+                                  pcm_uint initial_value) {
     struct var_attr *attr;
-    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, user_index,
-                       initial_value, attr);
+    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, idx, initial_value,
+                       attr);
     return PCM_SUCCESS;
 }
 
-int algorithm_config_var_int_set(struct algorithm_config *config,
-                                 size_t user_index, pcm_int initial_value) {
+int algorithm_config_var_int_set(struct algorithm_config *config, size_t idx,
+                                 pcm_int initial_value) {
     struct var_attr *attr;
     pcm_uint encoded_val = encode_pcm_int(initial_value);
-    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, user_index,
-                       encoded_val, attr);
+    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, idx, encoded_val,
+                       attr);
     return PCM_SUCCESS;
 }
 
-int algorithm_config_var_float_set(struct algorithm_config *config,
-                                   size_t user_index, pcm_float initial_value) {
+int algorithm_config_var_float_set(struct algorithm_config *config, size_t idx,
+                                   pcm_float initial_value) {
     struct var_attr *attr;
     pcm_uint encoded_val = encode_pcm_float(initial_value);
-    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, user_index,
-                       encoded_val, attr);
+    ATTR_LIST_ITEM_SET(&config->var_list, struct var_attr, idx, encoded_val,
+                       attr);
     return PCM_SUCCESS;
 }

@@ -36,7 +36,7 @@ static PCM_FORCE_INLINE void nscc_update_q_delay(ALGO_CTX_ARGS, bool ecn) {
     set_var_uint(VAR_AVG_Q_DELAY, new_avg_q_delay);
 }
 
-static PCM_FORCE_INLINE void nscc_fair_increase(ALGO_CTX_ARGS, pcm_uint *cur_cwnd) {
+static PCM_FORCE_INLINE void nscc_fair_increase(ALGO_CTX_ARGS) {
     pcm_float increment = FI * get_signal(SIG_NUM_ACKED_BYTES);
     set_var_uint(VAR_FULFILL_ADJ_INCREMENT, get_var_uint(VAR_FULFILL_ADJ_INCREMENT) + increment);
 }
@@ -86,34 +86,34 @@ static PCM_FORCE_INLINE void nscc_multiplicative_decrease(ALGO_CTX_ARGS, pcm_uin
 
 static PCM_FORCE_INLINE void nscc_core_cases(ALGO_CTX_ARGS, pcm_uint q_delay, pcm_uint *cur_cwnd) {
     if (!get_signal(SIG_NUM_ECN) && q_delay >= TARGET_Q_DELAY) {
-        printf("Core case: branch=preFI _cwnd=%llu, num_acked_bytes=%llu\n", *cur_cwnd,
-               get_signal(SIG_NUM_ACKED_BYTES));
-        nscc_fair_increase(ALGO_CTX_PASS, cur_cwnd);
-        printf("Core case: branch=postFI _cwnd=%llu\n", *cur_cwnd);
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=FI _cwnd=%llu\n", ctx,
-               get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
+        // printf("Core case: branch=preFI _cwnd=%llu, num_acked_bytes=%llu\n", *cur_cwnd,
+        //        get_signal(SIG_NUM_ACKED_BYTES));
+        nscc_fair_increase(ALGO_CTX_PASS);
+        // printf("Core case: branch=postFI _cwnd=%llu\n", *cur_cwnd);
+        // printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=FI _cwnd=%llu\n", ctx,
+        //        get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
     } else if (!get_signal(SIG_NUM_ECN) && q_delay < TARGET_Q_DELAY) {
-        printf("Core case: branch=prePI _cwnd=%llu, num_acked_bytes=%llu\n", *cur_cwnd,
-               get_signal(SIG_NUM_ACKED_BYTES));
+        // printf("Core case: branch=prePI _cwnd=%llu, num_acked_bytes=%llu\n", *cur_cwnd,
+        //        get_signal(SIG_NUM_ACKED_BYTES));
         nscc_proportional_increase(ALGO_CTX_PASS, q_delay, cur_cwnd);
-        printf("Core case: branch=postPI _cwnd=%llu\n", *cur_cwnd);
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=PI _cwnd=%llu\n", ctx,
-               get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
+        // printf("Core case: branch=postPI _cwnd=%llu\n", *cur_cwnd);
+        // printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=PI _cwnd=%llu\n", ctx,
+        //        get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
     } else if (get_signal(SIG_NUM_ECN) && q_delay >= TARGET_Q_DELAY) {
-        printf("Core case: branch=postMD _cwnd=%llu, num_acked_bytes=%llu\n", *cur_cwnd,
-               get_signal(SIG_NUM_ACKED_BYTES));
+        // printf("Core case: branch=postMD _cwnd=%llu, num_acked_bytes=%llu\n", *cur_cwnd,
+        //        get_signal(SIG_NUM_ACKED_BYTES));
         nscc_multiplicative_decrease(ALGO_CTX_PASS, cur_cwnd);
-        printf("Core case: branch=preMD _cwnd=%llu\n", *cur_cwnd);
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=MD _cwnd=%llu\n", ctx,
-               get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
+        // printf("Core case: branch=preMD _cwnd=%llu\n", *cur_cwnd);
+        // printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=MD _cwnd=%llu\n", ctx,
+        //        get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
     } else if (get_signal(SIG_NUM_ECN) && q_delay < TARGET_Q_DELAY) {
         // NOOP, just switch path
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=NOOP _cwnd=%llu\n", ctx,
-               get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
-        printf("Core case: branch=NOOP _cwnd=%llu, num_acked_bytes=%llu q_delay=%llu "
-               "tgt_q_delay=%llu rtt_sample=%llu\n",
-               *cur_cwnd, get_signal(SIG_NUM_ACKED_BYTES), q_delay, TARGET_Q_DELAY,
-               get_signal(SIG_RTT_SAMPLE));
+        // printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=NOOP _cwnd=%llu\n", ctx,
+        //        get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
+        // printf("Core case: branch=NOOP _cwnd=%llu, num_acked_bytes=%llu q_delay=%llu "
+        //        "tgt_q_delay=%llu rtt_sample=%llu\n",
+        //        *cur_cwnd, get_signal(SIG_NUM_ACKED_BYTES), q_delay, TARGET_Q_DELAY,
+        //        get_signal(SIG_RTT_SAMPLE));
     }
 }
 
@@ -155,8 +155,8 @@ static PCM_FORCE_INLINE void nscc_handle_ack(ALGO_CTX_ARGS, pcm_uint q_delay, pc
 
     if (nscc_quick_adapt(ALGO_CTX_PASS, q_delay, get_signal(SIG_NUM_ECN), false,
                          get_signal(SIG_NUM_ACKED_BYTES), cur_cwnd)) {
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=QA-ACK _cwnd=%llu\n", ctx,
-               get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
+        //printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=QA-ACK _cwnd=%llu\n", ctx,
+        //       get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
         return;
     }
 
@@ -169,11 +169,11 @@ static PCM_FORCE_INLINE void nscc_handle_loss_signal(ALGO_CTX_ARGS, pcm_uint *cu
     if (!nscc_quick_adapt(ALGO_CTX_PASS, 0, true, true, get_signal(SIG_NUM_NACKED_BYTES),
                           cur_cwnd)) { // && (!_receiver_based_cc || !last_hop)) {
         *cur_cwnd -= get_signal(SIG_NUM_NACKED_BYTES);
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=LOSS _cwnd=%llu\n", ctx,
-               get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
+        // printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=LOSS _cwnd=%llu\n", ctx,
+        //        get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
     } else {
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=QA-LOSS _cwnd=%llu\n", ctx,
-               get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
+        // printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=QA-LOSS _cwnd=%llu\n", ctx,
+        //        get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
     }
 }
 
@@ -205,15 +205,13 @@ int algorithm_main() {
 
     pcm_uint cur_cwnd = get_control(CTRL_CWND_BYTES);
 
-    if (get_signal(SIG_NUM_NACK) > 0) {
+    pcm_uint trigger_mask = get_signal_trigger_mask();
+    if (trigger_mask & SIG_NUM_NACK) {
         nscc_handle_loss_signal(ALGO_CTX_PASS, &cur_cwnd);
         update_signal(SIG_NUM_NACK, -get_signal(SIG_NUM_NACK));
         update_signal(SIG_NUM_NACKED_BYTES, -get_signal(SIG_NUM_NACKED_BYTES));
         goto save_state;
-    }
-
-    if (get_signal(SIG_NUM_ACK) > 0) {
-        printf("DELAY ESTIMATION: t_now=%llu delay=%llu\n", get_signal(SIG_ELAPSED_TIME), q_delay);
+    } else if (trigger_mask & SIG_NUM_ACK) {
         nscc_handle_ack(ALGO_CTX_PASS, q_delay, &cur_cwnd);
         nscc_fulfill_adjustment(ALGO_CTX_PASS, &cur_cwnd);
         update_signal(SIG_NUM_ACK, -get_signal(SIG_NUM_ACK));
@@ -221,6 +219,8 @@ int algorithm_main() {
         if (get_signal(SIG_NUM_ECN)) {
             update_signal(SIG_NUM_ECN, -get_signal(SIG_NUM_ECN));
         }
+    } else {
+        return PCM_ERROR;
     }
 
 save_state:

@@ -19,15 +19,15 @@ extern "C" {
 
 struct generic_metadata {
     struct slist_entry list_entry;
-    size_t index;
+    size_t idx;
     pcm_uint value;
 };
 
 // Forward declaration
 struct signal_attr;
 
-typedef void (*signal_accumulation_op_fn)(pcm_flow_t, const struct signal_attr *,
-                                          pcm_uint);
+typedef void (*signal_accumulation_op_fn)(pcm_flow_t,
+                                          const struct signal_attr *, pcm_uint);
 typedef bool (*signal_trigger_check_fn)(const pcm_flow_t,
                                         const struct signal_attr *);
 typedef void (*signal_trigger_arm_fn)(pcm_flow_t, const struct signal_attr *);
@@ -60,7 +60,8 @@ typedef int (*pcmc_init_function_t)(pcm_handle_t);
 #define PCMC_MAX_LIB_NAME 256
 #define PCMC_MAX_LEN_ALGO_NAME (PCMC_MAX_INIT_FN_NAME / 2)
 
-#define ALGO_CONF_MAX_NUM_SIGNALS 16
+#define ALGO_CONF_MAX_NUM_SIGNALS                                              \
+    (sizeof(pcm_uint) * 8) // number of signals is limited by trigger_mask width
 #define ALGO_CONF_MAX_NUM_CONTROLS 2
 #define ALGO_CONF_MAX_VARS 16
 
@@ -117,7 +118,8 @@ struct flow_plugin_ops {
 
 // Plugin registration system for datapath plugins
 #if !defined(__GNUC__) && !defined(__clang__)
-STATIC_ASSERT(0, "Plugin system requires GCC or Clang compiler for constructor/destructor attributes");
+STATIC_ASSERT(0, "Plugin system requires GCC or Clang compiler for "
+                 "constructor/destructor attributes");
 #endif
 
 struct flow_plugin_registry_entry {
@@ -126,7 +128,8 @@ struct flow_plugin_registry_entry {
     int (*init_fn)(struct flow_plugin_ops *);
 };
 
-int flow_plugin_register(const char *name, int (*init_fn)(struct flow_plugin_ops *));
+int flow_plugin_register(const char *name,
+                         int (*init_fn)(struct flow_plugin_ops *));
 int flow_plugin_ops_get(const char *name, struct flow_plugin_ops *ops);
 int flow_plugin_deregister(const char *name);
 void flow_plugin_cleanup(void);
@@ -136,8 +139,7 @@ struct flow {
     pcm_addr_t addr;
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
-    struct slist_entry *cur_trigger;
-    size_t trigger_user_index;
+    pcm_uint trigger_mask;
     void *backend_ctx;
     // Note: this is a hacky way to get signals/ctrls/etc to get exposed
     // directly to the handler
@@ -170,7 +172,8 @@ struct device {
     struct scheduler scheduler;
 };
 
-int algorithm_config_alloc(pcm_device_t device, struct algorithm_config **config);
+int algorithm_config_alloc(pcm_device_t device,
+                           struct algorithm_config **config);
 int algorithm_config_destroy(struct algorithm_config *config);
 int algorithm_config_matching_rule_add(struct algorithm_config *config,
                                        pcm_addr_mask_t matching_rule_mask);
@@ -178,23 +181,21 @@ int algorithm_config_activate(struct algorithm_config *config);
 int algorithm_config_deactivate(struct algorithm_config *config);
 int algorithm_config_signal_add(struct algorithm_config *config,
                                 pcm_signal_t signal,
-                                pcm_signal_accum_t accum_type,
-                                size_t user_index);
+                                pcm_signal_accum_t accum_type, size_t idx);
 int algorithm_config_signal_trigger_set(struct algorithm_config *config,
-                                        size_t user_index, pcm_uint threshold);
+                                        size_t idx, pcm_uint threshold);
 int algorithm_config_control_add(struct algorithm_config *config,
-                                 pcm_control_t control, size_t user_index);
+                                 pcm_control_t control, size_t idx);
 int algorithm_config_control_initial_value_set(struct algorithm_config *config,
-                                               size_t user_index,
+                                               size_t idx,
                                                pcm_uint initial_value);
-int algorithm_config_var_add(struct algorithm_config *config,
-                             size_t user_index);
-int algorithm_config_var_int_set(struct algorithm_config *config,
-                                 size_t user_index, pcm_int initial_value);
-int algorithm_config_var_uint_set(struct algorithm_config *config,
-                                  size_t user_index, pcm_uint initial_value);
-int algorithm_config_var_float_set(struct algorithm_config *config,
-                                   size_t user_index, pcm_float initial_value);
+int algorithm_config_var_add(struct algorithm_config *config, size_t idx);
+int algorithm_config_var_int_set(struct algorithm_config *config, size_t idx,
+                                 pcm_int initial_value);
+int algorithm_config_var_uint_set(struct algorithm_config *config, size_t idx,
+                                  pcm_uint initial_value);
+int algorithm_config_var_float_set(struct algorithm_config *config, size_t idx,
+                                   pcm_float initial_value);
 int algorithm_config_compile(struct algorithm_config *config,
                              const char *algo_name);
 int device_scheduler_flow_add(struct scheduler *scheduler, pcm_flow_t flow);

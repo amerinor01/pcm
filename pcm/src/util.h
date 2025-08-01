@@ -7,23 +7,32 @@
 #include "impl.h"
 #include "pcm_log.h"
 
+#define UTIL_MASK_TO_ARR_IDX(mask) ((unsigned long)__builtin_ctz(mask))
+
 #define container_of(ptr, type, member)                                        \
     ({                                                                         \
         const typeof(((type *)0)->member) *__mptr = (ptr);                     \
         (type *)((char *)__mptr - offsetof(type, member));                     \
     })
 
-#define ATTR_LIST_ITEM_ALLOC(attr_list, user_index, item_counter, max_items,   \
-                             attr_ptr)                                         \
+#define ATTR_LIST_ITEM_ALLOC(attr_list, idx, item_counter, max_items,          \
+                             attr_ptr, idx_is_mask)                            \
     {                                                                          \
         if ((item_counter) >= (max_items)) {                                   \
             PCM_LOG_CRIT("[attr_list=%p] %s list storage is full", attr_list,  \
                          #attr_list);                                          \
             return PCM_ERROR;                                                  \
         }                                                                      \
-        if ((user_index) >= (max_items)) {                                     \
-            PCM_LOG_CRIT("[attr_list=%p] user_index exeeds %s list capacity",  \
-                         attr_list, #attr_list);                               \
+        if (!(idx_is_mask) && (idx) >= (max_items)) {                          \
+            PCM_LOG_CRIT(                                                      \
+                "[attr_list=%p] absolute idx=%zu exeeds %s list capacity",     \
+                attr_list, idx, #attr_list);                                   \
+            return PCM_ERROR;                                                  \
+        } else if ((idx_is_mask) &&                                            \
+                   ((UTIL_MASK_TO_ARR_IDX(idx)) >= (max_items))) {             \
+            PCM_LOG_CRIT(                                                      \
+                "[attr_list=%p] mask idx=%zu exeeds %s list capacity",         \
+                attr_list, UTIL_MASK_TO_ARR_IDX(idx), #attr_list);             \
             return PCM_ERROR;                                                  \
         }                                                                      \
         (attr_ptr) = calloc(1, sizeof(*(attr_ptr)));                           \
@@ -32,7 +41,7 @@
                          attr_list);                                           \
             return PCM_ERROR;                                                  \
         }                                                                      \
-        (attr_ptr)->metadata.index = (user_index);                             \
+        (attr_ptr)->metadata.idx = (idx);                                      \
         slist_insert_head(&(attr_ptr)->metadata.list_entry, (attr_list));      \
         ++(item_counter);                                                      \
     }
@@ -48,15 +57,15 @@
         }                                                                      \
     }
 
-#define ATTR_LIST_DUPLICATE_USER_INDEX_CHK(attr_list, attr_type, user_index)   \
+#define ATTR_LIST_DUPLICATE_IDX_CHK(attr_list, attr_type, idx)                 \
     {                                                                          \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
             (void)prev; /* suppress complier warning */                        \
             if (container_of(item, attr_type, metadata.list_entry)             \
-                    ->metadata.index == (user_index)) {                        \
-                PCM_LOG_CRIT("[attr_list=%p] found duplicate index=%zu",       \
-                             attr_list, user_index);                           \
+                    ->metadata.idx == (idx)) {                                 \
+                PCM_LOG_CRIT("[attr_list=%p] found duplicate idx=%zu",         \
+                             attr_list, idx);                                  \
                 return PCM_ERROR;                                              \
             }                                                                  \
         }                                                                      \
@@ -86,19 +95,18 @@
             attr_type *attr =                                                  \
                 container_of(item, attr_type, metadata.list_entry);            \
             if (attr->type == (entry_type)) {                                  \
-                (found_idx) = attr->metadata.index;                            \
+                (found_idx) = attr->metadata.idx;                              \
                 break;                                                         \
             }                                                                  \
         }                                                                      \
     }
 
-#define ATTR_LIST_ITEM_SET(attr_list, attr_type, user_index, val,              \
-                           found_attr_ptr)                                     \
+#define ATTR_LIST_ITEM_SET(attr_list, attr_type, idx, val, found_attr_ptr)     \
     {                                                                          \
         if (slist_empty(attr_list)) {                                          \
             PCM_LOG_CRIT(                                                      \
-                "[attr_list=%p] item set on an empty list at index=%zu",       \
-                attr_list, user_index);                                        \
+                "[attr_list=%p] item set on an empty list at idx=%zu",         \
+                attr_list, idx);                                               \
             return PCM_ERROR;                                                  \
         }                                                                      \
         (found_attr_ptr) = NULL;                                               \
@@ -107,28 +115,32 @@
         slist_foreach(attr_list, item, prev) {                                 \
             (void)prev; /* suppress complier warning */                        \
             cur_attr = container_of(item, attr_type, metadata.list_entry);     \
-            if (cur_attr->metadata.index == (user_index)) {                    \
+            if (cur_attr->metadata.idx == (idx)) {                             \
                 (found_attr_ptr) = cur_attr;                                   \
                 break;                                                         \
             }                                                                  \
         }                                                                      \
         if (!(found_attr_ptr)) {                                               \
             PCM_LOG_CRIT(                                                      \
-                "[attr_list=%p] failed to find attribute with index=%zu",      \
-                attr_list, user_index);                                        \
+                "[attr_list=%p] failed to find attribute with idx=%zu",        \
+                attr_list, idx);                                               \
             return PCM_ERROR;                                                  \
         }                                                                      \
         (found_attr_ptr)->metadata.value = val;                                \
     }
 
-#define ATTR_LIST_FLOW_STATE_INIT(attr_list, attr_type, state_ptr)             \
+#define ATTR_LIST_FLOW_STATE_INIT(attr_list, attr_type, state_ptr,             \
+                                  idx_is_mask)                                 \
     {                                                                          \
         attr_type *cur_attr = NULL;                                            \
         struct slist_entry *item, *prev;                                       \
         slist_foreach(attr_list, item, prev) {                                 \
             (void)prev; /* suppress complier warning */                        \
             cur_attr = container_of(item, attr_type, metadata.list_entry);     \
-            (state_ptr)[cur_attr->metadata.index] = cur_attr->metadata.value;  \
+            (state_ptr)[idx_is_mask                                            \
+                            ? UTIL_MASK_TO_ARR_IDX(cur_attr->metadata.idx)     \
+                            : cur_attr->metadata.idx] =                        \
+                cur_attr->metadata.value;                                      \
         }                                                                      \
     }
 
@@ -234,110 +246,110 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
     plugin_name##_flow_signal_get
 #define PLUGIN_FLOW_SIGNAL_GET_GENERIC_DEFINE(plugin_name)                     \
     static inline pcm_uint PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)(     \
-        const void *ctx, size_t user_index) {                                  \
+        const void *ctx, size_t idx) {                                         \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return flow_ctx->signals[user_index];                                  \
+        return flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(idx)];                   \
     }
 
 #define PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(plugin_name)                         \
     plugin_name##_flow_signal_set
 #define PLUGIN_FLOW_SIGNAL_SET_GENERIC_DEFINE(plugin_name)                     \
     static inline void PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(plugin_name)(         \
-        void *ctx, size_t user_index, pcm_uint val) {                          \
+        void *ctx, size_t idx, pcm_uint val) {                                 \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->signals[user_index] = val;                                   \
+        flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(idx)] = val;                    \
     }
 
 #define PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(plugin_name)                      \
     plugin_name##_flow_signal_update
 #define PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_DEFINE(plugin_name)                  \
     static inline void PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(plugin_name)(      \
-        void *ctx, size_t user_index, pcm_uint val) {                          \
+        void *ctx, size_t idx, pcm_uint val) {                                 \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->signals[user_index] += val;                                  \
+        flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(idx)] += val;                   \
     }
 
 #define PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)                        \
     plugin_name##_flow_control_get
 #define PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(plugin_name)                    \
     static inline pcm_uint PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)(    \
-        const void *ctx, size_t user_index) {                                  \
+        const void *ctx, size_t idx) {                                         \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return flow_ctx->controls[user_index];                                 \
+        return flow_ctx->controls[idx];                                        \
     }
 
 #define PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(plugin_name)                        \
     plugin_name##_flow_control_set
 #define PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(plugin_name)                    \
     static inline void PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(plugin_name)(        \
-        void *ctx, size_t user_index, pcm_uint val) {                          \
+        void *ctx, size_t idx, pcm_uint val) {                                 \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->controls[user_index] = val;                                  \
+        flow_ctx->controls[idx] = val;                                         \
     }
 
 #define PLUGIN_FLOW_VAR_UINT_GET_GENERIC_FN(plugin_name)                       \
     plugin_name##_flow_VAR_uint_get
 #define PLUGIN_FLOW_VAR_UINT_GET_GENERIC_DEFINE(plugin_name)                   \
     static inline pcm_uint PLUGIN_FLOW_VAR_UINT_GET_GENERIC_FN(plugin_name)(   \
-        const void *ctx, size_t user_index) {                                  \
+        const void *ctx, size_t idx) {                                         \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return flow_ctx->vars[user_index];                                     \
+        return flow_ctx->vars[idx];                                            \
     }
 
 #define PLUGIN_FLOW_VAR_UINT_SET_GENERIC_FN(plugin_name)                       \
     plugin_name##_flow_VAR_uint_set
 #define PLUGIN_FLOW_VAR_UINT_SET_GENERIC_DEFINE(plugin_name)                   \
     static inline void PLUGIN_FLOW_VAR_UINT_SET_GENERIC_FN(plugin_name)(       \
-        void *ctx, size_t user_index, pcm_uint val) {                          \
+        void *ctx, size_t idx, pcm_uint val) {                                 \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->vars[user_index] = val;                                      \
+        flow_ctx->vars[idx] = val;                                             \
     }
 
 #define PLUGIN_FLOW_VAR_INT_GET_GENERIC_FN(plugin_name)                        \
     plugin_name##_flow_VAR_int_get
 #define PLUGIN_FLOW_VAR_INT_GET_GENERIC_DEFINE(plugin_name)                    \
     static inline pcm_int PLUGIN_FLOW_VAR_INT_GET_GENERIC_FN(plugin_name)(     \
-        const void *ctx, size_t user_index) {                                  \
+        const void *ctx, size_t idx) {                                         \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return decode_pcm_int(flow_ctx->vars[user_index]);                     \
+        return decode_pcm_int(flow_ctx->vars[idx]);                            \
     }
 
 #define PLUGIN_FLOW_VAR_INT_SET_GENERIC_FN(plugin_name)                        \
     plugin_name##_flow_VAR_int_set
 #define PLUGIN_FLOW_VAR_INT_SET_GENERIC_DEFINE(plugin_name)                    \
     static inline void PLUGIN_FLOW_VAR_INT_SET_GENERIC_FN(plugin_name)(        \
-        void *ctx, size_t user_index, pcm_int val) {                           \
+        void *ctx, size_t idx, pcm_int val) {                                  \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->vars[user_index] = encode_pcm_int(val);                      \
+        flow_ctx->vars[idx] = encode_pcm_int(val);                             \
     }
 
 #define PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_FN(plugin_name)                      \
     plugin_name##_flow_VAR_float_get
 #define PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_DEFINE(plugin_name)                  \
     static inline pcm_float PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_FN(plugin_name)( \
-        const void *ctx, size_t user_index) {                                  \
+        const void *ctx, size_t idx) {                                         \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return decode_pcm_float(flow_ctx->vars[user_index]);                   \
+        return decode_pcm_float(flow_ctx->vars[idx]);                          \
     }
 
 #define PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_FN(plugin_name)                      \
     plugin_name##_flow_VAR_float_set
 #define PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_DEFINE(plugin_name)                  \
     static inline void PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_FN(plugin_name)(      \
-        void *ctx, size_t user_index, pcm_float val) {                         \
+        void *ctx, size_t idx, pcm_float val) {                                \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->vars[user_index] = encode_pcm_float(val);                    \
+        flow_ctx->vars[idx] = encode_pcm_float(val);                           \
     }
 
 #define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(plugin_name)                \
@@ -348,7 +360,7 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
                      pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        flow_ctx->signals[attr->metadata.index] += signal;                     \
+        flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)] += signal; \
     }
 
 #define PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_FN(plugin_name)               \
@@ -359,7 +371,7 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
                      pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        flow_ctx->signals[attr->metadata.index] = signal;                      \
+        flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)] = signal;  \
     }
 
 #define PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_FN(plugin_name)                \
@@ -370,8 +382,10 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
                      pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        if (signal < flow_ctx->signals[attr->metadata.index]) {                \
-            flow_ctx->signals[attr->metadata.index] = signal;                  \
+        if (signal <                                                           \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)]) {     \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)] =      \
+                signal;                                                        \
         }                                                                      \
     }
 
@@ -383,8 +397,10 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
                      pcm_uint signal) {                                        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        if (signal > flow_ctx->signals[attr->metadata.index]) {                \
-            flow_ctx->signals[attr->metadata.index] = signal;                  \
+        if (signal >                                                           \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)]) {     \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)] =      \
+                signal;                                                        \
         }                                                                      \
     }
 
@@ -395,8 +411,10 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         plugin_name)(const pcm_flow_t flow, const struct signal_attr *attr) {  \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        pcm_uint value = flow_ctx->signals[attr->metadata.index];              \
-        pcm_uint threshold = flow_ctx->thresholds[attr->metadata.index];       \
+        pcm_uint value =                                                       \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];       \
+        pcm_uint threshold =                                                   \
+            flow_ctx->thresholds[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];    \
         if (value >= threshold)                                                \
             return true;                                                       \
         return false;                                                          \
@@ -410,9 +428,10 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         plugin_name)(pcm_flow_t flow, const struct signal_attr *attr) {        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        pcm_uint burst = flow_ctx->signals[attr->metadata.index];              \
+        pcm_uint burst =                                                       \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];       \
         if (burst) {                                                           \
-            flow_ctx->signals[attr->metadata.index] = 1;                       \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)] = 1;   \
         }                                                                      \
     }
 
@@ -424,8 +443,10 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         plugin_name)(const pcm_flow_t flow, const struct signal_attr *attr) {  \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        pcm_uint burst = flow_ctx->signals[attr->metadata.index];              \
-        pcm_uint threshold = flow_ctx->thresholds[attr->metadata.index];       \
+        pcm_uint burst =                                                       \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];       \
+        pcm_uint threshold =                                                   \
+            flow_ctx->thresholds[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];    \
         if (burst) {                                                           \
             if ((burst - 1) >= threshold) {                                    \
                 return true;                                                   \
@@ -445,7 +466,7 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         (void)signal;                                                          \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        flow_ctx->signals[attr->metadata.index] =                              \
+        flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)] =          \
             time_diff_fn(flow_ctx->start_ts, time_now_fn());                   \
     }
 
@@ -457,14 +478,16 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         plugin_name)(const pcm_flow_t flow, const struct signal_attr *attr) {  \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        pcm_uint timer = flow_ctx->signals[attr->metadata.index];              \
-        pcm_uint threshold = flow_ctx->thresholds[attr->metadata.index];       \
+        pcm_uint timer =                                                       \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];       \
+        pcm_uint threshold =                                                   \
+            flow_ctx->thresholds[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];    \
         if (timer) {                                                           \
             pcm_uint now = time_diff_fn(flow_ctx->start_ts, time_now_fn());    \
             /* we assume that now is always larger than timer value */         \
             if (now - timer >= threshold) {                                    \
                 PCM_LOG_DBG("TIMER EXPIRED: now=%d timer=%d threshold=%d",     \
-                            diff, timer, threshold);                           \
+                            now, timer, threshold);                            \
                 return true;                                                   \
             }                                                                  \
         }                                                                      \
@@ -480,9 +503,10 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
         plugin_name)(pcm_flow_t flow, const struct signal_attr *attr) {        \
         struct plugin_name##_flow *flow_ctx =                                  \
             (struct plugin_name##_flow *)(flow->backend_ctx);                  \
-        pcm_uint timer = flow_ctx->signals[attr->metadata.index];              \
+        pcm_uint timer =                                                       \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)];       \
         if (timer == PCM_SIG_REARM) {                                          \
-            flow_ctx->signals[attr->metadata.index] =                          \
+            flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(attr->metadata.idx)] =      \
                 time_diff_fn(flow_ctx->start_ts, time_now_fn());               \
         }                                                                      \
     }

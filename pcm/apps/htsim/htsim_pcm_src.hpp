@@ -35,7 +35,8 @@ class Src final : public UecSrc {
 
   private:
     void updateCwndOnAck(bool skip, simtime_picosec delay, mem_b newly_acked_bytes) {
-        std::cout << "PCM::updateCwndOnAck acked_bytes=" << newly_acked_bytes << std::endl;
+        // std::cout << "PCM::updateCwndOnAck acked_bytes=" << newly_acked_bytes << std::endl;
+        (void)delay; // if needed, queuing delay is computed on the handler side, RTT sample is delivered instead
 
         _pcm_flow.signalUpdate(PCM_SIG_ECN, skip);
         _pcm_flow.signalUpdate(PCM_SIG_DATA_TX, newly_acked_bytes);
@@ -54,7 +55,7 @@ class Src final : public UecSrc {
         (void)skip;     // Suppress unused parameter warning
         (void)last_hop; // Suppress unused parameter warning
 
-        std::cout << "PCM::updateCwndOnNack nacked_bytes=" << nacked_bytes << std::endl;
+        // std::cout << "PCM::updateCwndOnNack nacked_bytes=" << nacked_bytes << std::endl;
 
         _pcm_flow.signalUpdate(PCM_SIG_NACK, 1);
         _pcm_flow.signalUpdate(PCM_SIG_DATA_NACKED, nacked_bytes);

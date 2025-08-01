@@ -32,11 +32,11 @@ int htsim_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     struct htsim_flow *flow_ctx = (struct htsim_flow *)flow->backend_ctx;
 
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->signals_list, struct signal_attr,
-                              flow_ctx->thresholds);
+                              flow_ctx->thresholds, true);
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->controls_list, struct control_attr,
-                              flow_ctx->controls);
+                              flow_ctx->controls, false);
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->var_list, struct var_attr,
-                              flow_ctx->vars);
+                              flow_ctx->vars, false);
 
     PCM_LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d", flow->config,
             flow, flow->addr);

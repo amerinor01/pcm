@@ -41,10 +41,10 @@ void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type,
         if (attr->type == signal_type &&
             attr->accumulation_op_fn != flow_signal_accumulation_no_op) {
             PCM_LOG_DBG("[flow=%p, addr=%u] update signal_type=%s, "
-                        "accum_type=%s, index=%zu, update_val=%d",
+                        "accum_type=%s, idx=%zu, update_val=%d",
                         flow, flow->addr, signal_type_to_string(signal_type),
                         signal_accum_type_to_string(attr->accum_type),
-                        attr->metadata.index, value);
+                        UTIL_MASK_TO_ARR_IDX(attr->metadata.idx), value);
             attr->accumulation_op_fn(flow, attr, value);
         }
     }
@@ -52,31 +52,31 @@ void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type,
 
 bool flow_triggers_check(pcm_flow_t flow) {
     const struct algorithm_config *config = flow->config;
-
-    for (size_t idx = 0; idx < config->num_signals; idx++) {
-        bool trigger = false;
-        struct signal_attr *attr = container_of(
-            flow->cur_trigger, struct signal_attr, metadata.list_entry);
+    // mask should be fresh from previous invocation, otherwise handler
+    // invocation teardown logic is broken!
+    if (flow->trigger_mask)
+        PCM_LOG_FATAL("[flow=%p, addr=%u] trigger_mask is not empty!", flow,
+                      flow->addr);
+    bool trigger = false;
+    struct slist_entry *item, *prev;
+    slist_foreach(&config->signals_list, item, prev) {
+        (void)prev;
+        struct signal_attr *attr =
+            container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
-            flow->trigger_user_index = attr->metadata.index;
+            flow->trigger_mask |= attr->metadata.idx;
             PCM_LOG_DBG("[flow=%p, addr=%u] trigger signal_type=%s, "
-                        "accum_type=%s, index=%zu",
+                        "accum_type=%s, idx=%zu",
                         flow, flow->addr, signal_type_to_string(attr->type),
                         signal_accum_type_to_string(attr->accum_type),
-                        attr->metadata.index);
-            trigger = true;
-        }
-
-        if (flow->cur_trigger == config->signals_list.tail)
-            flow->cur_trigger = config->signals_list.head;
-        else
-            flow->cur_trigger = flow->cur_trigger->next;
-
-        if (trigger) {
-            return trigger;
+                        UTIL_MASK_TO_ARR_IDX(attr->metadata.idx));
+            if (!trigger) {
+                trigger = true;
+            }
         }
     }
-
+    if (trigger)
+        return trigger;
     return false;
 }
 
@@ -90,20 +90,21 @@ void flow_triggers_arm(pcm_flow_t flow) {
         if (attr->is_trigger &&
             attr->trigger_arm_fn != flow_signal_trigger_arm_no_op) {
             PCM_LOG_DBG("[flow=%p, addr=%u] rearm signal_type=%s, "
-                        "accum_type=%s, index=%zu",
+                        "accum_type=%s, idx=%zu",
                         flow, flow->addr, signal_type_to_string(attr->type),
                         signal_accum_type_to_string(attr->accum_type),
-                        attr->metadata.index);
+                        UTIL_MASK_TO_ARR_IDX(attr->metadata.idx));
             attr->trigger_arm_fn(flow, attr);
         }
     }
+    flow->trigger_mask = 0;
 }
 
 bool flow_handler_invoke_on_trigger(pcm_flow_t flow) {
     PERF_PROF_REGION_SCOPE_INIT();
     PERF_PROF_REGION_START();
-    bool handler_invoked = false;
-    if (flow_triggers_check(flow)) {
+    bool invoke;
+    if ((invoke = flow_triggers_check(flow))) {
         flow_signals_update(flow, PCM_SIG_ELAPSED_TIME, 0);
         flow->config->algorithm_fn((void *)flow, flow->signals,
                                    flow->thresholds, flow->controls,
@@ -111,10 +112,9 @@ bool flow_handler_invoke_on_trigger(pcm_flow_t flow) {
         PCM_LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
                     flow_time_get(flow), flow_cwnd_get(flow));
         flow_triggers_arm(flow);
-        handler_invoked = true;
     }
     PERF_PROF_REGION_END(handler_invoked, "HANDLER PERFORMANCE");
-    return handler_invoked;
+    return invoke;
 }
 
 int flow_destroy(pcm_flow_t flow) {
@@ -170,8 +170,6 @@ int flow_create(pcm_device_t device, pcm_flow_t *flow,
             device, new_flow->addr);
         goto err_free_flow;
     }
-
-    new_flow->cur_trigger = new_flow->config->signals_list.head;
 
     if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
         PCM_LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler",

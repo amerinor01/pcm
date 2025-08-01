@@ -189,16 +189,19 @@ class AlgorithmCodeGenerator:
         lines.append("")
 
         def __generate_enum(
-            block: str, items: List[Dict[str, Any]], cathegory: str
+            block: str, items: List[Dict[str, Any]], cathegory: str, mask: bool=False
         ) -> None:
             """Helper to define enum for a given cathegory."""
             lines.append(f"enum {self.algorithm_name}_{block} {{")
             for item in items:
-                lines.append(f"    {cathegory}_{item['name']} = {item['index']},")
+                index = str(item['index'])
+                if mask:
+                    index = f"1 << {item['index']}"
+                lines.append(f"    {cathegory}_{item['name']} = {index},")
             lines.append("};")
             lines.append("")
 
-        __generate_enum("signals", self.config.get("signals", []), "SIG")
+        __generate_enum("signals", self.config.get("signals", []), "SIG", mask=True)
         __generate_enum("controls", self.config.get("controls", []), "CTRL")
         __generate_enum("variables", self.config.get("variables", []), "VAR")
 

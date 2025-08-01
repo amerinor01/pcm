@@ -146,28 +146,27 @@ typedef enum signal_accum {
  *
  * @param[in] signal       Signal identifier (SIG_*).
  * @param[in] accum_type   Accumulation operation (SIG_ACCUM_*).
- * @param[in] user_index   Index for user-defined signal mapping.
+ * @param[in] idx   Index for user-defined signal mapping.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
 pcm_err_t register_signal_pcmc(pcm_signal_t signal,
-                               pcm_signal_accum_t accum_type, size_t user_index,
+                               pcm_signal_accum_t accum_type, size_t idx,
                                pcm_handle_t handle);
 
 /**
  * @brief Set a threshold to trigger algorithm callback.
  *
- * When the monitored value for the signal at a user_index exceeds the
+ * When the monitored value for the signal at a idx exceeds the
  * threshold, the algorithm handler registered in PCMC will be invoked in the
  * CCC of PDC.
  *
- * @param[in] user_index   User-defined signal index.
+ * @param[in] idx   User-defined signal index.
  * @param[in] threshold    Threshold value for triggering.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_signal_invoke_trigger_pcmc(size_t user_index,
-                                              pcm_uint threshold,
+pcm_err_t register_signal_invoke_trigger_pcmc(size_t idx, pcm_uint threshold,
                                               pcm_handle_t handle);
 
 /**
@@ -183,11 +182,11 @@ typedef enum control {
  * @brief Register a control knob for external adjustment by an algorithm.
  *
  * @param[in] control      Control identifier (CTRL_*).
- * @param[in] user_index   Index for user-defined control mapping.
+ * @param[in] idx   Index for user-defined control mapping.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_control_pcmc(pcm_control_t control, size_t user_index,
+pcm_err_t register_control_pcmc(pcm_control_t control, size_t idx,
                                 pcm_handle_t handle);
 
 /**
@@ -196,70 +195,68 @@ pcm_err_t register_control_pcmc(pcm_control_t control, size_t user_index,
  * This sets the starting value before activation.
  * Similar to the register_control_initial_value_int_pcmc.
  *
- * @param[in] user_index   User-defined control index.
+ * @param[in] idx   User-defined control index.
  * @param[in] initial_value Initial control value.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_control_initial_value_pcmc(size_t user_index,
+pcm_err_t register_control_initial_value_pcmc(size_t idx,
                                               pcm_uint initial_value,
                                               pcm_handle_t handle);
 
 /**
  * @brief Register persistent integer value state storage for a flow.
  *
- * @param[in] user_index   Index for user-defined state mapping.
+ * @param[in] idx   Index for user-defined state mapping.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_var_pcmc(size_t user_index, pcm_handle_t handle);
+pcm_err_t register_var_pcmc(size_t idx, pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent state value for a flow.
  * Similar to register_var_initial_value_int_pcmc
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_var_initial_value_pcmc(size_t user_index,
-                                          pcm_uint initial_value,
+pcm_err_t register_var_initial_value_pcmc(size_t idx, pcm_uint initial_value,
                                           pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent int state value for a flow.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_var_initial_value_int_pcmc(size_t user_index,
-                                              pcm_int initial_value,
+pcm_err_t register_var_initial_value_int_pcmc(size_t idx, pcm_int initial_value,
                                               pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent uint state value for a flow.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_var_initial_value_uint_pcmc(size_t user_index,
+pcm_err_t register_var_initial_value_uint_pcmc(size_t idx,
                                                pcm_uint initial_value,
                                                pcm_handle_t handle);
 
 /**
  * @brief Set the initial persistent float state value for a flow.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] initial_value Initial state value.
  * @param[in] handle       PCM handle.
  * @return SUCCESS on success, PCM_ERROR on failure.
  */
-pcm_err_t register_var_initial_value_float_pcmc(size_t user_index,
+pcm_err_t register_var_initial_value_float_pcmc(size_t idx,
                                                 pcm_float initial_value,
                                                 pcm_handle_t handle);
 
@@ -283,139 +280,136 @@ pcm_err_t register_var_initial_value_float_pcmc(size_t user_index,
 #define PCM_FORCE_INLINE inline
 #endif
 
-pcm_uint __flow_control_get(const void *ctx, size_t user_index);
-void __flow_control_set(void *ctx, size_t user_index, pcm_uint val);
-pcm_uint __flow_signal_get(const void *ctx, size_t user_index);
-void __flow_signal_set(void *ctx, size_t user_index, pcm_uint val);
-void __flow_signal_update(void *ctx, size_t user_index, pcm_uint val);
-size_t __flow_signal_trigger_user_index_get(void *ctx);
-pcm_int __flow_var_int_get(const void *ctx, size_t user_index);
-void __flow_var_int_set(void *ctx, size_t user_index, pcm_int val);
-pcm_uint __flow_var_uint_get(const void *ctx, size_t user_index);
-void __flow_var_uint_set(void *ctx, size_t user_index, pcm_uint val);
-pcm_float __flow_var_float_get(const void *ctx, size_t user_index);
-void __flow_var_float_set(void *ctx, size_t user_index, pcm_float val);
+pcm_uint __flow_control_get(const void *ctx, size_t idx);
+void __flow_control_set(void *ctx, size_t idx, pcm_uint val);
+pcm_uint __flow_signal_get(const void *ctx, size_t idx);
+void __flow_signal_set(void *ctx, size_t idx, pcm_uint val);
+void __flow_signal_update(void *ctx, size_t idx, pcm_uint val);
+pcm_uint __flow_signal_trigger_mask_get(void *ctx);
+pcm_int __flow_var_int_get(const void *ctx, size_t idx);
+void __flow_var_int_set(void *ctx, size_t idx, pcm_int val);
+pcm_uint __flow_var_uint_get(const void *ctx, size_t idx);
+void __flow_var_uint_set(void *ctx, size_t idx, pcm_uint val);
+pcm_float __flow_var_float_get(const void *ctx, size_t idx);
+void __flow_var_float_set(void *ctx, size_t idx, pcm_float val);
 
 /**
  * @brief Get the current persistent state within a handler.
  *
  * Similar to get_var_uint.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @return Current state value.
  */
-#define get_var(user_index) __flow_var_uint_get(ctx, user_index)
+#define get_var(idx) __flow_var_uint_get(ctx, idx)
 
 /**
  * @brief Update the persistent state within a handler.
  *
  * Similar to set_var_int.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] val          New state value.
  */
-#define set_var(user_index, val) __flow_var_uint_set(ctx, user_index, val);
+#define set_var(idx, val) __flow_var_uint_set(ctx, idx, val);
 
 /**
  * @brief Get the integer current persistent state within a handler.
  *
- * @param[in] user_index User-defined state index.
+ * @param[in] idx User-defined state index.
  * @return Current state integer value.
  */
-#define get_var_int(user_index) __flow_var_int_get(ctx, user_index)
+#define get_var_int(idx) __flow_var_int_get(ctx, idx)
 
 /**
  * @brief Update the integer persistent state within a handler.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] val          New integer state value.
  */
-#define set_var_int(user_index, val) __flow_var_int_set(ctx, user_index, val);
+#define set_var_int(idx, val) __flow_var_int_set(ctx, idx, val);
 
 /**
  * @brief Get the unsigned integer current persistent state within a
  * handler.
  *
- * @param[in] user_index User-defined state index.
+ * @param[in] idx User-defined state index.
  * @return Current state unsigned integer value.
  */
-#define get_var_uint(user_index) __flow_var_uint_get(ctx, user_index)
+#define get_var_uint(idx) __flow_var_uint_get(ctx, idx)
 
 /**
  * @brief Update the unsigned integer persistent state within a handler.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] val          New unsigned integer state value.
  */
-#define set_var_uint(user_index, val) __flow_var_uint_set(ctx, user_index, val);
+#define set_var_uint(idx, val) __flow_var_uint_set(ctx, idx, val);
 
 /**
  * @brief Get the float current persistent state within a handler.
  *
- * @param[in] user_index User-defined state index.
+ * @param[in] idx User-defined state index.
  * @return Current state float value.
  */
-#define get_var_float(user_index) __flow_var_float_get(ctx, user_index)
+#define get_var_float(idx) __flow_var_float_get(ctx, idx)
 
 /**
  * @brief Update the float persistent state within a handler.
  *
- * @param[in] user_index   User-defined state index.
+ * @param[in] idx   User-defined state index.
  * @param[in] val          New float state value.
  */
-#define set_var_float(user_index, val)                                         \
-    __flow_var_float_set(ctx, user_index, val);
+#define set_var_float(idx, val) __flow_var_float_set(ctx, idx, val);
 
 /**
  * @brief Read the latest signal value within a handler.
  *
- * @param[in] user_index   User-defined signal index.
+ * @param[in] idx   User-defined signal index.
  * @return Current signal value.
  */
-#define get_signal(user_index) __flow_signal_get(ctx, user_index)
+#define get_signal(idx) __flow_signal_get(ctx, idx)
 
 /**
  * @brief Set the signal value within a handler.
  *
- * @param[in] user_index   User-defined signal index.
+ * @param[in] idx   User-defined signal index.
  * @param[in] val          New signal value.
  */
-#define set_signal(user_index, val) __flow_signal_set(ctx, user_index, val)
+#define set_signal(idx, val) __flow_signal_set(ctx, idx, val)
 
 #define PCM_SIG_REARM (UINT64_MAX - 1)
 
 /**
  * @brief Update the signal value within a handler.
  *
- * @param[in] user_index   User-defined signal index.
+ * @param[in] idx   User-defined signal index.
  * @param[in] val          Update value.
  */
-#define update_signal(user_index, val)                                         \
-    __flow_signal_update(ctx, user_index, val)
+#define update_signal(idx, val) __flow_signal_update(ctx, idx, val)
 
 /**
- * @brief Get user index of signal that triggered handler.
+ * @brief Get mask of signals that triggered handler.
  *
- * @return[in] user_index   User-defined signal index.
+ * @return[in] trigger_mask with bits set for signals that triggered handler.
  */
-#define get_signal_invoke_trigger_user_index()                                 \
-    __flow_signal_trigger_user_index_get(ctx)
+#define get_signal_trigger_mask() __flow_signal_trigger_mask_get(ctx)
 
 /**
  * @brief Read the current control knob value within a handler.
  *
- * @param[in] user_index   User-defined control index.
+ * @param[in] idx   User-defined control index.
  * @return Current control value.
  */
-#define get_control(user_index) __flow_control_get(ctx, user_index)
+#define get_control(idx) __flow_control_get(ctx, idx)
 
 /**
  * @brief Update the control knob value within a handler.
  *
- * @param[in] user_index   User-defined control index.
+ * @param[in] idx   User-defined control index.
  * @param[in] val          New control value.
  */
-#define set_control(user_index, val) __flow_control_set(ctx, user_index, val)
+#define set_control(idx, val) __flow_control_set(ctx, idx, val)
 
 /**
  * @brief Algorithm handler entry point

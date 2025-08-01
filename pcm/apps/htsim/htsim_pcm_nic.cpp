@@ -44,8 +44,6 @@ Device::Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picos
 
     if (_sched_type == pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
         _next_sched = eventlist().now() + _poll_delay;
-        std::cerr << "PCM device scheduling: now=" << eventlist().now() << ", next_sched=" << _next_sched
-                  << ", poll_delay=" << _poll_delay << std::endl;
         eventlist().sourceIsPending(*this, _next_sched);
     }
 }
