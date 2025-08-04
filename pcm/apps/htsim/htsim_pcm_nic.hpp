@@ -85,7 +85,6 @@ class Flow final {
 
     [[nodiscard]] pcm_flow_t getImplPtr() const noexcept { return _pcm_flow_ptr; }
     [[nodiscard]] pcm_uint cwndGet() const noexcept { return flow_cwnd_get(_pcm_flow_ptr); }
-    void cwndReset(pcm_uint new_cwnd) noexcept { __flow_control_set(_pcm_flow_ptr, 0, new_cwnd); }
     void signalUpdate(pcm_signal_t sig, pcm_uint val) noexcept { flow_signals_update(_pcm_flow_ptr, sig, val); }
 
   private:

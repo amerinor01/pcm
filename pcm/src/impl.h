@@ -14,6 +14,7 @@ extern "C" {
 #include <stdint.h>
 
 #include "pcm.h"
+#include "pcmh.h"
 #include "pcm_network.h"
 #include "slist.h"
 
@@ -60,11 +61,6 @@ typedef int (*pcmc_init_function_t)(pcm_handle_t);
 #define PCMC_MAX_LIB_NAME 256
 #define PCMC_MAX_LEN_ALGO_NAME (PCMC_MAX_INIT_FN_NAME / 2)
 
-#define ALGO_CONF_MAX_NUM_SIGNALS                                              \
-    (sizeof(pcm_uint) * 8) // number of signals is limited by trigger_mask width
-#define ALGO_CONF_MAX_NUM_CONTROLS 2
-#define ALGO_CONF_MAX_VARS 16
-
 struct algorithm_config {
     pcm_device_t device;
     bool active;
@@ -99,21 +95,11 @@ struct flow_plugin_ops {
         signal_accumulation_op_fn min;
         signal_accumulation_op_fn max;
         signal_accumulation_op_fn elapsed_time;
+        void (*snapshot_prepare)(pcm_flow_t);
+        void (*snapshot_apply)(pcm_flow_t);
+        void (*control_set)(pcm_flow_t, size_t, pcm_uint);
+        pcm_uint (*control_get)(const pcm_flow_t, size_t);
     } datapath;
-
-    struct handler_ops {
-        void (*control_set)(void *, size_t, pcm_uint);
-        pcm_uint (*control_get)(const void *, size_t);
-        void (*signal_set)(void *, size_t, pcm_uint);
-        pcm_uint (*signal_get)(const void *, size_t);
-        void (*signal_update)(void *, size_t, pcm_uint);
-        pcm_int (*var_int_get)(const void *, size_t);
-        void (*var_int_set)(void *, size_t, pcm_int);
-        pcm_uint (*var_uint_get)(const void *, size_t);
-        void (*var_uint_set)(void *, size_t, pcm_uint);
-        pcm_float (*var_float_get)(const void *, size_t);
-        void (*var_float_set)(void *, size_t, pcm_float);
-    } handler;
 };
 
 // Plugin registration system for datapath plugins
@@ -139,14 +125,8 @@ struct flow {
     pcm_addr_t addr;
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
-    pcm_uint trigger_mask;
     void *backend_ctx;
-    // Note: this is a hacky way to get signals/ctrls/etc to get exposed
-    // directly to the handler
-    void *signals;
-    void *thresholds;
-    void *controls;
-    void *vars;
+    struct flow_datapath_snapshot datapath_snapshot;
 };
 
 #define SCHEDULER_SLEEP_US 1000 // 10 ms
@@ -202,7 +182,8 @@ int device_scheduler_flow_add(struct scheduler *scheduler, pcm_flow_t flow);
 int device_scheduler_flow_remove(struct scheduler *scheduler, pcm_flow_t flow);
 const struct algorithm_config *
 device_flow_id_to_config_match(const pcm_device_t device, pcm_addr_t id);
-
+void flow_cwnd_set(const pcm_flow_t flow, pcm_uint cwnd);
+pcm_uint flow_cwnd_get(const pcm_flow_t flow);
 void flow_triggers_arm(pcm_flow_t flow);
 bool flow_handler_invoke_on_trigger(pcm_flow_t flow);
 

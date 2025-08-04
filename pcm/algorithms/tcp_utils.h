@@ -3,6 +3,7 @@
 
 #include "algo_utils.h"
 #include "pcm.h"
+#include "pcmh.h"
 
 #ifdef BUILD_ALGO_NEWRENO
 #include "newreno.h"

@@ -1,5 +1,6 @@
 #include <stdbool.h>
 
+#include "pcmh.h"
 #include "algo_utils.h"
 #include "nscc.h"
 #include "pcm.h"

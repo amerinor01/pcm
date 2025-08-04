@@ -20,7 +20,15 @@ pcm_uint flow_cwnd_get(const pcm_flow_t flow) {
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(&flow->config->controls_list,
                                             struct control_attr, PCM_CTRL_CWND,
                                             cwnd_idx);
-    return flow->device->flow_ops.handler.control_get(flow, cwnd_idx);
+    return flow->device->flow_ops.datapath.control_get(flow, cwnd_idx);
+}
+
+void flow_cwnd_set(const pcm_flow_t flow, pcm_uint cwnd) {
+    size_t cwnd_idx;
+    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(&flow->config->controls_list,
+                                            struct control_attr, PCM_CTRL_CWND,
+                                            cwnd_idx);
+    return flow->device->flow_ops.datapath.control_set(flow, cwnd_idx, cwnd);
 }
 
 pcm_uint flow_time_get(const pcm_flow_t flow) {
@@ -29,6 +37,14 @@ pcm_uint flow_time_get(const pcm_flow_t flow) {
 
 bool flow_is_ready(const pcm_flow_t flow) {
     return flow->device->flow_ops.control.is_ready(flow);
+}
+
+static void flow_datapath_snapshot_prepare(pcm_flow_t flow) {
+    flow->device->flow_ops.datapath.snapshot_prepare(flow);
+}
+
+static void flow_datapath_snapshot_apply(pcm_flow_t flow) {
+    flow->device->flow_ops.datapath.snapshot_apply(flow);
 }
 
 void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type,
@@ -54,9 +70,10 @@ bool flow_triggers_check(pcm_flow_t flow) {
     const struct algorithm_config *config = flow->config;
     // mask should be fresh from previous invocation, otherwise handler
     // invocation teardown logic is broken!
-    if (flow->trigger_mask)
-        PCM_LOG_FATAL("[flow=%p, addr=%u] trigger_mask is not empty!", flow,
-                      flow->addr);
+    if (flow->datapath_snapshot.trigger_mask)
+        PCM_LOG_FATAL(
+            "[flow=%p, addr=%u] datapath_snapshot.trigger_mask is not empty!",
+            flow, flow->addr);
     bool trigger = false;
     struct slist_entry *item, *prev;
     slist_foreach(&config->signals_list, item, prev) {
@@ -64,7 +81,7 @@ bool flow_triggers_check(pcm_flow_t flow) {
         struct signal_attr *attr =
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
-            flow->trigger_mask |= attr->metadata.idx;
+            flow->datapath_snapshot.trigger_mask |= attr->metadata.idx;
             PCM_LOG_DBG("[flow=%p, addr=%u] trigger signal_type=%s, "
                         "accum_type=%s, idx=%zu",
                         flow, flow->addr, signal_type_to_string(attr->type),
@@ -97,23 +114,25 @@ void flow_triggers_arm(pcm_flow_t flow) {
             attr->trigger_arm_fn(flow, attr);
         }
     }
-    flow->trigger_mask = 0;
+    flow->datapath_snapshot.trigger_mask = 0;
 }
 
 bool flow_handler_invoke_on_trigger(pcm_flow_t flow) {
     PERF_PROF_REGION_SCOPE_INIT();
-    PERF_PROF_REGION_START();
     bool invoke;
     if ((invoke = flow_triggers_check(flow))) {
+        // flow_signals_update() call below doesn't include timers which might
+        // have already been fired up above
         flow_signals_update(flow, PCM_SIG_ELAPSED_TIME, 0);
-        flow->config->algorithm_fn((void *)flow, flow->signals,
-                                   flow->thresholds, flow->controls,
-                                   flow->vars);
+        flow_datapath_snapshot_prepare(flow);
+        PERF_PROF_REGION_START();
+        flow->config->algorithm_fn((void *)&flow->datapath_snapshot);
+        PERF_PROF_REGION_END(true, "HANDLER PERFORMANCE");
+        flow_datapath_snapshot_apply(flow);
+        flow_triggers_arm(flow);
         PCM_LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
                     flow_time_get(flow), flow_cwnd_get(flow));
-        flow_triggers_arm(flow);
     }
-    PERF_PROF_REGION_END(handler_invoked, "HANDLER PERFORMANCE");
     return invoke;
 }
 
@@ -170,6 +189,10 @@ int flow_create(pcm_device_t device, pcm_flow_t *flow,
             device, new_flow->addr);
         goto err_free_flow;
     }
+  
+    // Variables are local to the handler, so can be stored directly in the snapshot
+    ATTR_LIST_FLOW_STATE_INIT(&new_flow->config->var_list, struct var_attr,
+                              new_flow->datapath_snapshot.vars, false);
 
     if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
         PCM_LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler",

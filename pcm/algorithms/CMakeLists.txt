@@ -48,6 +48,9 @@ function(create_algo_plugin ALGO_NAME)
         BUILD_ALGO_${ALGO_NAME_UPPER}
     )
     
+    # Add assembly generation
+    target_compile_options(${ALGO_NAME} PRIVATE -save-temps=obj -gno-record-gcc-switches -Wa,--no-warn)
+    
     # Link with PCM and math library
     target_link_libraries(${ALGO_NAME} PRIVATE pcm m)
     

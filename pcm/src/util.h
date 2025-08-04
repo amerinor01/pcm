@@ -186,39 +186,6 @@ static inline const char *signal_accum_type_to_string(pcm_signal_accum_t type) {
     return "SIG_ACCUM_UNKNOWN";
 }
 
-/* encode any value T into pcm_uint representation */
-static inline pcm_uint encode_to_pcm_uint(const void *val, size_t val_size) {
-    pcm_uint u;
-    memcpy(&u, val, val_size);
-    return u;
-}
-
-/* decode a pcm_uint raw into a value T */
-static inline void decode_from_pcm_uint(pcm_uint u, void *out,
-                                        size_t out_size) {
-    memcpy(out, &u, out_size);
-}
-
-static inline pcm_float decode_pcm_float(pcm_uint u) {
-    pcm_float f;
-    decode_from_pcm_uint(u, &f, sizeof(f));
-    return f;
-}
-
-static inline pcm_int decode_pcm_int(pcm_uint u) {
-    pcm_int x;
-    decode_from_pcm_uint(u, &x, sizeof(x));
-    return x;
-}
-
-static inline pcm_uint encode_pcm_float(pcm_float f) {
-    return encode_to_pcm_uint(&f, sizeof(f));
-}
-
-static inline pcm_uint encode_pcm_int(pcm_int x) {
-    return encode_to_pcm_uint(&x, sizeof(x));
-}
-
 static inline struct timespec clock_gettime_now() {
     struct timespec now_ts;
     if (clock_gettime(CLOCK_MONOTONIC, &now_ts)) {
@@ -242,41 +209,11 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
     return (pcm_uint)(ts_end - ts_start);
 }
 
-#define PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)                         \
-    plugin_name##_flow_signal_get
-#define PLUGIN_FLOW_SIGNAL_GET_GENERIC_DEFINE(plugin_name)                     \
-    static inline pcm_uint PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(plugin_name)(     \
-        const void *ctx, size_t idx) {                                         \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(idx)];                   \
-    }
-
-#define PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(plugin_name)                         \
-    plugin_name##_flow_signal_set
-#define PLUGIN_FLOW_SIGNAL_SET_GENERIC_DEFINE(plugin_name)                     \
-    static inline void PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(plugin_name)(         \
-        void *ctx, size_t idx, pcm_uint val) {                                 \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(idx)] = val;                    \
-    }
-
-#define PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(plugin_name)                      \
-    plugin_name##_flow_signal_update
-#define PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_DEFINE(plugin_name)                  \
-    static inline void PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(plugin_name)(      \
-        void *ctx, size_t idx, pcm_uint val) {                                 \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->signals[UTIL_MASK_TO_ARR_IDX(idx)] += val;                   \
-    }
-
 #define PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)                        \
     plugin_name##_flow_control_get
 #define PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(plugin_name)                    \
     static inline pcm_uint PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(plugin_name)(    \
-        const void *ctx, size_t idx) {                                         \
+        const pcm_flow_t ctx, size_t idx) {                                         \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
         return flow_ctx->controls[idx];                                        \
@@ -286,70 +223,10 @@ static inline pcm_uint picosec_ts_diff_us_get(uint64_t ts_start,
     plugin_name##_flow_control_set
 #define PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(plugin_name)                    \
     static inline void PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(plugin_name)(        \
-        void *ctx, size_t idx, pcm_uint val) {                                 \
+        pcm_flow_t ctx, size_t idx, pcm_uint val) {                                 \
         struct plugin_name##_flow *flow_ctx =                                  \
             ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
         flow_ctx->controls[idx] = val;                                         \
-    }
-
-#define PLUGIN_FLOW_VAR_UINT_GET_GENERIC_FN(plugin_name)                       \
-    plugin_name##_flow_VAR_uint_get
-#define PLUGIN_FLOW_VAR_UINT_GET_GENERIC_DEFINE(plugin_name)                   \
-    static inline pcm_uint PLUGIN_FLOW_VAR_UINT_GET_GENERIC_FN(plugin_name)(   \
-        const void *ctx, size_t idx) {                                         \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return flow_ctx->vars[idx];                                            \
-    }
-
-#define PLUGIN_FLOW_VAR_UINT_SET_GENERIC_FN(plugin_name)                       \
-    plugin_name##_flow_VAR_uint_set
-#define PLUGIN_FLOW_VAR_UINT_SET_GENERIC_DEFINE(plugin_name)                   \
-    static inline void PLUGIN_FLOW_VAR_UINT_SET_GENERIC_FN(plugin_name)(       \
-        void *ctx, size_t idx, pcm_uint val) {                                 \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->vars[idx] = val;                                             \
-    }
-
-#define PLUGIN_FLOW_VAR_INT_GET_GENERIC_FN(plugin_name)                        \
-    plugin_name##_flow_VAR_int_get
-#define PLUGIN_FLOW_VAR_INT_GET_GENERIC_DEFINE(plugin_name)                    \
-    static inline pcm_int PLUGIN_FLOW_VAR_INT_GET_GENERIC_FN(plugin_name)(     \
-        const void *ctx, size_t idx) {                                         \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return decode_pcm_int(flow_ctx->vars[idx]);                            \
-    }
-
-#define PLUGIN_FLOW_VAR_INT_SET_GENERIC_FN(plugin_name)                        \
-    plugin_name##_flow_VAR_int_set
-#define PLUGIN_FLOW_VAR_INT_SET_GENERIC_DEFINE(plugin_name)                    \
-    static inline void PLUGIN_FLOW_VAR_INT_SET_GENERIC_FN(plugin_name)(        \
-        void *ctx, size_t idx, pcm_int val) {                                  \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->vars[idx] = encode_pcm_int(val);                             \
-    }
-
-#define PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_FN(plugin_name)                      \
-    plugin_name##_flow_VAR_float_get
-#define PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_DEFINE(plugin_name)                  \
-    static inline pcm_float PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_FN(plugin_name)( \
-        const void *ctx, size_t idx) {                                         \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        return decode_pcm_float(flow_ctx->vars[idx]);                          \
-    }
-
-#define PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_FN(plugin_name)                      \
-    plugin_name##_flow_VAR_float_set
-#define PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_DEFINE(plugin_name)                  \
-    static inline void PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_FN(plugin_name)(      \
-        void *ctx, size_t idx, pcm_float val) {                                \
-        struct plugin_name##_flow *flow_ctx =                                  \
-            ((struct plugin_name##_flow *)(((pcm_flow_t)ctx)->backend_ctx));   \
-        flow_ctx->vars[idx] = encode_pcm_float(val);                           \
     }
 
 #define PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_FN(plugin_name)                \

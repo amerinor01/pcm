@@ -1,6 +1,8 @@
 #include "pthread_flow.h"
 #include "util.h"
 
+const char *pthrd_flow_plugin_name = "pthread";
+
 bool pthrd_flow_is_ready(const pcm_flow_t flow) {
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
     return flow_ctx->running;
@@ -35,13 +37,6 @@ int pthrd_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
                               flow_ctx->thresholds, true);
     ATTR_LIST_FLOW_STATE_INIT(&flow->config->controls_list, struct control_attr,
                               flow_ctx->controls, false);
-    ATTR_LIST_FLOW_STATE_INIT(&flow->config->var_list, struct var_attr,
-                              flow_ctx->vars, false);
-
-    flow->signals = (void *)flow_ctx->signals;
-    flow->thresholds = (void *)flow_ctx->thresholds;
-    flow->controls = (void *)flow_ctx->controls;
-    flow->vars = (void *)flow_ctx->vars;
 
     PCM_LOG_DBG("[conf=%p] instantiated config on flow=%p addr=%d",
                 flow->config, flow, flow->addr);
@@ -71,17 +66,31 @@ thread_destroy:
     return pthrd_flow_destroy(flow);
 }
 
-PLUGIN_FLOW_SIGNAL_GET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_SIGNAL_SET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(pthrd)
+void pthrd_snapshot_prepare(pcm_flow_t flow) {
+    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)flow->backend_ctx;
+    for (size_t i = 0; i < flow->config->num_signals; i++) {
+        flow->datapath_snapshot.signals[i] =
+            atomic_exchange(&flow_ctx->signals[i], 0);
+        flow->datapath_snapshot.thresholds[i] = flow_ctx->thresholds[i];
+    }
+    for (size_t i = 0; i < flow->config->num_controls; i++) {
+        flow->datapath_snapshot.controls[i] = flow_ctx->controls[i];
+    }
+}
+
+void pthrd_snapshot_apply(pcm_flow_t flow) {
+    struct pthrd_flow *flow_ctx = (struct pthrd_flow *)flow->backend_ctx;
+    for (size_t i = 0; i < flow->config->num_signals; i++) {
+        flow_ctx->signals[i] += flow->datapath_snapshot.signals[i];
+        flow_ctx->thresholds[i] = flow->datapath_snapshot.thresholds[i];
+    }
+    for (size_t i = 0; i < flow->config->num_controls; i++) {
+        flow_ctx->controls[i] = flow->datapath_snapshot.controls[i];
+    }
+}
+
 PLUGIN_FLOW_CONTROL_SET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_VAR_INT_GET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_VAR_INT_SET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_VAR_UINT_GET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_VAR_UINT_SET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_DEFINE(pthrd)
-PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_DEFINE(pthrd)
+PLUGIN_FLOW_CONTROL_GET_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_ACCUMULATION_OP_SUM_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_ACCUMULATION_OP_LAST_GENERIC_DEFINE(pthrd)
 PLUGIN_FLOW_ACCUMULATION_OP_MIN_GENERIC_DEFINE(pthrd)
@@ -97,7 +106,6 @@ PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_DEFINE(pthrd, clock_gettime_now,
                                                clock_gettime_ts_diff_us_get)
 PLUGIN_FLOW_TIME_GET_GENERIC_DEFINE(pthrd, clock_gettime_now,
                                     clock_gettime_ts_diff_us_get)
-const char *pthrd_flow_plugin_name = "pthread";
 
 struct flow_plugin_ops pthrd_flow_ops = {
     .control.create = pthrd_flow_create,
@@ -117,18 +125,10 @@ struct flow_plugin_ops pthrd_flow_ops = {
         PLUGIN_FLOW_SIGNAL_ELAPSED_TIME_ACCUMULATION_OP_GENERIC_FN(pthrd),
     .datapath.timer_check = PLUGIN_FLOW_TRIGGER_TIMER_CHECK_GENERIC_FN(pthrd),
     .datapath.timer_reset = PLUGIN_FLOW_TRIGGER_TIMER_RESET_GENERIC_FN(pthrd),
-
-    .handler.control_set = PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(pthrd),
-    .handler.control_get = PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(pthrd),
-    .handler.signal_set = PLUGIN_FLOW_SIGNAL_SET_GENERIC_FN(pthrd),
-    .handler.signal_get = PLUGIN_FLOW_SIGNAL_GET_GENERIC_FN(pthrd),
-    .handler.signal_update = PLUGIN_FLOW_SIGNAL_UPDATE_GENERIC_FN(pthrd),
-    .handler.var_int_get = PLUGIN_FLOW_VAR_INT_GET_GENERIC_FN(pthrd),
-    .handler.var_int_set = PLUGIN_FLOW_VAR_INT_SET_GENERIC_FN(pthrd),
-    .handler.var_uint_get = PLUGIN_FLOW_VAR_UINT_GET_GENERIC_FN(pthrd),
-    .handler.var_uint_set = PLUGIN_FLOW_VAR_UINT_SET_GENERIC_FN(pthrd),
-    .handler.var_float_get = PLUGIN_FLOW_VAR_FLOAT_GET_GENERIC_FN(pthrd),
-    .handler.var_float_set = PLUGIN_FLOW_VAR_FLOAT_SET_GENERIC_FN(pthrd),
+    .datapath.control_set = PLUGIN_FLOW_CONTROL_SET_GENERIC_FN(pthrd),
+    .datapath.control_get = PLUGIN_FLOW_CONTROL_GET_GENERIC_FN(pthrd),
+    .datapath.snapshot_prepare = pthrd_snapshot_prepare,
+    .datapath.snapshot_apply = pthrd_snapshot_apply,
 };
 
 int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {

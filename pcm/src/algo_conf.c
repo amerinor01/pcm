@@ -257,7 +257,6 @@ int algorithm_config_signal_trigger_set(struct algorithm_config *config,
     attr->trigger_check_fn = config->device->flow_ops.datapath.overflow_check;
     attr->trigger_arm_fn = flow_signal_trigger_arm_no_op;
 
-    // trigger on elapsed time (timer) relies on aux state
     if (attr->type == PCM_SIG_ELAPSED_TIME) {
         attr->accumulation_op_fn = flow_signal_accumulation_no_op;
         attr->trigger_check_fn = config->device->flow_ops.datapath.timer_check;

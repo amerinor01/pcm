@@ -2,6 +2,7 @@
 #include "algo_utils.h"
 #include "assert.h"
 #include "pcm.h"
+#include "pcmh.h"
 
 static PCM_FORCE_INLINE void dcqcn_rate_to_cwnd(ALGO_CTX_ARGS, pcm_uint *cwnd_cur) {
     // Original DCQCN is a rate based, we use RTT to convert rate to cwnd

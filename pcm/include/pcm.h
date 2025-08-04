@@ -261,16 +261,8 @@ pcm_err_t register_var_initial_value_float_pcmc(size_t idx,
                                                 pcm_handle_t handle);
 
 /* Handler-side API */
-
-// timos: the unoptimized handlers only use ctx, only when we use the
-// optimizing compiler passes will we make use of the other args, so
-// we mark them as unused here.
-#define ALGO_CTX_ARGS                                                          \
-    __attribute__((unused)) void *ctx, __attribute__((unused)) void *signals,  \
-        __attribute__((unused)) void *thresholds,                              \
-        __attribute__((unused)) void *controls,                                \
-        __attribute__((unused)) void *var
-#define ALGO_CTX_PASS ctx, signals, thresholds, controls, var
+#define ALGO_CTX_ARGS __attribute__((unused)) void *ctx
+#define ALGO_CTX_PASS ctx
 #define __algorithm_entry_point __algorithm_main(ALGO_CTX_ARGS)
 #define __algorithm_entry_point_symbol "__algorithm_main"
 
@@ -279,19 +271,6 @@ pcm_err_t register_var_initial_value_float_pcmc(size_t idx,
 #else
 #define PCM_FORCE_INLINE inline
 #endif
-
-pcm_uint __flow_control_get(const void *ctx, size_t idx);
-void __flow_control_set(void *ctx, size_t idx, pcm_uint val);
-pcm_uint __flow_signal_get(const void *ctx, size_t idx);
-void __flow_signal_set(void *ctx, size_t idx, pcm_uint val);
-void __flow_signal_update(void *ctx, size_t idx, pcm_uint val);
-pcm_uint __flow_signal_trigger_mask_get(void *ctx);
-pcm_int __flow_var_int_get(const void *ctx, size_t idx);
-void __flow_var_int_set(void *ctx, size_t idx, pcm_int val);
-pcm_uint __flow_var_uint_get(const void *ctx, size_t idx);
-void __flow_var_uint_set(void *ctx, size_t idx, pcm_uint val);
-pcm_float __flow_var_float_get(const void *ctx, size_t idx);
-void __flow_var_float_set(void *ctx, size_t idx, pcm_float val);
 
 /**
  * @brief Get the current persistent state within a handler.
