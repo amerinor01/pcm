@@ -66,7 +66,7 @@ void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type,
     }
 }
 
-bool flow_triggers_check(pcm_flow_t flow) {
+static bool flow_triggers_check(pcm_flow_t flow) {
     const struct algorithm_config *config = flow->config;
     // mask should be fresh from previous invocation, otherwise handler
     // invocation teardown logic is broken!
@@ -90,6 +90,9 @@ bool flow_triggers_check(pcm_flow_t flow) {
             if (!trigger) {
                 trigger = true;
             }
+        } else if (attr->type == PCM_SIG_ELAPSED_TIME &&
+                   attr->accumulation_op_fn != flow_signal_accumulation_no_op) {
+            attr->accumulation_op_fn(flow, attr, 0); // progress time
         }
     }
     if (trigger)
@@ -118,21 +121,18 @@ void flow_triggers_arm(pcm_flow_t flow) {
 }
 
 bool flow_handler_invoke_on_trigger(pcm_flow_t flow) {
-    PERF_PROF_REGION_SCOPE_INIT();
+    PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
     bool invoke;
+    PCM_PERF_PROF_REGION_START(trigger_cycle);
     if ((invoke = flow_triggers_check(flow))) {
-        // flow_signals_update() call below doesn't include timers which might
-        // have already been fired up above
-        flow_signals_update(flow, PCM_SIG_ELAPSED_TIME, 0);
         flow_datapath_snapshot_prepare(flow);
-        PERF_PROF_REGION_START();
         flow->config->algorithm_fn((void *)&flow->datapath_snapshot);
-        PERF_PROF_REGION_END(true, "HANDLER PERFORMANCE");
         flow_datapath_snapshot_apply(flow);
         flow_triggers_arm(flow);
         PCM_LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
                     flow_time_get(flow), flow_cwnd_get(flow));
     }
+    PCM_PERF_PROF_REGION_END(trigger_cycle, invoke);
     return invoke;
 }
 
@@ -189,8 +189,9 @@ int flow_create(pcm_device_t device, pcm_flow_t *flow,
             device, new_flow->addr);
         goto err_free_flow;
     }
-  
-    // Variables are local to the handler, so can be stored directly in the snapshot
+
+    // Variables are local to the handler, so can be stored directly in the
+    // snapshot
     ATTR_LIST_FLOW_STATE_INIT(&new_flow->config->var_list, struct var_attr,
                               new_flow->datapath_snapshot.vars, false);
 

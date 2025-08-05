@@ -1,5 +1,4 @@
 #include <algorithm>
-#include <format>
 #include <limits>
 
 #include "htsim_pcm_nic.hpp"

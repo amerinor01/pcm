@@ -75,6 +75,7 @@ def generate_plot(log_file, output_dir, test_name):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         
         if result.returncode == 0:
+            print(f"  CWND plot saved to: {plot_file}")
             return
         else:
             print(f"    Plot generation failed")
@@ -84,12 +85,51 @@ def generate_plot(log_file, output_dir, test_name):
         print(f"    Plot generation error: {e}")
         return
 
+
+def generate_performance_plot(profile_subsyst, output_file_name, output_dir):
+    """Generate cycle and instruction performance plots using plot_cyc_and_inst.py."""
+    try:
+        plot_script = Path(__file__).parent.parent.parent / "analysis" / "plot_cyc_and_inst.py"
+        if not plot_script.exists():
+            print(f"    Performance plot script not found: {plot_script}")
+            return
+        
+        plot_file = output_dir / output_file_name
+        
+        cmd = [
+            sys.executable,  # Use the same Python interpreter
+            str(plot_script),
+            str(output_dir),  # Directory containing .log files
+            str(plot_file),   # Output plot file
+            profile_subsyst  # Profile pattern to search for
+        ]
+        
+        print(f"Generating performance plots...")
+        print(f"  Command: {' '.join(cmd)}")
+        
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        
+        if result.returncode == 0:
+            print(f"  Performance plots saved to: {plot_file}")
+            return
+        else:
+            print(f"    Performance plot generation failed:")
+            print(f"    stdout: {result.stdout}")
+            print(f"    stderr: {result.stderr}")
+            return
+            
+    except Exception as e:
+        print(f"    Performance plot generation error: {e}")
+        return
+
 def main():
     parser = argparse.ArgumentParser(description="HTSIM Batch Simulation Runner")
     parser.add_argument('--conf', required=True, help='JSON config file')
     parser.add_argument('--out', required=True, help='Output directory')
     parser.add_argument('--plot', action='store_true', 
                        help='Generate CWND plots for successful runs')
+    parser.add_argument('--profile', action='store_true',
+                       help='Generate cycle and instruction performance plots')
     
     args = parser.parse_args()
     
@@ -122,6 +162,7 @@ def main():
     print(f"Baseline algorithms: {len(baseline_algorithms)}")
     print(f"PCM algorithms: {len(pcm_algorithms)}")
     print(f"Generate plots: {args.plot}")
+    print(f"Generate performance plots: {args.profile}")
     print()
     
     for input_file in input_files:
@@ -186,6 +227,11 @@ def main():
         json.dump(summary, f, indent=2)
         f.write('\n')  # Add trailing newline
     
+    # Generate performance plots if requested
+    if args.profile:
+        print()
+        generate_performance_plot("TRIGGER CYCLE", "trigger_cycle_perf.pdf", output_dir)
+  
     print()  # Final newline for clean terminal output
     return 0 if failed == 0 else 1
 

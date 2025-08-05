@@ -7,7 +7,7 @@ int algorithm_main() {
     pcm_uint trigger_mask = get_signal_trigger_mask();
     if (trigger_mask & SIG_NUM_NACK) {
         pcm_uint cur_cwnd =
-            MAX(MSS, get_control(CTRL_CWND_BYTES) - get_signal(SIG_NUM_NACKED_BYTES));
+            MAX((pcm_uint)MSS, get_control(CTRL_CWND_BYTES) - get_signal(SIG_NUM_NACKED_BYTES));
         set_control(CTRL_CWND_BYTES, cur_cwnd);
         // printf("DCTCP: newly_nacked_bytes=%llu\n", get_signal(SIG_NUM_NACKED_BYTES),
         // get_signal(SIG_NUM_NACK) * MSS);
@@ -21,7 +21,7 @@ int algorithm_main() {
         // get_signal(SIG_NUM_ECN));
         if (!get_signal(SIG_NUM_ECN)) {
             cur_cwnd += newly_acked_bytes * MSS / cur_cwnd;
-            cur_cwnd = MAX(MSS, cur_cwnd);
+            cur_cwnd = MAX((pcm_uint)MSS, cur_cwnd);
         } else {
             cur_cwnd -= newly_acked_bytes / 3;
             update_signal(SIG_NUM_ECN, -get_signal(SIG_NUM_ECN));

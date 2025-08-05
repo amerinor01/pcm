@@ -79,7 +79,7 @@ static PCM_FORCE_INLINE void nscc_multiplicative_decrease(ALGO_CTX_ARGS, pcm_uin
                 1.0 - MD_GAMMA * (pcm_float)(nscc_get_avg_q_delay(ALGO_CTX_PASS) - TARGET_Q_DELAY) /
                           (pcm_float)nscc_get_avg_q_delay(ALGO_CTX_PASS),
                 0.5);
-            *cur_cwnd = MAX((pcm_uint)(*cur_cwnd * decrease_factor), MSS);
+            *cur_cwnd = MAX((pcm_uint)(*cur_cwnd * decrease_factor), (pcm_uint)MSS);
             set_var_uint(VAR_T_MD_LAST, get_signal(SIG_ELAPSED_TIME));
         }
     }
@@ -133,7 +133,7 @@ static PCM_FORCE_INLINE bool nscc_quick_adapt(ALGO_CTX_ARGS, pcm_uint q_delay, b
             set_var_uint(VAR_QA_TRIGGER, 0);
             set_var_uint(VAR_QA_BYTES_TO_IGNORE, get_signal(SIG_IN_FLIGHT_BYTES));
             set_var_uint(VAR_QA_BYTES_IGNORED, 0);
-            *cur_cwnd = (pcm_uint)(MAX(get_var_uint(VAR_QA_ACKED_BYTES), MSS));
+            *cur_cwnd = (pcm_uint)(MAX(get_var_uint(VAR_QA_ACKED_BYTES), (pcm_uint)MSS));
             qa_done_or_ignore = true;
         }
         set_var_uint(VAR_QA_ACKED_BYTES, 0);

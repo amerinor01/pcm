@@ -18,7 +18,7 @@ static PCM_FORCE_INLINE bool smartt_quick_adapt(ALGO_CTX_ARGS, pcm_uint t_now, p
             adapted = true;
             set_var_uint(VAR_BYTES_TO_IGNORE,
                          *cur_cwnd); // TODO: use inflight bytes
-            *cur_cwnd = (pcm_uint)(MAX(get_var_uint(VAR_ACKED_BYTES) * QA_SCALING, MSS));
+            *cur_cwnd = (pcm_uint)(MAX(get_var_uint(VAR_ACKED_BYTES) * QA_SCALING, (pcm_uint)MSS));
             set_var_uint(VAR_BYTES_IGNORED, 0);
         }
         set_var_uint(VAR_ACKED_BYTES, 0);
@@ -99,9 +99,6 @@ int algorithm_main() {
     pcm_uint t_now = get_signal(SIG_ELAPSED_TIME);
     pcm_uint cur_cwnd = get_control(CTRL_CWND_BYTES);
 
-    printf("SMaRTT: start: num_nacks=%llu num_rtos=%llu num_acks=%llu, cwnd=%llu rtt_sample=%llu\n", get_signal(SIG_NUM_NACK),
-           get_signal(SIG_NUM_RTO), get_signal(SIG_NUM_ACK), cur_cwnd, rtt_sample);
-
     if (get_signal(SIG_NUM_NACK) > 0) {
         smartt_handle_loss_signal(ALGO_CTX_PASS, t_now, &cur_cwnd);
         update_signal(SIG_NUM_NACK, -1);
@@ -124,8 +121,6 @@ int algorithm_main() {
     }
 
 save_state:
-    printf("SMaRTT: end: num_nacks=%llu num_rtos=%llu num_acks=%llu, cwnd=%llu rtt_sample=%llu\n", get_signal(SIG_NUM_NACK),
-           get_signal(SIG_NUM_RTO), get_signal(SIG_NUM_ACK), cur_cwnd, rtt_sample);
     set_control(CTRL_CWND_BYTES, cur_cwnd);
 
     return PCM_SUCCESS;
