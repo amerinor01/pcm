@@ -51,10 +51,10 @@ def main():
                        help='Enable HTSIM flow plugin')
     parser.add_argument('--htsim-dir', metavar='DIR',
                        help='Set HTSIM build directory')
+    parser.add_argument('--hac-ir', action='store_true',
+                       help='Enable HAC LLVM IR generation')
     parser.add_argument('--profiling', action='store_true',
                        help='Enable profiling support')
-    parser.add_argument('--hac', action='store_true',
-                       help='Enable HAC optimizations')
     parser.add_argument('--clean', action='store_true',
                        help='Clean build directory first')
     parser.add_argument('--install', action='store_true',
@@ -79,8 +79,8 @@ def main():
         build_type = "Release"
         
     build_htsim = "ON" if args.htsim else "OFF"
+    build_hac_ir = "ON" if args.hac_ir else "OFF"
     enable_profiling = "ON" if args.profiling else "OFF"
-    build_hac = "ON" if args.hac else "OFF"
     jobs = args.jobs if args.jobs else get_cpu_count()
     
     # Paths
@@ -90,8 +90,8 @@ def main():
     print("=== PCM CMake Build ===")
     print(f"Build type: {build_type}")
     print(f"HTSIM plugin: {build_htsim}")
+    print(f"HAC IR generation: {build_hac_ir}")
     print(f"Profiling: {enable_profiling}")
-    print(f"HAC pass: {build_hac}")
     print(f"Clean build: {args.clean}")
     print(f"Jobs: {jobs}")
     print(f"Project root: {project_root}")
@@ -111,8 +111,8 @@ def main():
         "cmake",
         f"-DCMAKE_BUILD_TYPE={build_type}",
         f"-DBUILD_HTSIM_PLUGIN={build_htsim}",
+        f"-DBUILD_HAC_IR={build_hac_ir}",
         f"-DENABLE_PROFILING={enable_profiling}",
-        f"-DBUILD_HAC_PASS={build_hac}",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
         str(project_root)
     ]
@@ -146,25 +146,10 @@ def main():
     print(f"Binaries: {build_dir / 'bin'}")
     print(f"Libraries: {build_dir / 'lib'}")
     
-    # Show available targets
-    print()
-    print("Available executables:")
-    if args.htsim:
-        print("  - htsim_flow_app")
-    print("  - traffic_gen_app")
-    
-    print()
-    print("Available libraries:")
-    print("  - libpcm.so (core PCM library)")
-    print("  - Algorithm plugins: newreno, dctcp, swift, dcqcn, smartt")
-    
     # Show what to do next
     print()
     print("To test the build:")
     print(f"  cd {build_dir}")
-    print("  ./bin/traffic_gen_app --help")
-    if args.htsim:
-        print("  ./bin/htsim_flow_app --help")
     
     return 0
 

@@ -23,8 +23,8 @@ function(create_algo_plugin ALGO_NAME)
     # Custom command to generate header and PCMC files
     add_custom_command(
         OUTPUT ${HEADER_FILE} ${PCMC_FILE}
-        COMMAND python3 ${CMAKE_CURRENT_SOURCE_DIR}/../yaml/pcmc_yaml2src.py 
-                -o ${CMAKE_BINARY_DIR}/algorithms -f ${YAML_FILE} -c ${FABRIC_FILE}
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../hac/hac --codegen
+                --output ${CMAKE_BINARY_DIR}/algorithms --algoconf ${YAML_FILE} --fabricconf ${FABRIC_FILE}
         DEPENDS ${YAML_FILE} ${FABRIC_FILE}
         COMMENT "Generating ${ALGO_NAME} algorithm header and PCMC source"
     )

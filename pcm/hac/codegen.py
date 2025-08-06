@@ -1,13 +1,4 @@
-#!/usr/bin/env python3
-"""
- PCMC Code Generator
-
-Generates algorithm-specific PCMC and header files from
-a YAML configuration file and a fabric constants YAML.
-"""
-
 import yaml
-import argparse
 import os
 import math
 from typing import List, Dict, Any
@@ -28,8 +19,8 @@ CalcLoader.add_constructor("!eval", construct_calc)
 
 class AlgorithmCodeGenerator:
 
-    def __init__(self, constants_file: str, config_file: str):
-        with open(constants_file, "r") as f:
+    def __init__(self, fabric_constants_file: str, config_file: str):
+        with open(fabric_constants_file, "r") as f:
             self.fabric_constants: Dict[str, Any] = yaml.safe_load(f)
 
         # Load algorithm config, allowing !calc tags
@@ -227,33 +218,3 @@ class AlgorithmCodeGenerator:
             lines.append(decl)
 
         return "\n".join(lines)
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate <algo_name>_.h and <algo_name>_pcmc.c files from algorithm YAML config"
-    )
-    parser.add_argument(
-        "-c", "--constants", required=True, help="path to fabric.yaml file"
-    )
-    parser.add_argument(
-        "-f",
-        "--config",
-        required=True,
-        help="path to algorithm configuration <algo_name>.yaml file",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        default=".",
-        help="path to output directory",
-    )
-
-    args = parser.parse_args()
-
-    generator = AlgorithmCodeGenerator(args.constants, args.config)
-    generator.run(args.output)
-
-
-if __name__ == "__main__":
-    main()
