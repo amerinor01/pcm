@@ -14,8 +14,8 @@ extern "C" {
 #include <stdint.h>
 
 #include "pcm.h"
-#include "pcmh.h"
 #include "pcm_network.h"
+#include "pcmh.h"
 #include "slist.h"
 
 struct generic_metadata {
@@ -55,8 +55,8 @@ struct var_attr {
     struct generic_metadata metadata;
 };
 
-typedef int (*algo_function_t)(ALGO_CTX_ARGS);
-typedef int (*pcmc_init_function_t)(pcm_handle_t);
+typedef pcm_err_t (*algo_function_t)(ALGO_CTX_ARGS);
+typedef pcm_err_t (*pcmc_init_function_t)(pcm_handle_t);
 #define PCMC_MAX_INIT_FN_NAME 256
 #define PCMC_MAX_LIB_NAME 256
 #define PCMC_MAX_LEN_ALGO_NAME (PCMC_MAX_INIT_FN_NAME / 2)
@@ -78,8 +78,8 @@ struct algorithm_config {
 
 struct flow_plugin_ops {
     struct control_ops {
-        int (*create)(pcm_flow_t, traffic_gen_fn_t);
-        int (*destroy)(pcm_flow_t);
+        pcm_err_t (*create)(pcm_flow_t, traffic_gen_fn_t);
+        pcm_err_t (*destroy)(pcm_flow_t);
         bool (*is_ready)(const pcm_flow_t);
         pcm_uint (*time_get)(const pcm_flow_t);
     } control;
@@ -111,13 +111,13 @@ STATIC_ASSERT(0, "Plugin system requires GCC or Clang compiler for "
 struct flow_plugin_registry_entry {
     struct slist_entry list_entry;
     char *name;
-    int (*init_fn)(struct flow_plugin_ops *);
+    pcm_err_t (*init_fn)(struct flow_plugin_ops *);
 };
 
-int flow_plugin_register(const char *name,
-                         int (*init_fn)(struct flow_plugin_ops *));
-int flow_plugin_ops_get(const char *name, struct flow_plugin_ops *ops);
-int flow_plugin_deregister(const char *name);
+pcm_err_t flow_plugin_register(const char *name,
+                               pcm_err_t (*init_fn)(struct flow_plugin_ops *));
+pcm_err_t flow_plugin_ops_get(const char *name, struct flow_plugin_ops *ops);
+pcm_err_t flow_plugin_deregister(const char *name);
 void flow_plugin_cleanup(void);
 
 struct flow {
@@ -139,7 +139,7 @@ struct scheduler {
             pthread_mutex_t flow_list_lock;
             pthread_t pthread_obj;
             atomic_bool running;
-            int err;
+            pcm_err_t err;
         } thread;
         struct slist_entry *cur_flow;
     } progress;
@@ -152,34 +152,38 @@ struct device {
     struct scheduler scheduler;
 };
 
-int algorithm_config_alloc(pcm_device_t device,
-                           struct algorithm_config **config);
-int algorithm_config_destroy(struct algorithm_config *config);
-int algorithm_config_matching_rule_add(struct algorithm_config *config,
-                                       pcm_addr_mask_t matching_rule_mask);
-int algorithm_config_activate(struct algorithm_config *config);
-int algorithm_config_deactivate(struct algorithm_config *config);
-int algorithm_config_signal_add(struct algorithm_config *config,
-                                pcm_signal_t signal,
-                                pcm_signal_accum_t accum_type, size_t idx);
-int algorithm_config_signal_trigger_set(struct algorithm_config *config,
-                                        size_t idx, pcm_uint threshold);
-int algorithm_config_control_add(struct algorithm_config *config,
-                                 pcm_control_t control, size_t idx);
-int algorithm_config_control_initial_value_set(struct algorithm_config *config,
-                                               size_t idx,
-                                               pcm_uint initial_value);
-int algorithm_config_var_add(struct algorithm_config *config, size_t idx);
-int algorithm_config_var_int_set(struct algorithm_config *config, size_t idx,
-                                 pcm_int initial_value);
-int algorithm_config_var_uint_set(struct algorithm_config *config, size_t idx,
-                                  pcm_uint initial_value);
-int algorithm_config_var_float_set(struct algorithm_config *config, size_t idx,
-                                   pcm_float initial_value);
-int algorithm_config_compile(struct algorithm_config *config,
-                             const char *algo_name);
-int device_scheduler_flow_add(struct scheduler *scheduler, pcm_flow_t flow);
-int device_scheduler_flow_remove(struct scheduler *scheduler, pcm_flow_t flow);
+pcm_err_t algorithm_config_alloc(pcm_device_t device,
+                                 struct algorithm_config **config);
+pcm_err_t algorithm_config_destroy(struct algorithm_config *config);
+pcm_err_t
+algorithm_config_matching_rule_add(struct algorithm_config *config,
+                                   pcm_addr_mask_t matching_rule_mask);
+pcm_err_t algorithm_config_activate(struct algorithm_config *config);
+pcm_err_t algorithm_config_deactivate(struct algorithm_config *config);
+pcm_err_t algorithm_config_signal_add(struct algorithm_config *config,
+                                      pcm_signal_t signal,
+                                      pcm_signal_accum_t accum_type,
+                                      size_t idx);
+pcm_err_t algorithm_config_signal_trigger_set(struct algorithm_config *config,
+                                              size_t idx, pcm_uint threshold);
+pcm_err_t algorithm_config_control_add(struct algorithm_config *config,
+                                       pcm_control_t control, size_t idx);
+pcm_err_t
+algorithm_config_control_initial_value_set(struct algorithm_config *config,
+                                           size_t idx, pcm_uint initial_value);
+pcm_err_t algorithm_config_var_add(struct algorithm_config *config, size_t idx);
+pcm_err_t algorithm_config_var_int_set(struct algorithm_config *config,
+                                       size_t idx, pcm_int initial_value);
+pcm_err_t algorithm_config_var_uint_set(struct algorithm_config *config,
+                                        size_t idx, pcm_uint initial_value);
+pcm_err_t algorithm_config_var_float_set(struct algorithm_config *config,
+                                         size_t idx, pcm_float initial_value);
+pcm_err_t algorithm_config_compile(struct algorithm_config *config,
+                                   const char *algo_name);
+pcm_err_t device_scheduler_flow_add(struct scheduler *scheduler,
+                                    pcm_flow_t flow);
+pcm_err_t device_scheduler_flow_remove(struct scheduler *scheduler,
+                                       pcm_flow_t flow);
 const struct algorithm_config *
 device_flow_id_to_config_match(const pcm_device_t device, pcm_addr_t id);
 void flow_cwnd_set(const pcm_flow_t flow, pcm_uint cwnd);

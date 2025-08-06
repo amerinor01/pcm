@@ -8,8 +8,8 @@ bool pthrd_flow_is_ready(const pcm_flow_t flow) {
     return flow_ctx->running;
 }
 
-int pthrd_flow_destroy(pcm_flow_t flow) {
-    int ret = PCM_SUCCESS;
+pcm_err_t pthrd_flow_destroy(pcm_flow_t flow) {
+    pcm_err_t ret = PCM_SUCCESS;
     struct pthrd_flow *flow_ctx = (struct pthrd_flow *)(flow->backend_ctx);
 
     flow_ctx->running = false;
@@ -24,7 +24,7 @@ int pthrd_flow_destroy(pcm_flow_t flow) {
     return ret;
 }
 
-int pthrd_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
+pcm_err_t pthrd_flow_create(pcm_flow_t flow, traffic_gen_fn_t traffic_gen_fn) {
     flow->backend_ctx = calloc(1, sizeof(struct pthrd_flow));
     if (!flow->backend_ctx) {
         PCM_LOG_CRIT("failed to allocate new pthread flow context");
@@ -131,7 +131,7 @@ struct flow_plugin_ops pthrd_flow_ops = {
     .datapath.snapshot_apply = pthrd_snapshot_apply,
 };
 
-int pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {
+pcm_err_t pthrd_flow_ops_init(struct flow_plugin_ops *flow_ops) {
     *flow_ops = pthrd_flow_ops;
     return PCM_SUCCESS;
 }

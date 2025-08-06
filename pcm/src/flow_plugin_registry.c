@@ -9,8 +9,8 @@
 // Global plugin registry
 static struct slist plugin_registry = {NULL, NULL};
 
-int flow_plugin_register(const char *name,
-                         int (*init_fn)(struct flow_plugin_ops *)) {
+pcm_err_t flow_plugin_register(const char *name,
+                               pcm_err_t (*init_fn)(struct flow_plugin_ops *)) {
     if (!name || !init_fn) {
         PCM_LOG_CRIT("Invalid plugin registration parameters");
         return PCM_ERROR;
@@ -43,7 +43,7 @@ int flow_plugin_register(const char *name,
     return PCM_SUCCESS;
 }
 
-int flow_plugin_ops_get(const char *name, struct flow_plugin_ops *ops) {
+pcm_err_t flow_plugin_ops_get(const char *name, struct flow_plugin_ops *ops) {
     if (!name || !ops) {
         PCM_LOG_CRIT("Invalid plugin lookup parameters");
         return PCM_ERROR;
@@ -63,7 +63,7 @@ int flow_plugin_ops_get(const char *name, struct flow_plugin_ops *ops) {
     return PCM_ERROR;
 }
 
-int flow_plugin_deregister(const char *name) {
+pcm_err_t flow_plugin_deregister(const char *name) {
     if (!name) {
         PCM_LOG_CRIT("Invalid plugin deregistration parameters");
         return PCM_ERROR;

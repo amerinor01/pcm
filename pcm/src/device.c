@@ -4,12 +4,12 @@
 #include "pthread_flow.h"
 #include "util.h"
 
-int device_scheduler_init(struct scheduler *scheduler,
-                          bool needs_progress_thread);
-int device_scheduler_destroy(struct scheduler *scheduler);
+pcm_err_t device_scheduler_init(struct scheduler *scheduler,
+                                bool needs_progress_thread);
+pcm_err_t device_scheduler_destroy(struct scheduler *scheduler);
 static void *device_scheduler_thread_fn(void *arg);
 
-int device_init(const char *flow_plugin_name, pcm_device_t *out) {
+pcm_err_t device_init(const char *flow_plugin_name, pcm_device_t *out) {
     pcm_device_t device = calloc(1, sizeof(*device));
     if (!device) {
         PCM_LOG_CRIT("failed to allocate new device");
@@ -50,8 +50,8 @@ err:
     return PCM_ERROR;
 }
 
-int device_destroy(pcm_device_t device) {
-    int ret = PCM_SUCCESS;
+pcm_err_t device_destroy(pcm_device_t device) {
+    pcm_err_t ret = PCM_SUCCESS;
 
     ret = device_scheduler_destroy(&device->scheduler);
     if (ret != PCM_SUCCESS)
@@ -72,8 +72,8 @@ int device_destroy(pcm_device_t device) {
     return ret;
 }
 
-int device_pcmc_init(pcm_device_t dev_ctx, const char *algo_name,
-                     pcm_handle_t *algo_handler) {
+pcm_err_t device_pcmc_init(pcm_device_t dev_ctx, const char *algo_name,
+                           pcm_handle_t *algo_handler) {
     pcm_handle_t new_handle;
     if (register_pcmc((void *)dev_ctx, 0, 0, 0, 0, &new_handle) != PCM_SUCCESS)
         return PCM_ERROR;
@@ -93,7 +93,7 @@ int device_pcmc_init(pcm_device_t dev_ctx, const char *algo_name,
     return PCM_SUCCESS;
 }
 
-int device_pcmc_destroy(pcm_handle_t algo_handler) {
+pcm_err_t device_pcmc_destroy(pcm_handle_t algo_handler) {
     if (deactivate_pcmc(algo_handler) != PCM_SUCCESS)
         return PCM_ERROR;
 
@@ -125,8 +125,8 @@ device_flow_id_to_config_match(const pcm_device_t device, pcm_addr_t addr) {
     return NULL;
 }
 
-int device_scheduler_init(struct scheduler *scheduler,
-                          bool needs_progress_thread) {
+pcm_err_t device_scheduler_init(struct scheduler *scheduler,
+                                bool needs_progress_thread) {
     slist_init(&scheduler->flow_list);
 
     scheduler->progress_auto = needs_progress_thread;
@@ -155,8 +155,8 @@ err:
     return PCM_ERROR;
 }
 
-int device_scheduler_destroy(struct scheduler *scheduler) {
-    int ret = PCM_SUCCESS;
+pcm_err_t device_scheduler_destroy(struct scheduler *scheduler) {
+    pcm_err_t ret = PCM_SUCCESS;
 
     if (scheduler->progress_auto) {
         if (!scheduler->progress.thread.running)
@@ -176,7 +176,8 @@ int device_scheduler_destroy(struct scheduler *scheduler) {
     return ret;
 }
 
-int device_scheduler_flow_add(struct scheduler *scheduler, pcm_flow_t flow) {
+pcm_err_t device_scheduler_flow_add(struct scheduler *scheduler,
+                                    pcm_flow_t flow) {
     if (scheduler->progress_auto &&
         pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
         return PCM_ERROR;
@@ -190,7 +191,8 @@ int device_scheduler_flow_add(struct scheduler *scheduler, pcm_flow_t flow) {
     return PCM_SUCCESS;
 }
 
-int device_scheduler_flow_remove(struct scheduler *scheduler, pcm_flow_t flow) {
+pcm_err_t device_scheduler_flow_remove(struct scheduler *scheduler,
+                                       pcm_flow_t flow) {
     if (scheduler->progress_auto &&
         pthread_mutex_lock(&scheduler->progress.thread.flow_list_lock))
         return PCM_ERROR;

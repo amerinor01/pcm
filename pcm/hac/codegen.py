@@ -114,7 +114,7 @@ class AlgorithmCodeGenerator:
     def _generate_pcmc(self) -> str:
         lines: List[str] = []
         lines.append('#include "pcm_log.h"')
-        lines.append('#include "pcm.h"')
+        lines.append('#include "pcmc.h"')
         lines.append(f'#include "{self.algorithm_name}.h"')
         lines.append("")
         lines.append(f"int __{self.algorithm_name}_pcmc_init(pcm_handle_t new_handle)")

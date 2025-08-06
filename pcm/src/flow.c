@@ -126,7 +126,7 @@ bool flow_handler_invoke_on_trigger(pcm_flow_t flow) {
     PCM_PERF_PROF_REGION_START(trigger_cycle);
     if ((invoke = flow_triggers_check(flow))) {
         flow_datapath_snapshot_prepare(flow);
-        flow->config->algorithm_fn((void *)&flow->datapath_snapshot);
+        flow->config->algorithm_fn(&flow->datapath_snapshot);
         flow_datapath_snapshot_apply(flow);
         flow_triggers_arm(flow);
         PCM_LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
@@ -136,8 +136,8 @@ bool flow_handler_invoke_on_trigger(pcm_flow_t flow) {
     return invoke;
 }
 
-int flow_destroy(pcm_flow_t flow) {
-    int ret = PCM_SUCCESS;
+pcm_err_t flow_destroy(pcm_flow_t flow) {
+    pcm_err_t ret = PCM_SUCCESS;
 
     if (device_scheduler_flow_remove(&flow->config->device->scheduler, flow)) {
         PCM_LOG_CRIT("[flow=%p addr=%u] failed to remove flow from scheduler",
@@ -159,8 +159,8 @@ int flow_destroy(pcm_flow_t flow) {
     return ret;
 }
 
-int flow_create(pcm_device_t device, pcm_flow_t *flow,
-                traffic_gen_fn_t traffic_gen_fn) {
+pcm_err_t flow_create(pcm_device_t device, pcm_flow_t *flow,
+                      traffic_gen_fn_t traffic_gen_fn) {
     if (!device)
         return PCM_ERROR;
 

@@ -69,7 +69,7 @@ void Device::doNextEvent() {
     for (auto &it : _flow_to_src_mapping) {
         auto pcm_src = static_cast<pcm::Src *>(it.second);
         auto cwnd = pcm_src->datapathCwndGet();
-        __flow_control_set(it.first, 0, cwnd);
+        //flow_cwnd_set(it.first, cwnd);
     }
 
     pcm_flow_t triggered_flow;

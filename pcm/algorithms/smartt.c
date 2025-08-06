@@ -59,7 +59,7 @@ static PCM_FORCE_INLINE bool smartt_fast_increase(ALGO_CTX_ARGS, pcm_uint num_ec
     return get_var_uint(VAR_FAST_ACTIVE);
 }
 
-static PCM_FORCE_INLINE void smartt_core_cases(ALGO_CTX_ARGS, pcm_uint num_ecns, pcm_uint rtt_sample, pcm_uint *cur_cwnd) {
+static PCM_FORCE_INLINE void smartt_core_cases(pcm_uint num_ecns, pcm_uint rtt_sample, pcm_uint *cur_cwnd) {
     if (!num_ecns && rtt_sample < TRTT) {
         /* Fair Increase */
         // Case 1 RTT Based Increase
@@ -90,7 +90,7 @@ static PCM_FORCE_INLINE void smartt_handle_ack(ALGO_CTX_ARGS, pcm_uint num_ecns,
                      get_var_uint(VAR_BYTES_IGNORED) + MSS); // TODO: += last_pkt_size
     } else if (!smartt_quick_adapt(ALGO_CTX_PASS, t_now, cur_cwnd) ||
                !smartt_fast_increase(ALGO_CTX_PASS, num_ecns, rtt_sample, cur_cwnd)) {
-        smartt_core_cases(ALGO_CTX_PASS, num_ecns, rtt_sample, cur_cwnd);
+        smartt_core_cases(num_ecns, rtt_sample, cur_cwnd);
     }
 }
 

@@ -19,6 +19,6 @@ struct htsim_flow {
     uint64_t start_ts;
 };
 
-int htsim_flow_ops_init(struct flow_plugin_ops *flow_ops);
+pcm_err_t htsim_flow_ops_init(struct flow_plugin_ops *flow_ops);
 
 #endif /* _PTHREAD_FLOW_H_ */

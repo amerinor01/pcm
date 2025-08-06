@@ -5,7 +5,7 @@
 #include "algo_utils.h"
 #include "swift.h"
 
-static PCM_FORCE_INLINE pcm_float swift_target_delay(ALGO_CTX_ARGS, pcm_uint cur_cwnd) {
+static PCM_FORCE_INLINE pcm_float swift_target_delay(pcm_uint cur_cwnd) {
     pcm_uint fs_delay = FS_ALPHA / sqrtf((pcm_float)cur_cwnd / MSS) + FS_BETA;
 
     if (fs_delay > FS_RANGE)
@@ -25,7 +25,7 @@ static PCM_FORCE_INLINE void swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks
                                                 pcm_uint *cur_cwnd) {
     set_var_uint(VAR_RETX_CNT, 0);
     //set_var_uint(VAR_ACKED, get_var(VAR_ACKED) + num_acks * MSS);
-    pcm_float target_delay = swift_target_delay(ALGO_CTX_PASS, *cur_cwnd);
+    pcm_float target_delay = swift_target_delay(*cur_cwnd);
 
     if (rtt_sample < target_delay) {
         /* Additive Increase */
