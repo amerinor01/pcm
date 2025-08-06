@@ -20,7 +20,15 @@ pcm_uint flow_cwnd_get(const pcm_flow_t flow) {
     ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(&flow->config->controls_list,
                                             struct control_attr, PCM_CTRL_CWND,
                                             cwnd_idx);
-    return flow->device->flow_ops.handler.control_get(flow, cwnd_idx);
+    return flow->device->flow_ops.datapath.control_get(flow, cwnd_idx);
+}
+
+void flow_cwnd_set(const pcm_flow_t flow, pcm_uint cwnd) {
+    size_t cwnd_idx;
+    ATTR_LIST_FIRST_MATCH_BY_ATTR_TYPE_FIND(&flow->config->controls_list,
+                                            struct control_attr, PCM_CTRL_CWND,
+                                            cwnd_idx);
+    return flow->device->flow_ops.datapath.control_set(flow, cwnd_idx, cwnd);
 }
 
 pcm_uint flow_time_get(const pcm_flow_t flow) {
@@ -29,6 +37,14 @@ pcm_uint flow_time_get(const pcm_flow_t flow) {
 
 bool flow_is_ready(const pcm_flow_t flow) {
     return flow->device->flow_ops.control.is_ready(flow);
+}
+
+static void flow_datapath_snapshot_prepare(pcm_flow_t flow) {
+    flow->device->flow_ops.datapath.snapshot_prepare(flow);
+}
+
+static void flow_datapath_snapshot_apply(pcm_flow_t flow) {
+    flow->device->flow_ops.datapath.snapshot_apply(flow);
 }
 
 void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type,
@@ -40,43 +56,47 @@ void flow_signals_update(pcm_flow_t flow, pcm_signal_t signal_type,
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->type == signal_type &&
             attr->accumulation_op_fn != flow_signal_accumulation_no_op) {
-            LOG_DBG("[flow=%p, addr=%u] update signal_type=%s, "
-                    "accum_type=%s, index=%zu, update_val=%d",
-                    flow, flow->addr, signal_type_to_string(signal_type),
-                    signal_accum_type_to_string(attr->accum_type),
-                    attr->metadata.index, value);
+            PCM_LOG_DBG("[flow=%p, addr=%u] update signal_type=%s, "
+                        "accum_type=%s, idx=%zu, update_val=%d",
+                        flow, flow->addr, signal_type_to_string(signal_type),
+                        signal_accum_type_to_string(attr->accum_type),
+                        UTIL_MASK_TO_ARR_IDX(attr->metadata.idx), value);
             attr->accumulation_op_fn(flow, attr, value);
         }
     }
 }
 
-bool flow_triggers_check(pcm_flow_t flow) {
+static bool flow_triggers_check(pcm_flow_t flow) {
     const struct algorithm_config *config = flow->config;
-
-    for (size_t idx = 0; idx < config->num_signals; idx++) {
-        bool trigger = false;
-        struct signal_attr *attr = container_of(
-            flow->cur_trigger, struct signal_attr, metadata.list_entry);
+    // mask should be fresh from previous invocation, otherwise handler
+    // invocation teardown logic is broken!
+    if (flow->datapath_snapshot.trigger_mask)
+        PCM_LOG_FATAL(
+            "[flow=%p, addr=%u] datapath_snapshot.trigger_mask is not empty!",
+            flow, flow->addr);
+    bool trigger = false;
+    struct slist_entry *item, *prev;
+    slist_foreach(&config->signals_list, item, prev) {
+        (void)prev;
+        struct signal_attr *attr =
+            container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger && attr->trigger_check_fn(flow, attr)) {
-            flow->trigger_user_index = attr->metadata.index;
-            LOG_DBG("[flow=%p, addr=%u] trigger signal_type=%s, "
-                    "accum_type=%s, index=%zu",
-                    flow, flow->addr, signal_type_to_string(attr->type),
-                    signal_accum_type_to_string(attr->accum_type),
-                    attr->metadata.index);
-            trigger = true;
-        }
-
-        if (flow->cur_trigger == config->signals_list.tail)
-            flow->cur_trigger = config->signals_list.head;
-        else
-            flow->cur_trigger = flow->cur_trigger->next;
-
-        if (trigger) {
-            return trigger;
+            flow->datapath_snapshot.trigger_mask |= attr->metadata.idx;
+            PCM_LOG_DBG("[flow=%p, addr=%u] trigger signal_type=%s, "
+                        "accum_type=%s, idx=%zu",
+                        flow, flow->addr, signal_type_to_string(attr->type),
+                        signal_accum_type_to_string(attr->accum_type),
+                        UTIL_MASK_TO_ARR_IDX(attr->metadata.idx));
+            if (!trigger) {
+                trigger = true;
+            }
+        } else if (attr->type == PCM_SIG_ELAPSED_TIME &&
+                   attr->accumulation_op_fn != flow_signal_accumulation_no_op) {
+            attr->accumulation_op_fn(flow, attr, 0); // progress time
         }
     }
-
+    if (trigger)
+        return trigger;
     return false;
 }
 
@@ -89,50 +109,50 @@ void flow_triggers_arm(pcm_flow_t flow) {
             container_of(item, struct signal_attr, metadata.list_entry);
         if (attr->is_trigger &&
             attr->trigger_arm_fn != flow_signal_trigger_arm_no_op) {
-            LOG_DBG("[flow=%p, addr=%u] rearm signal_type=%s, "
-                    "accum_type=%s, index=%zu",
-                    flow, flow->addr, signal_type_to_string(attr->type),
-                    signal_accum_type_to_string(attr->accum_type),
-                    attr->metadata.index);
+            PCM_LOG_DBG("[flow=%p, addr=%u] rearm signal_type=%s, "
+                        "accum_type=%s, idx=%zu",
+                        flow, flow->addr, signal_type_to_string(attr->type),
+                        signal_accum_type_to_string(attr->accum_type),
+                        UTIL_MASK_TO_ARR_IDX(attr->metadata.idx));
             attr->trigger_arm_fn(flow, attr);
         }
     }
+    flow->datapath_snapshot.trigger_mask = 0;
 }
 
 bool flow_handler_invoke_on_trigger(pcm_flow_t flow) {
-    PERF_PROF_REGION_SCOPE_INIT();
-    PERF_PROF_REGION_START();
-    bool handler_invoked = false;
-    if (flow_triggers_check(flow)) {
-        flow_signals_update(flow, PCM_SIG_ELAPSED_TIME, 0);
-        flow->config->algorithm_fn((void *)flow, flow->signals,
-                                   flow->thresholds, flow->controls,
-                                   flow->vars);
-        LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
-                flow_time_get(flow), flow_cwnd_get(flow));
+    PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
+    bool invoke;
+    PCM_PERF_PROF_REGION_START(trigger_cycle);
+    if ((invoke = flow_triggers_check(flow))) {
+        flow_datapath_snapshot_prepare(flow);
+        flow->config->algorithm_fn((void *)&flow->datapath_snapshot);
+        flow_datapath_snapshot_apply(flow);
         flow_triggers_arm(flow);
-        handler_invoked = true;
+        PCM_LOG_DBG("[flow=%p addr=%u] time=%d cwnd=%d", flow, flow->addr,
+                    flow_time_get(flow), flow_cwnd_get(flow));
     }
-    PERF_PROF_REGION_END(handler_invoked, "HANDLER PERFORMANCE");
-    return handler_invoked;
+    PCM_PERF_PROF_REGION_END(trigger_cycle, invoke);
+    return invoke;
 }
 
 int flow_destroy(pcm_flow_t flow) {
     int ret = PCM_SUCCESS;
 
     if (device_scheduler_flow_remove(&flow->config->device->scheduler, flow)) {
-        LOG_CRIT("[flow=%p addr=%u] failed to remove flow from scheduler", flow,
-                 flow->addr);
+        PCM_LOG_CRIT("[flow=%p addr=%u] failed to remove flow from scheduler",
+                     flow, flow->addr);
         ret = PCM_ERROR;
     }
 
     if (flow->device->flow_ops.control.destroy(flow)) {
-        LOG_CRIT("[flow=%p addr=%u] failed to destroy flow backend state", flow,
-                 flow->addr)
+        PCM_LOG_CRIT("[flow=%p addr=%u] failed to destroy flow backend state",
+                     flow, flow->addr)
         ret = PCM_ERROR;
     }
 
-    LOG_INFO("[dev=%p config=%p] flow=%p destroyed", flow->config->device, flow->config, flow);
+    PCM_LOG_INFO("[dev=%p config=%p] flow=%p destroyed", flow->config->device,
+                 flow->config, flow);
 
     free(flow);
 
@@ -144,41 +164,45 @@ int flow_create(pcm_device_t device, pcm_flow_t *flow,
     if (!device)
         return PCM_ERROR;
 
-    pcm_flow_t new_flow = (pcm_flow_t)calloc(
-        1, sizeof(*new_flow) + device->flow_ops.control.max_regfile_size_get());
+    pcm_flow_t new_flow = (pcm_flow_t)calloc(1, sizeof(*new_flow));
     if (!new_flow) {
-        LOG_CRIT("[dev=%p] failed to allocate new flow", device);
+        PCM_LOG_CRIT("[dev=%p] failed to allocate new flow", device);
         return PCM_ERROR;
     }
 
     new_flow->device = device;
     new_flow->addr = device->flow_addr_counter++;
-    LOG_DBG("[dev=%p] allocated new flow=%p, addr=%u", device, new_flow,
-            new_flow->addr);
+    PCM_LOG_DBG("[dev=%p] allocated new flow=%p, addr=%u", device, new_flow,
+                new_flow->addr);
 
     new_flow->config = device_flow_id_to_config_match(device, new_flow->addr);
     if (!new_flow->config) {
-        LOG_CRIT("[dev=%p] failed to match flow addr=%u to algorithm config",
-                 device, new_flow->addr);
+        PCM_LOG_CRIT(
+            "[dev=%p] failed to match flow addr=%u to algorithm config", device,
+            new_flow->addr);
         goto err_free_flow;
     }
 
     if (new_flow->device->flow_ops.control.create(new_flow, traffic_gen_fn)) {
-        LOG_DBG("[dev=%p] failed to initialize backend state for flow addr=%u",
-                device, new_flow->addr);
+        PCM_LOG_DBG(
+            "[dev=%p] failed to initialize backend state for flow addr=%u",
+            device, new_flow->addr);
         goto err_free_flow;
     }
 
-    new_flow->cur_trigger = new_flow->config->signals_list.head;
+    // Variables are local to the handler, so can be stored directly in the
+    // snapshot
+    ATTR_LIST_FLOW_STATE_INIT(&new_flow->config->var_list, struct var_attr,
+                              new_flow->datapath_snapshot.vars, false);
 
     if (device_scheduler_flow_add(&device->scheduler, new_flow)) {
-        LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler", device,
-                new_flow, new_flow->addr);
+        PCM_LOG_DBG("[dev=%p] failed to add flow=%p, addr=%u to scheduler",
+                    device, new_flow, new_flow->addr);
         goto err_destroy_plugin;
     }
 
-    LOG_INFO("[dev=%p config=%p] flow=%p created", device, new_flow->config,
-             new_flow);
+    PCM_LOG_INFO("[dev=%p config=%p] flow=%p created", device, new_flow->config,
+                 new_flow);
 
     *flow = new_flow;
 

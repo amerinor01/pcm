@@ -11,6 +11,7 @@
 // htsim
 #include "config.h"
 #include "eventlist.h"
+#include "uec.h"
 
 // PCM
 #include "impl.h"
@@ -28,6 +29,8 @@ class DeviceException final : public std::runtime_error {
     }
 };
 
+enum class DeviceSchedulerType { SCHEDULER_TYPE_SYNC, SCHEDULER_TYPE_ASYNC };
+
 class Device final : public EventSource {
     // expose time to htsim datapath plugin in PCM
   public:
@@ -38,22 +41,16 @@ class Device final : public EventSource {
 
   public:
     explicit Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picosec handlerDelay,
-                    simtime_picosec pollDelay);
+                    simtime_picosec pollDelay, DeviceSchedulerType schedType);
 
     ~Device();
 
     void doNextEvent() override;
-
-    void stopScheduling() noexcept {
-        _next_sched = 0;
-        eventlist().cancelPendingSource(*this);
-    }
+    static void setEventList(EventList *eventList);
 
     [[nodiscard]] pcm_device_t getImplPtr() const noexcept { return _pcm_device_ptr; }
-
+    [[nodiscard]] DeviceSchedulerType schedulerTypeGet() noexcept { return _sched_type; }
     void registerFlow(pcm_flow_t pcm_flow_handle, pcm::Src *src) { _flow_to_src_mapping[pcm_flow_handle] = src; }
-
-    static void setEventList(EventList *eventList);
 
   private:
     std::string _pcm_algo_name;
@@ -63,12 +60,13 @@ class Device final : public EventSource {
     pcm_handle_t _pcm_algo_handler{};
     simtime_picosec _next_sched;
     std::unordered_map<pcm_flow_t, pcm::Src *> _flow_to_src_mapping;
+    DeviceSchedulerType _sched_type;
 };
 
 class Flow final {
   public:
-    explicit Flow(std::shared_ptr<const Device> device) {
-        if (device.get() and flow_create(device->getImplPtr(), &_pcm_flow_ptr, nullptr) != PCM_SUCCESS) {
+    explicit Flow(const Device &device) {
+        if (flow_create(device.getImplPtr(), &_pcm_flow_ptr, nullptr) != PCM_SUCCESS) {
             throw DeviceException{"Failed to create flow"};
         }
     }
@@ -87,11 +85,25 @@ class Flow final {
 
     [[nodiscard]] pcm_flow_t getImplPtr() const noexcept { return _pcm_flow_ptr; }
     [[nodiscard]] pcm_uint cwndGet() const noexcept { return flow_cwnd_get(_pcm_flow_ptr); }
-    void cwndReset(pcm_uint new_cwnd) noexcept { __flow_control_set(_pcm_flow_ptr, 0, new_cwnd); }
     void signalUpdate(pcm_signal_t sig, pcm_uint val) noexcept { flow_signals_update(_pcm_flow_ptr, sig, val); }
 
   private:
     pcm_flow_t _pcm_flow_ptr{};
+};
+
+class Nic final : public UecNIC {
+    friend pcm::Src;
+
+  public:
+    Nic(id_t src_num, EventList &eventList, linkspeed_bps linkspeed, uint32_t ports, std::string_view pcmAlgoName,
+        simtime_picosec handlerDelay, simtime_picosec pollDelay, DeviceSchedulerType schedType)
+        : UecNIC{src_num, eventList, linkspeed, ports},
+          _pcm_device{eventList, pcmAlgoName, handlerDelay, pollDelay, schedType} {}
+
+    virtual ~Nic() = default;
+
+  private:
+    pcm::Device _pcm_device;
 };
 
 } // namespace pcm

@@ -56,7 +56,7 @@ variables:
     type: uint
     description: "ECN-marked packets delivered in current epoch"
   - name: EPOCH_TO_DELIVER
-    initial_value: "FABRIC_LINK_MSS"
+    initial_value: 1
     type: uint
     description: "Target packets to deliver per epoch"
   - name: ALPHA

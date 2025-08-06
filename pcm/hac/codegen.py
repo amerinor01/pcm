@@ -1,13 +1,4 @@
-#!/usr/bin/env python3
-"""
- PCMC Code Generator
-
-Generates algorithm-specific PCMC and header files from
-a YAML configuration file and a fabric constants YAML.
-"""
-
 import yaml
-import argparse
 import os
 import math
 from typing import List, Dict, Any
@@ -28,8 +19,8 @@ CalcLoader.add_constructor("!eval", construct_calc)
 
 class AlgorithmCodeGenerator:
 
-    def __init__(self, constants_file: str, config_file: str):
-        with open(constants_file, "r") as f:
+    def __init__(self, fabric_constants_file: str, config_file: str):
+        with open(fabric_constants_file, "r") as f:
             self.fabric_constants: Dict[str, Any] = yaml.safe_load(f)
 
         # Load algorithm config, allowing !calc tags
@@ -122,7 +113,7 @@ class AlgorithmCodeGenerator:
 
     def _generate_pcmc(self) -> str:
         lines: List[str] = []
-        lines.append('#include "algo_utils.h"')
+        lines.append('#include "pcm_log.h"')
         lines.append('#include "pcm.h"')
         lines.append(f'#include "{self.algorithm_name}.h"')
         lines.append("")
@@ -133,12 +124,12 @@ class AlgorithmCodeGenerator:
             typ, accum = sig["type"], sig["accumulation"]
             name = f"SIG_{sig['name']}"
             lines.append(
-                f"    EXIT_ON_ERR(register_signal_pcmc({typ}, {accum}, {name}, new_handle), PCM_SUCCESS);"
+                f"    PCM_EXIT_ON_ERR(register_signal_pcmc({typ}, {accum}, {name}, new_handle));"
             )
             if "trigger_threshold" in sig:
                 thr = sig["trigger_threshold"]
                 lines.append(
-                    f"    EXIT_ON_ERR(register_signal_invoke_trigger_pcmc({name}, {thr}, new_handle), PCM_SUCCESS);"
+                    f"    PCM_EXIT_ON_ERR(register_signal_invoke_trigger_pcmc({name}, {thr}, new_handle));"
                 )
         lines.append("")
         lines.append("    /* Controls */")
@@ -147,11 +138,11 @@ class AlgorithmCodeGenerator:
             name = f"CTRL_{ctrl['name']}"
             init = ctrl.get("initial_value")
             lines.append(
-                f"    EXIT_ON_ERR(register_control_pcmc({typ}, {name}, new_handle), PCM_SUCCESS);"
+                f"    PCM_EXIT_ON_ERR(register_control_pcmc({typ}, {name}, new_handle));"
             )
             if init is not None:
                 lines.append(
-                    f"    EXIT_ON_ERR(register_control_initial_value_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
+                    f"    PCM_EXIT_ON_ERR(register_control_initial_value_pcmc({name}, {init}, new_handle));"
                 )
         lines.append("")
         lines.append("    /* Variables */")
@@ -160,11 +151,11 @@ class AlgorithmCodeGenerator:
             init = var.get("initial_value")
             dtype = var.get("type")
             lines.append(
-                f"    EXIT_ON_ERR(register_var_pcmc({name}, new_handle), PCM_SUCCESS);"
+                f"    PCM_EXIT_ON_ERR(register_var_pcmc({name}, new_handle));"
             )
             if init is not None:
                 lines.append(
-                    f"    EXIT_ON_ERR(register_var_initial_value_{dtype}_pcmc({name}, {init}, new_handle), PCM_SUCCESS);"
+                    f"    PCM_EXIT_ON_ERR(register_var_initial_value_{dtype}_pcmc({name}, {init}, new_handle));"
                 )
         lines.append("")
         lines.append("    return PCM_SUCCESS;")
@@ -189,16 +180,19 @@ class AlgorithmCodeGenerator:
         lines.append("")
 
         def __generate_enum(
-            block: str, items: List[Dict[str, Any]], cathegory: str
+            block: str, items: List[Dict[str, Any]], cathegory: str, mask: bool=False
         ) -> None:
             """Helper to define enum for a given cathegory."""
             lines.append(f"enum {self.algorithm_name}_{block} {{")
             for item in items:
-                lines.append(f"    {cathegory}_{item['name']} = {item['index']},")
+                index = str(item['index'])
+                if mask:
+                    index = f"1 << {item['index']}"
+                lines.append(f"    {cathegory}_{item['name']} = {index},")
             lines.append("};")
             lines.append("")
 
-        __generate_enum("signals", self.config.get("signals", []), "SIG")
+        __generate_enum("signals", self.config.get("signals", []), "SIG", mask=True)
         __generate_enum("controls", self.config.get("controls", []), "CTRL")
         __generate_enum("variables", self.config.get("variables", []), "VAR")
 
@@ -224,33 +218,3 @@ class AlgorithmCodeGenerator:
             lines.append(decl)
 
         return "\n".join(lines)
-
-
-def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Generate <algo_name>_.h and <algo_name>_pcmc.c files from algorithm YAML config"
-    )
-    parser.add_argument(
-        "-c", "--constants", required=True, help="path to fabric.yaml file"
-    )
-    parser.add_argument(
-        "-f",
-        "--config",
-        required=True,
-        help="path to algorithm configuration <algo_name>.yaml file",
-    )
-    parser.add_argument(
-        "-o",
-        "--output",
-        default=".",
-        help="path to output directory",
-    )
-
-    args = parser.parse_args()
-
-    generator = AlgorithmCodeGenerator(args.constants, args.config)
-    generator.run(args.output)
-
-
-if __name__ == "__main__":
-    main()

@@ -22,27 +22,53 @@ except ImportError:
     sys.exit(1)
 
 
-def parse_log_file(file_path: Path) -> Dict[str, Tuple[List[int], List[int]]]:
+def parse_log_file(file_path: Path) -> Tuple[Dict[str, Tuple[List[int], List[int]]], Dict[str, int]]:
     """
-    Parse the log file, extracting TIME and CWND values for each flow address.
+    Parse the log file, extracting TIME and CWND values for each flow address,
+    and BDP information.
     
     Args:
         file_path: Path to the log file to parse
         
     Returns:
-        Dictionary mapping flow addresses to (times, cwnd_values) tuples
+        Tuple of (flow_data, bdp_info) where:
+        - flow_data: Dictionary mapping flow addresses to (times, cwnd_values) tuples
+        - bdp_info: Dictionary containing 'network_bdp', 'flow_bdp', 'flow_maxwnd'
     """
     if not file_path.exists():
         raise FileNotFoundError(f"Log file not found: {file_path}")
     
     flow_data = {}
+    bdp_info = {'network_bdp': None, 'flow_bdp': None, 'flow_maxwnd': None}
+    
     # Pattern for [PCM flow=0x<hex_address>, ACK]: TIME=... CWND=...
     pattern = re.compile(r'\[PCM flow=(0x[0-9a-fA-F]+), ACK\]: TIME=(\d+) CWND=(\d+)')
+    
+    # BDP patterns
+    network_bdp_pattern = re.compile(r'_network_bdp=(\d+)')
+    flow_params_pattern = re.compile(
+        r'Initialize per-instance NSCC parameters: flowid (\d+) _base_rtt=(\d+) _base_bdp=(\d+) _bdp=(\d+) _min_cwnd=(\d+) _maxwnd=(\d+) _cwnd=(\d+)'
+    )
     
     try:
         with open(file_path, 'r') as f:
             for line_num, line in enumerate(f, 1):
                 try:
+                    # Extract network BDP
+                    if bdp_info['network_bdp'] is None:
+                        network_bdp_match = network_bdp_pattern.search(line)
+                        if network_bdp_match:
+                            bdp_info['network_bdp'] = int(network_bdp_match.group(1))
+                    
+                    # Extract per-flow parameters (take first flow found)
+                    if bdp_info['flow_bdp'] is None:
+                        flow_params_match = flow_params_pattern.search(line)
+                        if flow_params_match:
+                            flowid, base_rtt, base_bdp, bdp, min_cwnd, maxwnd, init_cwnd = flow_params_match.groups()
+                            bdp_info['flow_bdp'] = int(bdp)
+                            bdp_info['flow_maxwnd'] = int(maxwnd)
+                    
+                    # Extract PCM flow data
                     match = pattern.search(line)
                     if match:
                         flow_addr = match.group(1)  # hex address as string
@@ -65,17 +91,19 @@ def parse_log_file(file_path: Path) -> Dict[str, Tuple[List[int], List[int]]]:
     if not flow_data:
         print(f"Warning: No PCM flow data found in {file_path}")
     
-    return flow_data
+    return flow_data, bdp_info
 
 
 def create_cwnd_plot(flow_data: Dict[str, Tuple[List[int], List[int]]], 
+                    bdp_info: Dict[str, int],
                     output_path: Path, 
                     title: str = "Congestion Window Evolution") -> bool:
     """
-    Create and save a congestion window evolution plot.
+    Create and save a congestion window evolution plot with BDP reference lines.
     
     Args:
         flow_data: Dictionary of flow data from parse_log_file
+        bdp_info: Dictionary containing BDP information
         output_path: Path where to save the plot
         title: Plot title
         
@@ -99,6 +127,19 @@ def create_cwnd_plot(flow_data: Dict[str, Tuple[List[int], List[int]]],
             
             plt.plot(times, abs_cwnds, label=f'Flow {flow_addr}', linewidth=1.5)
             print(f"Plotted {len(times)} points for flow {flow_addr}")
+        
+        # Add BDP reference lines
+        if bdp_info['flow_bdp'] is not None:
+            plt.axhline(y=bdp_info['flow_bdp'], color='red', linestyle='--', alpha=0.8, 
+                       label=f'Flow BDP ({bdp_info["flow_bdp"]} bytes)')
+        
+        if bdp_info['flow_maxwnd'] is not None:
+            plt.axhline(y=bdp_info['flow_maxwnd'], color='orange', linestyle=':', alpha=0.8,
+                       label=f'Max Window ({bdp_info["flow_maxwnd"]} bytes)')
+        
+        if bdp_info['network_bdp'] is not None and bdp_info['network_bdp'] != bdp_info['flow_bdp']:
+            plt.axhline(y=bdp_info['network_bdp'], color='purple', linestyle='-.', alpha=0.8,
+                       label=f'Network BDP ({bdp_info["network_bdp"]} bytes)')
         
         plt.xlabel('Simulated Time [ps]')
         plt.ylabel('Congestion Window [Bytes]')
@@ -142,7 +183,7 @@ Examples:
     try:
         # Parse log file
         print(f"Parsing log file: {args.input}")
-        flow_data = parse_log_file(args.input)
+        flow_data, bdp_info = parse_log_file(args.input)
         
         if not flow_data:
             print("No PCM flow data found in log file")
@@ -150,8 +191,16 @@ Examples:
         
         print(f"Found {len(flow_data)} flows")
         
+        # Print BDP info if available
+        if bdp_info['flow_bdp'] is not None:
+            print(f"Flow BDP: {bdp_info['flow_bdp']} bytes")
+        if bdp_info['network_bdp'] is not None:
+            print(f"Network BDP: {bdp_info['network_bdp']} bytes")
+        if bdp_info['flow_maxwnd'] is not None:
+            print(f"Flow Max Window: {bdp_info['flow_maxwnd']} bytes")
+        
         # Create plot
-        success = create_cwnd_plot(flow_data, args.output, args.title)
+        success = create_cwnd_plot(flow_data, bdp_info, args.output, args.title)
         
         return 0 if success else 1
         

@@ -18,8 +18,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Configurable build options
 option(BUILD_HTSIM_PLUGIN "Build HTSIM plugin" OFF)
+option(BUILD_HAC_IR "Build HAC LLVM IR generation" OFF)
 option(ENABLE_PROFILING "Enable Linux perf-based profiling" OFF)
-option(BUILD_HAC_PASS "Build HAC optimization pass" OFF)
 
 # Set default build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -60,9 +60,11 @@ set(PCM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(PCM_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(PCM_ALGO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/algorithms)
 set(PCM_APPS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/apps)
+set(PCM_MISC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/misc)
 
 # Include directories
 include_directories(${PCM_INCLUDE_DIR})
+include_directories(${PCM_MISC_DIR})
 include_directories(${PCM_ALGO_DIR})
 include_directories(${CMAKE_BINARY_DIR}/algorithms)  # For YAML-generated algorithm headers
 
@@ -81,6 +83,14 @@ add_subdirectory(src)
 add_subdirectory(algorithms)
 
 # ===============================================
+# HAC IR Generation
+# ===============================================
+
+if(BUILD_HAC_IR)
+    add_subdirectory(hac)
+endif()
+
+# ===============================================
 # Traffic Generator Application
 # ===============================================
 
@@ -96,14 +106,6 @@ if(BUILD_HTSIM_PLUGIN)
 endif()
 
 # ===============================================
-# HAC Pass (Optional)
-# ===============================================
-
-if(BUILD_HAC_PASS)
-    add_subdirectory(HAC)
-endif()
-
-# ===============================================
 # Summary
 # ===============================================
 
@@ -111,7 +113,7 @@ message(STATUS "PCM Build Configuration:")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "  HTSIM plugin: ${BUILD_HTSIM_PLUGIN}")
 message(STATUS "  Profiling: ${ENABLE_PROFILING}")
-message(STATUS "  HAC pass: ${BUILD_HAC_PASS}")
+message(STATUS "  IR generator: ${BUILD_HAC_IR}")
 if(BUILD_HTSIM_PLUGIN)
     message(STATUS "  HTSIM build dir: ${HTSIM_BUILD_DIR}")
 endif()

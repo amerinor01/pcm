@@ -1,0 +1,88 @@
+#!/usr/bin/env python3
+
+# The PCM handler compiler.
+#
+# This compiler has multiple purposes/modes:
+# * Generating host code necessary to instantiate a PCM handler - this could
+#   be written by hand by a user, however, several things need to be in sync
+#   between the PCM handler and the host code, so we offer this as a
+#   convenience.
+# * Verifying that a given PCM handler adheres to the UE spec, i.e., always
+#   terminates in finite time, does not access memory outside of its own
+#   state, etc.
+# * Compiling a handler in unoptimized form, using clang or gcc - this mainly
+#   exists so that we can verify that our handler specific optimizations do
+#   not alter the semantics of a handler.
+# * Optimizing and compiling a handler using clang and custom optimization
+#   passes that make use of knowledge of the specific PCM implementation.
+
+import sys
+import argparse
+import codegen
+
+def main() -> None:
+    # TODO: support options below
+    # parser.add_argument(
+    #    "-v",
+    #    "--verify",
+    #    required=False,
+    #    action='store_true',
+    #    help="Verify the given handler."
+    # )
+    # parser.add_argument(
+    #    "-p",
+    #    "--optimize",
+    #    required=False,
+    #    action='store_true',
+    #    help="If this flag is given when compiling, optimization passes are applied."
+    # )
+
+    parser = argparse.ArgumentParser(
+        description="The PCM handler compiler"    
+    )
+    parser.add_argument(
+       "-c",
+       "--codegen",
+       action='store_true',
+       required=False,
+       help="Generate <algo_name>_.h and <algo_name>_pcmc.c files from algorithm YAML config (--algoconf option)"
+    )
+    parser.add_argument(
+        "-a",
+        "--algoconf",
+        required=True,
+        help="path to algorithm configuration <algo_name>.yaml file",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=".",
+        help="path to output directory",
+    )
+    parser.add_argument(
+        "-f",
+        "--fabricconf",
+        required=True,
+        help="path to fabric.yaml file"
+    )
+
+    args = parser.parse_args()
+    if args.codegen:
+        generator = codegen.AlgorithmCodeGenerator(args.fabricconf, args.algoconf)
+        generator.run(args.output)
+    else:
+        sys.exit("Other options are not supported yet");
+    # elif args.compile_handler:
+    #    if args.optimize:
+    #        print("compiling optimized handler...")
+    #    else:
+    #        print("compiling non-optimized handler...")
+    #    if args.verify:
+    #        print("verifying handler...")
+    # elif args.optimize or args.verify:
+    #     print("verify/optimize can only be used in conjunction with compile")
+    # else:
+    #     print("Nothing to do...")
+
+if __name__ == "__main__":
+    main()
