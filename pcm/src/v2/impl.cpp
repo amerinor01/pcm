@@ -392,6 +392,11 @@ template <typename flow_impl_T, typename... Objs> struct Flow
          ...);
     }
 
+    void activate()
+    {
+        static_cast<flow_impl_T *>(this)->template prepare_pre_trigger_snapshot_impl<true>(pcm_uint{0});
+    }
+
     [[nodiscard]] bool invoke_cc_algorithm_on_trigger()
     {
         pcm_uint trigger_mask = 0;
@@ -418,7 +423,7 @@ template <typename flow_impl_T, typename... Objs> struct Flow
         if (!trigger_mask)
             return false;
 
-        static_cast<flow_impl_T *>(this)->prepare_pre_trigger_snapshot_impl(trigger_mask);
+        static_cast<flow_impl_T *>(this)->template prepare_pre_trigger_snapshot_impl<false>(trigger_mask);
         (void)static_cast<flow_impl_T *>(this)->execute_algorithm_impl();
         static_cast<flow_impl_T *>(this)->apply_post_trigger_snapshot_impl();
 
@@ -447,7 +452,11 @@ template <typename flow_impl_T, typename... Objs> struct Flow
 // Primary template
 template <class Storage, class Tuple> struct SimpleFlow;
 
-// tuple peel
+// template <class Storage, time_backend_t TimeBackend, class ...Ds>
+// template <class Storage, time_backend_t TimeBackend, class... Ds>
+// struct SimpleFlow<Storage, TimeBackend, std::tuple<Ds...>>
+//     : Flow<SimpleFlow<Storage, TimeBackend, std::tuple<Ds...>>, typename Ds::template
+//     rebind<Storage, TimeBackend>...>
 template <class Storage, class... Ds>
 struct SimpleFlow<Storage, std::tuple<Ds...>>
     : Flow<SimpleFlow<Storage, std::tuple<Ds...>>, typename Ds::template rebind<Storage>...>
@@ -456,15 +465,34 @@ struct SimpleFlow<Storage, std::tuple<Ds...>>
         Flow<SimpleFlow<Storage, std::tuple<Ds...>>, typename Ds::template rebind<Storage>...>;
     using base::base; // inherit ::base constructors
 
-    void prepare_pre_trigger_snapshot_impl(pcm_uint)
-    {
-    }
-    void apply_post_trigger_snapshot_impl()
-    {
-    }
+    // cc_algorithm_cb _algo_cb;
+
+    // template SimpleFlow(std::string algo_name) {
+    //     _algo_cb = dlsym_wrapper(algo_name);
+    // }
+
     [[nodiscard]] pcm_err_t execute_algorithm_impl()
     {
+        // return _algo_cb(_snapshot);
         return pcm_err_t::SUCCESS;
+    }
+
+    void apply_post_trigger_snapshot_impl()
+    {
+        // fetch controls/signals/thresholds
+    }
+
+    // flow_datapath_snapshot _snapshot;
+    template <bool sync_variables> void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask)
+    {
+        if constexpr (sync_variables)
+        {
+            // copy variables into the snapshot
+            // memcpy(_snapshot.variables, _variables, NUM_VARS);
+        }
+        // memcpy(_snapshot.controls, _controls, NUM_CONTROLS);
+        // memcpy(_snapshot.signals, _signals, NUM_signals);
+        // memcpy(_snapshot.thresholds, _thresholds, NUM_signals);
     }
 };
 
