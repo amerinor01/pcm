@@ -11,6 +11,9 @@ namespace pcm
 
 // ---------- common types ----------
 using pcm_uint = unsigned long;
+using pcm_float = float;
+using pcm_int = int;
+
 const unsigned long PCM_THRESHOLD_UNSPEC{std::numeric_limits<unsigned long>::max()};
 using pcm_signal_t = enum class pcm_signal
 {
@@ -52,35 +55,88 @@ cc_algorithm_cb _algorithm_cb;
 // ============================================================================
 // Forward declarations
 // ============================================================================
-template <class storage_T, pcm_signal_t signal_type, pcm_uint mask, pcm_signal_accum_t accumulator,
-          pcm_uint trigger_threshold>
-struct SignalImpl;
-template <class storage_T, pcm_control_t control_type, pcm_uint index> struct ControlImpl;
-
-// ============================================================================
-// Signals/controls traits/concepts
-// ============================================================================
-template <typename T> struct is_signal : std::false_type
-{
-};
-template <typename T> inline constexpr bool is_signal_v = is_signal<std::decay_t<T>>::value;
-
-template <typename T> struct is_control : std::false_type
-{
-};
-template <typename T> inline constexpr bool is_control_v = is_control<std::decay_t<T>>::value;
-
-template <typename T>
-concept IsAccumSignal = requires { typename T::accum_signal_trait; };
-
-template <typename T>
-concept IsTriggerSignal = requires { typename T::trigger_signal_trait; };
 
 template <class> inline constexpr bool always_false_v = false;
 
 // ============================================================================
-// Signals/controls descriptor definitions: contain no runtime state
+// PCMI-local variable descriptor definitions: the simplest for of object associated with the flow
 // ============================================================================
+
+// User-exposed variable API
+template <typename dtype_T, pcm_uint index> struct VariableDescr
+{
+    static constexpr pcm_uint _index = index;
+    dtype_T _value{0}; // can be FP dtype, therefore cannot be initialized at the compile time
+    void set(pcm_uint value)
+    {
+        _value = value;
+    }
+    template <class storage_T> using rebind = struct VariableDescr<dtype_T, index>;
+};
+
+// Trait: is object a variable?
+template <typename T> struct is_variable : std::false_type
+{
+};
+template <typename D, pcm_uint I> struct is_variable<VariableDescr<D, I>> : std::true_type
+{
+};
+template <typename T> inline constexpr bool is_variable_v = is_variable<std::decay_t<T>>::value;
+
+// ============================================================================
+// Control descriptor definitions: contain no runtime state
+// ============================================================================
+
+// Control implementation forward declaration
+template <class storage_T, pcm_control_t control_type, pcm_uint index> struct ControlImpl;
+
+// User-exposed control API
+template <pcm_control_t type, pcm_uint index> struct control_descr
+{
+    template <class storage_T> using rebind = struct ControlImpl<storage_T, type, index>;
+};
+
+// Trait: is object control?
+template <typename T> struct is_control : std::false_type
+{
+};
+template <pcm_control_t C, pcm_uint I> struct is_control<control_descr<C, I>> : std::true_type
+{
+};
+template <typename T> inline constexpr bool is_control_v = is_control<std::decay_t<T>>::value;
+
+// Implementation
+
+template <typename storage_T, pcm_control_t type, pcm_uint index> struct ControlImpl
+{
+    storage_T _value{};
+    static constexpr pcm_control_t _type = type;
+    static constexpr pcm_uint _index = index;
+
+    void set(pcm_uint new_value)
+    {
+        _value = static_cast<storage_T>(new_value);
+    }
+    [[nodiscard]] pcm_uint get() const
+    {
+        return static_cast<pcm_uint>(_value);
+    }
+};
+template <typename S, pcm_control_t C, pcm_uint I>
+struct is_control<ControlImpl<S, C, I>> : std::true_type
+{
+};
+
+// ============================================================================
+// Signal descriptor definition: contain no runtime state
+// ============================================================================
+
+// Signal implementation forward declaration
+template <class storage_T, pcm_signal_t signal_type, pcm_uint mask, pcm_signal_accum_t accumulator,
+          pcm_uint trigger_threshold>
+struct SignalImpl;
+
+// User-exposed signal API
 template <pcm_signal_t type, pcm_uint mask, pcm_signal_accum_t accumulator,
           pcm_uint trigger_threshold>
 struct SignalDescr
@@ -88,22 +144,24 @@ struct SignalDescr
     template <class storage_T>
     using rebind = struct SignalImpl<storage_T, type, mask, accumulator, trigger_threshold>;
 };
+
+// Trait: is object a signal?
+template <typename T> struct is_signal : std::false_type
+{
+};
+template <typename T> inline constexpr bool is_signal_v = is_signal<std::decay_t<T>>::value;
 template <pcm_signal_t T, pcm_uint M, pcm_signal_accum_t A, pcm_uint Thr>
 struct is_signal<SignalDescr<T, M, A, Thr>> : std::true_type
 {
 };
 
-template <pcm_control_t type, pcm_uint index> struct control_descr
-{
-    template <class storage_T> using rebind = struct ControlImpl<storage_T, type, index>;
-};
-template <pcm_control_t C, pcm_uint I> struct is_control<control_descr<C, I>> : std::true_type
-{
-};
+// Implementation
 
-// ============================================================================
-// Signal object implementation
-// ============================================================================
+template <typename T>
+concept IsAccumSignal = requires { typename T::accum_signal_trait; };
+
+template <typename T>
+concept IsTriggerSignal = requires { typename T::trigger_signal_trait; };
 
 template <class storage_T, pcm_signal_t type, pcm_uint mask, pcm_signal_accum_t accumulator,
           pcm_uint trigger_threshold>
@@ -137,7 +195,7 @@ struct SignalImpl
     {
         if constexpr (_type == pcm_signal::ELAPSED_TIME)
         {
-            static_assert(always_false_v<self_t>, "Elapsed time trigger is not supported yet");
+            static_assert(always_false_v<void>, "Elapsed time trigger is not supported yet");
             // auto timer = _cur_value;
             // if (timer)
             // {
@@ -173,7 +231,7 @@ struct SignalImpl
     {
         if constexpr (_type == pcm_signal::ELAPSED_TIME)
         {
-            static_assert(always_false_v<self_t>, "Elapsed time trigger is not supported yet");
+            static_assert(always_false_v<void>, "Elapsed time trigger is not supported yet");
             // if (_cur_value == PCM_SIG_REARM)
             // {
             //     _cur_value = time_diff_fn(flow_ctx->start_ts, time_now_fn());
@@ -202,7 +260,7 @@ struct SignalImpl
             else
             {
                 //_cur_value = time_diff_fn(flow_ctx->start_ts, time_now_fn());
-                static_assert(always_false_v<self_t>, "Elapsed time trigger is not supported yet");
+                static_assert(always_false_v<void>, "Elapsed time trigger is not supported yet");
             }
         }
         else if constexpr (accumulator == pcm_signal_accum::SUM)
@@ -223,7 +281,7 @@ struct SignalImpl
         }
         else
         {
-            static_assert(always_false_v<self_t>, "Unsupported accumulator kind");
+            static_assert(always_false_v<void>, "Unsupported accumulator kind");
         }
     }
 };
@@ -233,47 +291,51 @@ struct is_signal<SignalImpl<S, T, M, A, Thr>> : std::true_type
 };
 
 // ============================================================================
-// Control object implementation
-// ============================================================================
-
-template <typename storage_T, pcm_control_t type, pcm_uint index> struct ControlImpl
-{
-    storage_T _value{};
-    static constexpr pcm_control_t _type = type;
-    static constexpr pcm_uint _index = index;
-
-    void set(pcm_uint new_value)
-    {
-        _value = static_cast<storage_T>(new_value);
-    }
-    [[nodiscard]] pcm_uint get() const
-    {
-        return static_cast<pcm_uint>(_value);
-    }
-};
-template <typename S, pcm_control_t C, pcm_uint I>
-struct is_control<ControlImpl<S, C, I>> : std::true_type
-{
-};
-
-// ============================================================================
-// Flow logic template
+// Flow template class
 // ============================================================================
 
 template <typename flow_impl_T, typename... Objs> struct Flow
 {
     // Build tuples of only signals / only controls
-    using signals_tuple_T = decltype(std::tuple_cat(
-        std::conditional_t<is_signal_v<Objs>, std::tuple<Objs>, std::tuple<>>{}...));
+    using variables_tuple_T = decltype(std::tuple_cat(
+        std::conditional_t<is_variable_v<Objs>, std::tuple<Objs>, std::tuple<>>{}...));
     using controls_tuple_T = decltype(std::tuple_cat(
         std::conditional_t<is_control_v<Objs>, std::tuple<Objs>, std::tuple<>>{}...));
+    using signals_tuple_T = decltype(std::tuple_cat(
+        std::conditional_t<is_signal_v<Objs>, std::tuple<Objs>, std::tuple<>>{}...));
 
-    signals_tuple_T _signals{};
+    variables_tuple_T _variables{};
     controls_tuple_T _controls{};
+    signals_tuple_T _signals{};
 
+    // intended to be used from the host-side at PCMC configuration time, therefore can do compile
+    // "is_found" time checks
+    template <pcm_uint MatchIndex, typename dtype_T> void set_variable(dtype_T val)
+    {
+        bool is_found = false;
+        ((
+             [&, this] {
+                 using T = Objs;
+                 if constexpr (is_variable_v<T>)
+                 {
+                     if constexpr (T::_index == MatchIndex)
+                     {
+                         std::get<T::_index>(_variables).set(val);
+                         is_found = true;
+                     }
+                 }
+             }(),
+             is_found) ||
+         ...);
+        static_assert(always_false_v<void>, "Elapsed time trigger is not supported yet");
+    }
+
+    // set control can be called by the datapath, therefore has no compile-time checks
+    // if match was found or not, the API intention is to communicate is_found bool as return type
+    // so that callee can handle (possibly) erroneous not found case
     template <pcm_control_t Match> [[nodiscard]] bool set_control(pcm_uint val)
     {
-        bool found = false;
+        bool is_found = false;
         ((
              [&, this] {
                  using T = Objs;
@@ -282,19 +344,19 @@ template <typename flow_impl_T, typename... Objs> struct Flow
                      if (T::_type == Match)
                      {
                          std::get<T::_index>(_controls).set(val);
-                         found = true;
+                         is_found = true;
                      }
                  }
              }(),
              0),
          ...);
-        return found;
+        return is_found;
     }
 
     template <pcm_control_t Match>
     [[nodiscard]] std::tuple<bool, pcm_uint> get_control_first_match()
     {
-        bool found = false;
+        bool is_found = false;
         pcm_uint out{};
         ((
              [&, this] {
@@ -304,13 +366,13 @@ template <typename flow_impl_T, typename... Objs> struct Flow
                      if (T::_type == Match)
                      {
                          out = std::get<T::_index>(_controls).get();
-                         found = true;
+                         is_found = true;
                      }
                  }
              }(),
              0),
          ...);
-        return {found, out};
+        return {is_found, out};
     }
 
     template <pcm_signal_t Match> void update_signals(pcm_uint v)
@@ -413,7 +475,8 @@ using namespace pcm;
 using DatapathSpec = std::tuple<
     control_descr<pcm_control::CWND, 0>,
     SignalDescr<pcm_signal::ACK, (1ul << 0), pcm_signal_accum::SUM, PCM_THRESHOLD_UNSPEC>,
-    SignalDescr<pcm_signal::RTO, (1ul << 1), pcm_signal_accum::LAST, 10>>;
+    SignalDescr<pcm_signal::RTO, (1ul << 1), pcm_signal_accum::LAST, 10>,
+    VariableDescr<pcm_float, 0>, VariableDescr<pcm_int, 1>, VariableDescr<pcm_uint, 2>>;
 
 using FlowSpec = SimpleFlow<pcm_uint, DatapathSpec>;
 
