@@ -6,8 +6,7 @@
 #include <tuple>
 #include <type_traits>
 
-namespace pcm
-{
+namespace pcm {
 
 // ---------- common types ----------
 using pcm_uint = unsigned long;
@@ -15,8 +14,7 @@ using pcm_float = float;
 using pcm_int = int;
 
 const unsigned long PCM_THRESHOLD_UNSPEC{std::numeric_limits<unsigned long>::max()};
-using pcm_signal_t = enum class pcm_signal
-{
+using pcm_signal_t = enum class pcm_signal {
     ACK,
     RTO,
     NACK,
@@ -27,24 +25,9 @@ using pcm_signal_t = enum class pcm_signal
     IN_FLIGHT,
     ELAPSED_TIME
 };
-using pcm_signal_accum_t = enum class pcm_signal_accum
-{
-    SUM,
-    MAX,
-    MIN,
-    LAST,
-    UNSPEC
-};
-using pcm_control_t = enum class pcm_control
-{
-    CWND,
-    EV
-};
-using pcm_err_t = enum class pcm_error
-{
-    SUCCESS,
-    ERROR
-};
+using pcm_signal_accum_t = enum class pcm_signal_accum { SUM, MAX, MIN, LAST, UNSPEC };
+using pcm_control_t = enum class pcm_control { CWND, EV };
+using pcm_err_t = enum class pcm_error { SUCCESS, ERROR };
 
 // TODO: implement as part of flow_impl
 using flow_datapath_snapshot = unsigned long; // TODO: use struct flow_datapath snapshot from pcmh.h
@@ -63,24 +46,17 @@ template <class> inline constexpr bool always_false_v = false;
 // ============================================================================
 
 // User-exposed variable API
-template <typename dtype_T, pcm_uint index> struct VariableDescr
-{
+template <typename dtype_T, pcm_uint index> struct VariableDescr {
     static constexpr pcm_uint _index = index;
     dtype_T _value{0}; // can be FP dtype, therefore cannot be initialized at the compile time
-    void set(pcm_uint value)
-    {
-        _value = value;
-    }
+    void set(pcm_uint value) { _value = value; }
+    // enable generic tuple peel
     template <class storage_T> using rebind = struct VariableDescr<dtype_T, index>;
 };
 
 // Trait: is object a variable?
-template <typename T> struct is_variable : std::false_type
-{
-};
-template <typename D, pcm_uint I> struct is_variable<VariableDescr<D, I>> : std::true_type
-{
-};
+template <typename T> struct is_variable : std::false_type {};
+template <typename D, pcm_uint I> struct is_variable<VariableDescr<D, I>> : std::true_type {};
 template <typename T> inline constexpr bool is_variable_v = is_variable<std::decay_t<T>>::value;
 
 // ============================================================================
@@ -91,41 +67,27 @@ template <typename T> inline constexpr bool is_variable_v = is_variable<std::dec
 template <class storage_T, pcm_control_t control_type, pcm_uint index> struct ControlImpl;
 
 // User-exposed control API
-template <pcm_control_t type, pcm_uint index> struct control_descr
-{
+template <pcm_control_t type, pcm_uint index> struct control_descr {
     template <class storage_T> using rebind = struct ControlImpl<storage_T, type, index>;
 };
 
 // Trait: is object control?
-template <typename T> struct is_control : std::false_type
-{
-};
-template <pcm_control_t C, pcm_uint I> struct is_control<control_descr<C, I>> : std::true_type
-{
-};
+template <typename T> struct is_control : std::false_type {};
+template <pcm_control_t C, pcm_uint I> struct is_control<control_descr<C, I>> : std::true_type {};
 template <typename T> inline constexpr bool is_control_v = is_control<std::decay_t<T>>::value;
 
 // Implementation
 
-template <typename storage_T, pcm_control_t type, pcm_uint index> struct ControlImpl
-{
+template <typename storage_T, pcm_control_t type, pcm_uint index> struct ControlImpl {
     storage_T _value{};
     static constexpr pcm_control_t _type = type;
     static constexpr pcm_uint _index = index;
 
-    void set(pcm_uint new_value)
-    {
-        _value = static_cast<storage_T>(new_value);
-    }
-    [[nodiscard]] pcm_uint get() const
-    {
-        return static_cast<pcm_uint>(_value);
-    }
+    void set(pcm_uint new_value) { _value = static_cast<storage_T>(new_value); }
+    [[nodiscard]] pcm_uint get() const { return static_cast<pcm_uint>(_value); }
 };
 template <typename S, pcm_control_t C, pcm_uint I>
-struct is_control<ControlImpl<S, C, I>> : std::true_type
-{
-};
+struct is_control<ControlImpl<S, C, I>> : std::true_type {};
 
 // ============================================================================
 // Signal descriptor definition: contain no runtime state
@@ -139,21 +101,16 @@ struct SignalImpl;
 // User-exposed signal API
 template <pcm_signal_t type, pcm_uint mask, pcm_signal_accum_t accumulator,
           pcm_uint trigger_threshold>
-struct SignalDescr
-{
+struct SignalDescr {
     template <class storage_T>
     using rebind = struct SignalImpl<storage_T, type, mask, accumulator, trigger_threshold>;
 };
 
 // Trait: is object a signal?
-template <typename T> struct is_signal : std::false_type
-{
-};
+template <typename T> struct is_signal : std::false_type {};
 template <typename T> inline constexpr bool is_signal_v = is_signal<std::decay_t<T>>::value;
 template <pcm_signal_t T, pcm_uint M, pcm_signal_accum_t A, pcm_uint Thr>
-struct is_signal<SignalDescr<T, M, A, Thr>> : std::true_type
-{
-};
+struct is_signal<SignalDescr<T, M, A, Thr>> : std::true_type {};
 
 // Implementation
 
@@ -165,8 +122,7 @@ concept IsTriggerSignal = requires { typename T::trigger_signal_trait; };
 
 template <class storage_T, pcm_signal_t type, pcm_uint mask, pcm_signal_accum_t accumulator,
           pcm_uint trigger_threshold>
-struct SignalImpl
-{
+struct SignalImpl {
     using self_t = SignalImpl<storage_T, type, mask, accumulator, trigger_threshold>;
 
     // runtime state
@@ -185,16 +141,12 @@ struct SignalImpl
     using accum_signal_trait = std::conditional_t<is_accum, std::true_type, std::false_type>;
     using trigger_signal_trait = std::conditional_t<is_trigger, std::true_type, std::false_type>;
 
-    [[nodiscard]] pcm_uint get() const
-    {
-        return static_cast<pcm_uint>(_cur_value);
-    }
+    [[nodiscard]] pcm_uint get() const { return static_cast<pcm_uint>(_cur_value); }
 
     [[nodiscard]] bool is_fired() const
         requires IsTriggerSignal<self_t>
     {
-        if constexpr (_type == pcm_signal::ELAPSED_TIME)
-        {
+        if constexpr (_type == pcm_signal::ELAPSED_TIME) {
             static_assert(always_false_v<void>, "Elapsed time trigger is not supported yet");
             // auto timer = _cur_value;
             // if (timer)
@@ -207,21 +159,15 @@ struct SignalImpl
             //     }
             // }
             // return false;
-        }
-        else if constexpr (_type == pcm_signal::DATA_TX)
-        {
+        } else if constexpr (_type == pcm_signal::DATA_TX) {
             auto burst_len = _cur_value;
-            if (burst_len)
-            {
-                if ((burst_len - 1) >= _trigger_thresh)
-                {
+            if (burst_len) {
+                if ((burst_len - 1) >= _trigger_thresh) {
                     return true;
                 }
             }
             return false;
-        }
-        else
-        {
+        } else {
             return _cur_value >= _trigger_thresh;
         }
     }
@@ -229,19 +175,15 @@ struct SignalImpl
     void rearm()
         requires IsTriggerSignal<self_t>
     {
-        if constexpr (_type == pcm_signal::ELAPSED_TIME)
-        {
+        if constexpr (_type == pcm_signal::ELAPSED_TIME) {
             static_assert(always_false_v<void>, "Elapsed time trigger is not supported yet");
             // if (_cur_value == PCM_SIG_REARM)
             // {
             //     _cur_value = time_diff_fn(flow_ctx->start_ts, time_now_fn());
             // }
-        }
-        else if constexpr (_type == pcm_signal::DATA_TX)
-        {
+        } else if constexpr (_type == pcm_signal::DATA_TX) {
             auto burst_len = _cur_value;
-            if (burst_len)
-            {
+            if (burst_len) {
                 _cur_value = 1;
             }
         }
@@ -251,51 +193,34 @@ struct SignalImpl
         requires IsAccumSignal<self_t>
     {
         const storage_T v = static_cast<storage_T>(update_value);
-        if constexpr (_type == pcm_signal::ELAPSED_TIME)
-        {
-            if constexpr (is_trigger)
-            {
+        if constexpr (_type == pcm_signal::ELAPSED_TIME) {
+            if constexpr (is_trigger) {
                 /* this is a timer and handled in the IsTriggerSignal, nothing to do */
-            }
-            else
-            {
+            } else {
                 //_cur_value = time_diff_fn(flow_ctx->start_ts, time_now_fn());
                 static_assert(always_false_v<void>, "Elapsed time trigger is not supported yet");
             }
-        }
-        else if constexpr (accumulator == pcm_signal_accum::SUM)
-        {
+        } else if constexpr (accumulator == pcm_signal_accum::SUM) {
             _cur_value += v;
-        }
-        else if constexpr (accumulator == pcm_signal_accum::LAST)
-        {
+        } else if constexpr (accumulator == pcm_signal_accum::LAST) {
             _cur_value = v;
-        }
-        else if constexpr (accumulator == pcm_signal_accum::MIN)
-        {
+        } else if constexpr (accumulator == pcm_signal_accum::MIN) {
             _cur_value = std::min(_cur_value, v);
-        }
-        else if constexpr (accumulator == pcm_signal_accum::MAX)
-        {
+        } else if constexpr (accumulator == pcm_signal_accum::MAX) {
             _cur_value = std::max(_cur_value, v);
-        }
-        else
-        {
+        } else {
             static_assert(always_false_v<void>, "Unsupported accumulator kind");
         }
     }
 };
 template <typename S, pcm_signal_t T, pcm_uint M, pcm_signal_accum_t A, pcm_uint Thr>
-struct is_signal<SignalImpl<S, T, M, A, Thr>> : std::true_type
-{
-};
+struct is_signal<SignalImpl<S, T, M, A, Thr>> : std::true_type {};
 
 // ============================================================================
 // Flow template class
 // ============================================================================
 
-template <typename flow_impl_T, typename... Objs> struct Flow
-{
+template <typename flow_impl_T, typename... Objs> struct Flow {
     // Build tuples of only signals / only controls
     using variables_tuple_T = decltype(std::tuple_cat(
         std::conditional_t<is_variable_v<Objs>, std::tuple<Objs>, std::tuple<>>{}...));
@@ -310,16 +235,13 @@ template <typename flow_impl_T, typename... Objs> struct Flow
 
     // intended to be used from the host-side at PCMC configuration time, therefore can do compile
     // "is_found" time checks
-    template <pcm_uint MatchIndex, typename dtype_T> void set_variable(dtype_T val)
-    {
+    template <pcm_uint MatchIndex, typename dtype_T> void set_variable(dtype_T val) {
         bool is_found = false;
         ((
              [&, this] {
                  using T = Objs;
-                 if constexpr (is_variable_v<T>)
-                 {
-                     if constexpr (T::_index == MatchIndex)
-                     {
+                 if constexpr (is_variable_v<T>) {
+                     if constexpr (T::_index == MatchIndex) {
                          std::get<T::_index>(_variables).set(val);
                          is_found = true;
                      }
@@ -333,16 +255,13 @@ template <typename flow_impl_T, typename... Objs> struct Flow
     // set control can be called by the datapath, therefore has no compile-time checks
     // if match was found or not, the API intention is to communicate is_found bool as return type
     // so that callee can handle (possibly) erroneous not found case
-    template <pcm_control_t Match> [[nodiscard]] bool set_control(pcm_uint val)
-    {
+    template <pcm_control_t Match> [[nodiscard]] bool set_control(pcm_uint val) {
         bool is_found = false;
         ((
              [&, this] {
                  using T = Objs;
-                 if constexpr (is_control_v<T>)
-                 {
-                     if (T::_type == Match)
-                     {
+                 if constexpr (is_control_v<T>) {
+                     if (T::_type == Match) {
                          std::get<T::_index>(_controls).set(val);
                          is_found = true;
                      }
@@ -354,17 +273,14 @@ template <typename flow_impl_T, typename... Objs> struct Flow
     }
 
     template <pcm_control_t Match>
-    [[nodiscard]] std::tuple<bool, pcm_uint> get_control_first_match()
-    {
+    [[nodiscard]] std::tuple<bool, pcm_uint> get_control_first_match() {
         bool is_found = false;
         pcm_uint out{};
         ((
              [&, this] {
                  using T = Objs;
-                 if constexpr (is_control_v<T>)
-                 {
-                     if (T::_type == Match)
-                     {
+                 if constexpr (is_control_v<T>) {
+                     if (T::_type == Match) {
                          out = std::get<T::_index>(_controls).get();
                          is_found = true;
                      }
@@ -375,15 +291,12 @@ template <typename flow_impl_T, typename... Objs> struct Flow
         return {is_found, out};
     }
 
-    template <pcm_signal_t Match> void update_signals(pcm_uint v)
-    {
+    template <pcm_signal_t Match> void update_signals(pcm_uint v) {
         ((
              [&, this] {
                  using T = Objs;
-                 if constexpr (is_signal_v<T>)
-                 {
-                     if (T::is_accum && T::_type == Match)
-                     {
+                 if constexpr (is_signal_v<T>) {
+                     if (T::is_accum && T::_type == Match) {
                          std::get<T::_index>(_signals).update(v);
                      }
                  }
@@ -392,26 +305,22 @@ template <typename flow_impl_T, typename... Objs> struct Flow
          ...);
     }
 
-    void activate()
-    {
-        static_cast<flow_impl_T *>(this)->template prepare_pre_trigger_snapshot_impl<true>(pcm_uint{0});
+    void activate() {
+        static_cast<flow_impl_T *>(this)->template prepare_pre_trigger_snapshot_impl<true>(
+            pcm_uint{0});
     }
 
-    [[nodiscard]] bool invoke_cc_algorithm_on_trigger()
-    {
+    [[nodiscard]] bool invoke_cc_algorithm_on_trigger() {
         pcm_uint trigger_mask = 0;
 
         // collect triggers
         ((
              [&, this] {
                  using T = Objs;
-                 if constexpr (is_signal_v<T>)
-                 {
-                     if (T::is_trigger)
-                     {
+                 if constexpr (is_signal_v<T>) {
+                     if (T::is_trigger) {
                          auto &trig = std::get<T::_index>(_signals);
-                         if (trig.is_fired())
-                         {
+                         if (trig.is_fired()) {
                              trigger_mask |= T::_mask;
                          }
                      }
@@ -423,7 +332,8 @@ template <typename flow_impl_T, typename... Objs> struct Flow
         if (!trigger_mask)
             return false;
 
-        static_cast<flow_impl_T *>(this)->template prepare_pre_trigger_snapshot_impl<false>(trigger_mask);
+        static_cast<flow_impl_T *>(this)->template prepare_pre_trigger_snapshot_impl<false>(
+            trigger_mask);
         (void)static_cast<flow_impl_T *>(this)->execute_algorithm_impl();
         static_cast<flow_impl_T *>(this)->apply_post_trigger_snapshot_impl();
 
@@ -431,10 +341,8 @@ template <typename flow_impl_T, typename... Objs> struct Flow
         ((
              [&, this] {
                  using T = Objs;
-                 if constexpr (is_signal_v<T>)
-                 {
-                     if (T::is_trigger)
-                     {
+                 if constexpr (is_signal_v<T>) {
+                     if (T::is_trigger) {
                          std::get<T::_index>(_signals).rearm();
                      }
                  }
@@ -459,8 +367,7 @@ template <class Storage, class Tuple> struct SimpleFlow;
 //     rebind<Storage, TimeBackend>...>
 template <class Storage, class... Ds>
 struct SimpleFlow<Storage, std::tuple<Ds...>>
-    : Flow<SimpleFlow<Storage, std::tuple<Ds...>>, typename Ds::template rebind<Storage>...>
-{
+    : Flow<SimpleFlow<Storage, std::tuple<Ds...>>, typename Ds::template rebind<Storage>...> {
     using base =
         Flow<SimpleFlow<Storage, std::tuple<Ds...>>, typename Ds::template rebind<Storage>...>;
     using base::base; // inherit ::base constructors
@@ -471,22 +378,18 @@ struct SimpleFlow<Storage, std::tuple<Ds...>>
     //     _algo_cb = dlsym_wrapper(algo_name);
     // }
 
-    [[nodiscard]] pcm_err_t execute_algorithm_impl()
-    {
+    [[nodiscard]] pcm_err_t execute_algorithm_impl() {
         // return _algo_cb(_snapshot);
         return pcm_err_t::SUCCESS;
     }
 
-    void apply_post_trigger_snapshot_impl()
-    {
+    void apply_post_trigger_snapshot_impl() {
         // fetch controls/signals/thresholds
     }
 
     // flow_datapath_snapshot _snapshot;
-    template <bool sync_variables> void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask)
-    {
-        if constexpr (sync_variables)
-        {
+    template <bool sync_variables> void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask) {
+        if constexpr (sync_variables) {
             // copy variables into the snapshot
             // memcpy(_snapshot.variables, _variables, NUM_VARS);
         }
@@ -508,8 +411,7 @@ using DatapathSpec = std::tuple<
 
 using FlowSpec = SimpleFlow<pcm_uint, DatapathSpec>;
 
-int main()
-{
+int main() {
     FlowSpec f;
     auto found = f.set_control<pcm_control::CWND>(123);
     assert(found);
