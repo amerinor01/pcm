@@ -20,20 +20,54 @@
 
 /*
  Style guide:
- - Types in PascalCase (e.g., VariableDesc, ControlDesc, SignalDesc, FlowDesc, SimpleFlow).
+ - Types in PascalCase        auto [so_handle, raw_fn_ptr] = result.value();
+        algorithm_so_library_handle_ = so_handle;
+        algorithm_cb_ = reinterpret_cast<pcm_cc_algorithm_cb>(raw_fn_ptr);
+
+        (([&] {g., VariableDesc, ControlDesc, SignalDesc, FlowDesc, SimpleFlow).
  - Functions and non-type identifiers in lower_snake_case.
  - Class/struct data members end with a trailing underscore (e.g., get_time_, start_ts_).
- - Compile-time constants and enum values use k-prefixed PascalCase (e.g., kIndex, kInitialValue,
- GetTimeBackend::kStd).
+ - Compile-time constants and enum values use k-prefixed PascalCase (e.g., kIndex, kInitialValue).
  - Kept trait names in snake_case to match the STL convention (e.g., is_variable_v).
 */
 
 namespace pcm {
 
+namespace util {
+template <typename> inline constexpr bool always_false_v = false;
+
+[[nodiscard]] std::optional<std::pair<void *, void *>>
+shared_symbol_open(const std::string &lib_name, const std::string &fn_name) {
+    void *so_handle = dlopen(lib_name.c_str(), RTLD_NOW | RTLD_LOCAL);
+    if (!so_handle) {
+        std::cerr << "dlopen(" << lib_name << ") failed with " << dlerror() << std::endl;
+        return std::nullopt;
+    }
+
+    void *fn_ptr = dlsym(so_handle, fn_name.c_str());
+    if (!fn_ptr) {
+        dlclose(so_handle);
+        std::cerr << "dlsym(" << fn_name << ") failed with " << dlerror() << std::endl;
+        return std::nullopt;
+    }
+
+    return std::make_pair(so_handle, fn_ptr);
+}
+
+void shared_symbol_close(void *so_handle) {
+    if (so_handle && dlclose(so_handle)) {
+        std::cerr << "dlclose() failed with " << dlerror() << std::endl;
+    }
+}
+
+using GetTimeFn = pcm_uint (*)();
+uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) { return ts_end - ts_start; }
+
+} // namespace util
+
 // ============================================================================
 // Forward declarations
 // ============================================================================
-template <typename> inline constexpr bool always_false_v = false;
 
 // ============================================================================
 // PCMI-local variable descriptor definitions: the simplest form of object associated with the flow
@@ -82,11 +116,6 @@ template <typename T> inline constexpr bool is_control_v = is_control<std::decay
 // Stateless signal object policy
 // ============================================================================
 
-using GetTimeFn = pcm_uint (*)();
-enum class GetTimeBackend { kStd, kHtsim };
-
-uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) { return ts_end - ts_start; }
-
 template <typename StorageT, pcm_signal_t Type, pcm_uint Mask, pcm_signal_accum_t Accum,
           pcm_uint TriggerThreshold>
 struct SignalPolicy {
@@ -99,15 +128,16 @@ struct SignalPolicy {
         ((TriggerThreshold > 0) && (TriggerThreshold != PCM_SIG_NO_TRIGGER));
     static constexpr bool kIsAccum = (Accum != PCM_SIG_ACCUM_UNSPEC);
 
-    static void update(pcm_uint start_ts, GetTimeFn get_time, StorageT &cur, pcm_uint update_value)
+    static void update(pcm_uint start_ts, util::GetTimeFn get_time, StorageT &cur,
+                       pcm_uint update_value)
         requires(Accum != PCM_SIG_ACCUM_UNSPEC)
     {
         const StorageT v = static_cast<StorageT>(update_value);
         if constexpr (Type == PCM_SIG_ELAPSED_TIME) {
             if constexpr (kIsTrigger) {
-                /* this is a timer and handled in the TriggerSignal, nothing to do */
+                // this is a timer and handled in the TriggerSignal, so nothing to do
             } else {
-                cur = get_time_diff(start_ts, get_time());
+                cur = util::get_time_diff(start_ts, get_time());
             }
         } else if constexpr (Accum == PCM_SIG_ACCUM_SUM) {
             cur += v;
@@ -118,19 +148,19 @@ struct SignalPolicy {
         } else if constexpr (Accum == PCM_SIG_ACCUM_MAX) {
             cur = std::max(cur, v);
         } else {
-            static_assert(always_false_v<void>, "Unsupported accumulator");
+            static_assert(util::always_false_v<void>, "Unsupported accumulator");
         }
     }
 
-    static bool is_fired(pcm_uint start_ts, GetTimeFn get_time, const StorageT &cur,
+    static bool is_fired(pcm_uint start_ts, util::GetTimeFn get_time, const StorageT &cur,
                          const StorageT &thresh)
         requires(TriggerThreshold != PCM_SIG_NO_TRIGGER)
     {
         if constexpr (Type == PCM_SIG_ELAPSED_TIME) {
             auto timer = cur;
             if (timer) {
-                pcm_uint now = get_time_diff(start_ts, get_time());
-                /* we assume that now is always larger than timer value */
+                pcm_uint now = util::get_time_diff(start_ts, get_time());
+                // we assume that now value is always larger than timer value
                 if (now - timer >= thresh) {
                     return true;
                 }
@@ -144,12 +174,12 @@ struct SignalPolicy {
         }
     }
 
-    static void rearm_if_needed(pcm_uint start_ts, GetTimeFn get_time, StorageT &cur)
+    static void rearm_if_needed(pcm_uint start_ts, util::GetTimeFn get_time, StorageT &cur)
         requires(TriggerThreshold != PCM_SIG_NO_TRIGGER)
     {
         if constexpr (kType == PCM_SIG_ELAPSED_TIME) {
             if (cur == PCM_SIG_REARM) {
-                cur = get_time_diff(start_ts, get_time());
+                cur = util::get_time_diff(start_ts, get_time());
             }
         } else if constexpr (kType == PCM_SIG_DATA_TX) {
             if (cur == PCM_SIG_REARM) {
@@ -208,7 +238,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
     static_assert(HasDenseIndices<ControlsTupleT>, "Duplicate/non-uniform indices among controls");
     static_assert(HasDenseIndices<SignalsTupleT>, "Duplicate/non-uniform indices among signals");
 
-    GetTimeFn get_time_{nullptr};
+    util::GetTimeFn get_time_{nullptr};
     pcm_uint start_ts_{};
 
     /*
@@ -224,10 +254,10 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
                     auto &slot =
                         static_cast<FlowImplT *>(self)->template control_slot_impl<T::kIndex>();
                     T::set(slot, val);
-                    return true; // Found - triggers short-circuit
+                    return true;
                 }
             }
-            return false; // Not found - continue
+            return false;
         }(this) || ...));
     }
 
@@ -240,28 +270,12 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
                     auto const &slot = static_cast<FlowImplT const *>(self)
                                            ->template control_slot_impl<T::kIndex>();
                     result = T::get(slot);
-                    return true; // Found - triggers short-circuit
+                    return true;
                 }
             }
-            return false; // Not found - continue
+            return false;
         }(this) || ...));
         return result;
-    }
-
-    template <GetTimeBackend TimeSrc> void init_time() {
-        if constexpr (TimeSrc == GetTimeBackend::kStd) {
-            get_time_ = []() -> pcm_uint {
-                return static_cast<pcm_uint>(
-                    std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        std::chrono::high_resolution_clock::now().time_since_epoch())
-                        .count());
-            };
-        } else if constexpr (TimeSrc == GetTimeBackend::kHtsim) {
-            static_assert(always_false_v<GetTimeBackend>, "HTSIM time source is not supported yet");
-        } else {
-            static_assert(always_false_v<GetTimeBackend>, "Unsupported time source");
-        }
-        start_ts_ = get_time_();
     }
 
     template <pcm_signal_t Match> void update_signals(pcm_uint v) {
@@ -329,16 +343,32 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
 // ============================================================================
 
 // Primary template
-template <typename Tuple> struct SimpleFlow;
+template <const char *AlgoName, typename Tuple> struct SimpleFlow;
 
-template <typename... Ds>
-struct SimpleFlow<std::tuple<Ds...>>
-    : Flow<SimpleFlow<std::tuple<Ds...>>, typename Ds::template Rebind<pcm_uint>...> {
+// The only place where we need to expose raw pointers because templates can't accept std::string
+template <const char *AlgoName, typename... Ds>
+struct SimpleFlow<AlgoName, std::tuple<Ds...>>
+    : Flow<SimpleFlow<AlgoName, std::tuple<Ds...>>, typename Ds::template Rebind<pcm_uint>...> {
 
-    using Base = Flow<SimpleFlow<std::tuple<Ds...>>, typename Ds::template Rebind<pcm_uint>...>;
+    using Base =
+        Flow<SimpleFlow<AlgoName, std::tuple<Ds...>>, typename Ds::template Rebind<pcm_uint>...>;
 
+    void *algorithm_so_handle_;
     pcm_cc_algorithm_cb algorithm_cb_{nullptr};
-    explicit SimpleFlow(pcm_cc_algorithm_cb algorithm_cb) : algorithm_cb_{algorithm_cb} {
+
+    ~SimpleFlow() { util::shared_symbol_close(algorithm_so_handle_); }
+    explicit SimpleFlow(util::GetTimeFn get_time_fn) {
+        Base::get_time_ = get_time_fn;
+
+        auto result = util::shared_symbol_open("lib" + std::string(AlgoName) + ".so",
+                                               std::string(__algorithm_entry_point_symbol));
+        if (!result.has_value())
+            throw std::runtime_error("Failed to open algorithm shared library");
+
+        auto [so_handle, raw_fn_ptr] = result.value();
+        algorithm_so_handle_ = so_handle;
+        algorithm_cb_ = reinterpret_cast<pcm_cc_algorithm_cb>(raw_fn_ptr);
+
         (([&] {
              using T = typename Ds::template Rebind<pcm_uint>;
              if constexpr (is_signal_v<T>) {
@@ -358,7 +388,7 @@ struct SimpleFlow<std::tuple<Ds...>>
     SimpleFlow(const SimpleFlow &) = default; // default deepcopy used in factory
     SimpleFlow &operator=(const SimpleFlow &) = default;
 
-    flow_datapath_snapshot snapshot_{}; // TODO: have cache for the snapshot?
+    flow_datapath_snapshot snapshot_{}; // TODO: have cache for the snapshot shared between flows?
 
     using ControlsTupleT = typename Base::ControlsTupleT;
     using SignalsTupleT = typename Base::SignalsTupleT;
@@ -419,7 +449,10 @@ struct SimpleFlow<std::tuple<Ds...>>
     }
 };
 
-template <GetTimeBackend TimeSrc> struct Device {
+struct Device {
+    util::GetTimeFn get_time_fn_{nullptr};
+    explicit Device(util::GetTimeFn get_time_fn) : get_time_fn_{get_time_fn} {}
+
     [[nodiscard]] bool progress() {
         if (active_flows_.empty())
             return false;
@@ -431,15 +464,13 @@ template <GetTimeBackend TimeSrc> struct Device {
 
     // Register a flow spec (mask + factory that deep-copies the spec into the newly created
     // flow)
-    template <typename FlowT>
-    void add_flow_spec_matching_rule(const FlowT &flow_config, uint32_t matching_rule) {
+    template <typename FlowT> void add_flow_spec_matching_rule(uint32_t matching_rule) {
         static_assert(std::is_base_of_v<FlowDesc, FlowT>,
                       "FlowT must derive from FlowDesc (e.g., SimpleFlow<...>)");
         static_assert(std::is_copy_constructible_v<FlowT>);
         static_assert(std::is_move_constructible_v<FlowT>);
-        configs_.emplace_back(matching_rule, [flow_config]() -> std::unique_ptr<FlowDesc> {
-            auto new_flow = std::make_unique<FlowT>(flow_config);
-            new_flow->template init_time<TimeSrc>();
+        configs_.emplace_back(matching_rule, [this]() -> std::unique_ptr<FlowDesc> {
+            auto new_flow = std::make_unique<FlowT>(get_time_fn_);
             return new_flow;
         });
     }
@@ -467,7 +498,6 @@ template <GetTimeBackend TimeSrc> struct Device {
         throw std::runtime_error("No matching flow spec for address");
     }
 
-    // TODO: implement remove_flow()
   private:
     using Factory = std::function<std::unique_ptr<FlowDesc>()>;
     std::vector<std::pair<uint32_t, Factory>> configs_; // mask + flow factory
@@ -479,38 +509,12 @@ template <GetTimeBackend TimeSrc> struct Device {
 // Dynamic library loading utilities
 // ============================================================================
 
-[[nodiscard]] std::optional<std::pair<void *, void *>>
-shared_symbol_open(const std::string &lib_name, const std::string &fn_name) {
-    void *so_handle = dlopen(lib_name.c_str(), RTLD_NOW | RTLD_LOCAL);
-    if (!so_handle) {
-        std::cerr << "dlopen(" << lib_name << ") failed with " << dlerror() << std::endl;
-        return std::nullopt;
-    }
-
-    void *fn_ptr = dlsym(so_handle, fn_name.c_str());
-    if (!fn_ptr) {
-        dlclose(so_handle);
-        std::cerr << "dlsym(" << fn_name << ") failed with " << dlerror() << std::endl;
-        return std::nullopt;
-    }
-
-    return std::make_pair(so_handle, fn_ptr);
-}
-
-void shared_symbol_close(void *so_handle) {
-    if (so_handle && dlclose(so_handle)) {
-        std::cerr << "dlclose() failed with " << dlerror() << std::endl;
-    }
-}
-
 } // namespace pcm
 
 // ============================================================================
 // Demo
 // ============================================================================
 using namespace pcm;
-
-pcm_cc_algorithm_cb algorithm_cb = nullptr;
 
 inline constexpr pcm_float kFpVar = 42.0;
 inline constexpr pcm_int kIntVar = -42;
@@ -523,46 +527,23 @@ using DatapathSpec =
                VariableDesc<pcm_float, kFpVar, 0>, VariableDesc<pcm_int, kIntVar, 1>,
                VariableDesc<pcm_uint, kUintVar, 2>>;
 
-using FlowSpec = SimpleFlow<DatapathSpec>;
+inline constexpr const char AlgoName[] = "dctcp";
 
-void *algorithm_so_library_handle = nullptr;
+using FlowSpec = SimpleFlow<AlgoName, DatapathSpec>;
 
-[[nodiscard]] std::optional<FlowSpec> flow_spec_create(const std::string &algo_name) {
-    auto result =
-        shared_symbol_open("lib" + algo_name + ".so", std::string(__algorithm_entry_point_symbol));
-    if (!result.has_value()) {
-        return std::nullopt;
-    }
-
-    auto [so_handle, raw_algorithm_ptr] = result.value();
-    algorithm_so_library_handle = so_handle;
-
-    return FlowSpec{reinterpret_cast<pcm_cc_algorithm_cb>(raw_algorithm_ptr)};
-}
-
-void flow_spec_destroy() {
-    if (algorithm_so_library_handle) {
-        shared_symbol_close(algorithm_so_library_handle);
-        algorithm_so_library_handle = nullptr;
-    }
-    // FlowSpec returned from the flow_spec_create() gets destroyed automatically
-}
-
-int main(int argc, char **argv) {
-    if (argc < 2) {
-        std::cerr << "Usage: " << argv[0] << " <algorithm_name>" << std::endl;
-        return 1;
-    }
-
+int main() {
     // register a spec (mask 0xFF)
-    auto spec_opt = flow_spec_create(argv[1]);
-    if (!spec_opt.has_value()) {
-        std::cerr << "Failed to create flow spec for algorithm: " << argv[1] << std::endl;
-        return 1;
-    }
 
-    Device<GetTimeBackend::kStd> dev;
-    dev.add_flow_spec_matching_rule(spec_opt.value(), 0xFF);
+    util::GetTimeFn get_time_fn = []() -> pcm_uint {
+        return static_cast<pcm_uint>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::high_resolution_clock::now().time_since_epoch())
+                .count());
+    };
+
+    Device dev{get_time_fn};
+
+    dev.add_flow_spec_matching_rule<FlowSpec>(0xFF);
 
     // create a flow for some 32-bit "address"
     auto &fdesc = dev.create_flow(0x12);
