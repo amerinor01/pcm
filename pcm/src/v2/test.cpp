@@ -17,8 +17,8 @@ inline constexpr const char AlgoName[] = "dctcp";
 
 using FlowSpecType = SimpleFlow<AlgoName, DatapathSpec>;
 
-FlowSpecType dummy_spec() {
-    return FlowSpecType{};
+extern "C" FlowDesc* dummy_spec() {
+    return new FlowSpecType{};  // Return pointer to concrete type
 }
 
 int main() {
@@ -31,9 +31,8 @@ int main() {
 
     Device dev{get_time_source};
 
-    // Create spec and move it to add_flow_spec
-    auto flow_spec = dummy_spec();
-    dev.add_flow_spec(std::move(flow_spec), 0xFF); // Move instead of copy
+    // For dlsym usage - pass the factory function directly
+    dev.add_flow_spec_factory(dummy_spec, 0xFF);
 
     auto &fdesc1 = dev.create_flow(0x12);
     auto &fdesc2 = dev.create_flow(0x13);

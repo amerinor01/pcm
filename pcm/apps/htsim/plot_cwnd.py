@@ -117,6 +117,9 @@ def create_cwnd_plot(flow_data: Dict[str, Tuple[List[int], List[int]]],
     try:
         plt.figure(figsize=(12, 8))
         
+        # Set font size for all plot elements
+        plt.rcParams.update({'font.size': 14})
+        
         for flow_addr, (times, cwnds) in flow_data.items():
             if not times or not cwnds:
                 print(f"Warning: Empty data for flow {flow_addr}")
@@ -129,17 +132,17 @@ def create_cwnd_plot(flow_data: Dict[str, Tuple[List[int], List[int]]],
             print(f"Plotted {len(times)} points for flow {flow_addr}")
         
         # Add BDP reference lines
-        if bdp_info['flow_bdp'] is not None:
-            plt.axhline(y=bdp_info['flow_bdp'], color='red', linestyle='--', alpha=0.8, 
-                       label=f'Flow BDP ({bdp_info["flow_bdp"]} bytes)')
+        # if bdp_info['flow_bdp'] is not None:
+        #     plt.axhline(y=bdp_info['flow_bdp'], color='red', linestyle='--', alpha=0.8, 
+        #                label=f'Flow BDP ({bdp_info["flow_bdp"]} bytes)')
         
-        if bdp_info['flow_maxwnd'] is not None:
-            plt.axhline(y=bdp_info['flow_maxwnd'], color='orange', linestyle=':', alpha=0.8,
-                       label=f'Max Window ({bdp_info["flow_maxwnd"]} bytes)')
+        # if bdp_info['flow_maxwnd'] is not None:
+        #     plt.axhline(y=bdp_info['flow_maxwnd'], color='orange', linestyle=':', alpha=0.8,
+        #                label=f'Max Window ({bdp_info["flow_maxwnd"]} bytes)')
         
-        if bdp_info['network_bdp'] is not None and bdp_info['network_bdp'] != bdp_info['flow_bdp']:
-            plt.axhline(y=bdp_info['network_bdp'], color='purple', linestyle='-.', alpha=0.8,
-                       label=f'Network BDP ({bdp_info["network_bdp"]} bytes)')
+        # if bdp_info['network_bdp'] is not None and bdp_info['network_bdp'] != bdp_info['flow_bdp']:
+        #     plt.axhline(y=bdp_info['network_bdp'], color='purple', linestyle='-.', alpha=0.8,
+        #                label=f'Network BDP ({bdp_info["network_bdp"]} bytes)')
         
         plt.xlabel('Simulated Time [ps]')
         plt.ylabel('Congestion Window [Bytes]')

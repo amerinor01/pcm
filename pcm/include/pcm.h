@@ -28,8 +28,10 @@ extern "C" {
 #endif
 
 typedef int64_t pcm_int;
-typedef uint64_t pcm_uint;
 typedef double pcm_float;
+typedef uint64_t pcm_uint;
+
+#define PCM_THRESHOLD_UNSPEC UINT64_MAX
 
 /**
  * @file pcm.h
@@ -62,6 +64,9 @@ typedef enum signal {
     PCM_SIG_ELAPSED_TIME = 8 /**< Monotonic elapsed time */
 } pcm_signal_t;
 
+#define PCM_SIG_REARM (UINT64_MAX - 1)
+#define PCM_SIG_NO_TRIGGER (UINT64_MAX)
+
 /**
  * @enum pcm_signal_accum_t
  * @brief Accumulation operations for PCM signals.
@@ -70,7 +75,8 @@ typedef enum signal_accum {
     PCM_SIG_ACCUM_SUM = 0, /**< Sum all samples */
     PCM_SIG_ACCUM_MIN = 1, /**< Keep minimum sample */
     PCM_SIG_ACCUM_MAX = 2, /**< Keep maximum sample */
-    PCM_SIG_ACCUM_LAST = 3 /**< Keep only the last sample */
+    PCM_SIG_ACCUM_LAST = 3, /**< Keep only the last sample */
+    PCM_SIG_ACCUM_UNSPEC = 4, /**< Accumulator is not specified  */
 } pcm_signal_accum_t;
 
 /**

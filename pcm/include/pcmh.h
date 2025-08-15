@@ -31,6 +31,7 @@ struct flow_datapath_snapshot {
 #define ALGO_CTX_PASS snapshot
 #define __algorithm_entry_point __algorithm_main(ALGO_CTX_ARGS)
 #define __algorithm_entry_point_symbol "__algorithm_main"
+typedef pcm_err_t (*pcm_cc_algorithm_cb)(struct flow_datapath_snapshot *);
 
 /**
  * @brief Algorithm handler entry point
@@ -60,6 +61,8 @@ static PCM_FORCE_INLINE pcm_float decode_pcm_float(pcm_uint val) {
     converter.u = val;
     return converter.f;
 }
+
+#ifndef __cplusplus // handler-side API is compiled with C compiler
 
 static PCM_FORCE_INLINE pcm_uint
 __flow_signal_trigger_mask_get(struct flow_datapath_snapshot *snapshot) {
@@ -212,8 +215,6 @@ __flow_var_float_set(struct flow_datapath_snapshot *snapshot, size_t idx,
  */
 #define set_signal(idx, val) __flow_signal_set(snapshot, idx, val)
 
-#define PCM_SIG_REARM (UINT64_MAX - 1)
-
 /**
  * @brief Update the signal value within a handler.
  *
@@ -244,5 +245,7 @@ __flow_var_float_set(struct flow_datapath_snapshot *snapshot, size_t idx,
  * @param[in] val          New control value.
  */
 #define set_control(idx, val) __flow_control_set(snapshot, idx, val)
+
+#endif
 
 #endif /* _PCMH_H_ */

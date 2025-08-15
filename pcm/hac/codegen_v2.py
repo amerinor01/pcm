@@ -37,14 +37,14 @@ class AlgorithmCodeGenerator:
     def run(self, output_dir: str = ".") -> None:
         """Generate header file in the specified output directory."""
         header_content = self._generate_header()
-        header_path = os.path.join(output_dir, f"{self.algorithm_name}.h")
+        header_path = os.path.join(output_dir, f"{self.algorithm_name}.hpp")
         with open(header_path, "w") as f:
             f.write(header_content)
         print(f"Generated {header_path}")
 
         """Generate PCMC file in the specified output directory."""
         pcmc_content = self._generate_pcmc()
-        pcmc_path = os.path.join(output_dir, f"{self.algorithm_name}_pcmc.c")
+        pcmc_path = os.path.join(output_dir, f"{self.algorithm_name}_spec.cpp")
         with open(pcmc_path, "w") as f:
             f.write(pcmc_content)
         print(f"Generated {pcmc_path}")
@@ -111,17 +111,9 @@ class AlgorithmCodeGenerator:
             if "initial_value" in var:
                 var["initial_value"] = resolve(var["initial_value"])
 
-    def _generate_pcmc(self) -> str:
-        lines: List[str] = []
-        lines.append('#include <tuple>')
-        lines.append('#include <pcmc_v2.hpp>')
-        lines.append(f'#include "{self.algorithm_name}.h"')
-        lines.append("")
-        lines.append(f"__{self.algorithm_name}_pcmc_init(pcm_handle_t new_handle)")
-        lines.append("{")
-        lines.append("using DatapathSpec = std::tuple<")
-        
+    def _generate_pcmc(self) -> str:        
         # Collect all tuple elements first
+        variable_defs = []
         tuple_elements = []
         
         # Add signals
@@ -133,7 +125,7 @@ class AlgorithmCodeGenerator:
                 thr = "PCM_SIG_NO_TRIGGER"
                 if "trigger_threshold" in sig:
                     thr = sig["trigger_threshold"]
-                tuple_elements.append(f"    SignalDesc<{typ}, {accum}, {thr}, {name}>")
+                tuple_elements.append(f"    pcm::SignalDesc<{typ}, {accum}, {thr}, {name}>")
         
         # Add controls
         if self.config.get("controls", []):
@@ -142,7 +134,7 @@ class AlgorithmCodeGenerator:
                 typ = ctrl["type"]
                 name = f"CTRL_{ctrl['name']}"
                 init = ctrl.get("initial_value")
-                tuple_elements.append(f"    ControlDesc<{typ}, {init}, {name}>")
+                tuple_elements.append(f"    pcm::ControlDesc<{typ}, {init}, {name}>")
         
         # Add variables
         if self.config.get("variables", []):
@@ -151,8 +143,17 @@ class AlgorithmCodeGenerator:
                 name = f"VAR_{var['name']}"
                 init = var.get("initial_value")
                 dtype = var.get("type")
-                tuple_elements.append(f"    VariableDesc<pcm_{dtype}, {init}, {name}>")
+                variable_defs.append(f"inline constexpr pcm_{dtype} var_{name} = {init};")
+                tuple_elements.append(f"    pcm::VariableDesc<pcm_{dtype}, var_{name}, {name}>")
         
+        lines: List[str] = []
+        lines.append('#include <tuple>')
+        lines.append('#include "pcm_v2.hpp"')
+        lines.append(f'#include "{self.algorithm_name}.hpp"')
+        lines.append("")
+        for var_def in variable_defs:
+            lines.append(var_def)
+        lines.append("using DatapathSpec = std::tuple<")
         # Add commas to all but the last non-comment element
         for i, element in enumerate(tuple_elements):
             if element.strip().startswith("/*") or element == "":
@@ -171,9 +172,11 @@ class AlgorithmCodeGenerator:
                     lines.append(element + ",")
         
         lines.append(">;")
-
-        lines.append(f"inline constexpr const char AlgoName[] = \"{self.algorithm_name}\"")
-        lines.append("using FlowSpec = SimpleFlow<AlgoName, DatapathSpec>;")
+        lines.append(f"inline constexpr const char AlgoName[] = \"{self.algorithm_name}\";")
+        lines.append("using FlowSpecType = pcm::SimpleFlow<AlgoName, DatapathSpec>;")
+        lines.append(f"pcm::FlowDesc* __{self.algorithm_name}_spec_get()")
+        lines.append("{")
+        lines.append("    return new FlowSpecType{};")
         lines.append("}")
         return "\n".join(lines)
 
@@ -186,6 +189,7 @@ class AlgorithmCodeGenerator:
         lines.append(f"#define _{self.algorithm_name_upper}_H_")
         lines.append("")
         lines.append('#include "pcm.h"')
+        lines.append('#include "pcm_v2.hpp"')
         lines.append("")
 
         # Emit constants as #define
@@ -217,15 +221,7 @@ class AlgorithmCodeGenerator:
             "int algorithm_main();",
             "#else",
             "",
-            "#ifdef __cplusplus",
-            'extern "C" {',
-            "#endif",
-            "",
-            f"int __{self.algorithm_name}_pcmc_init(pcm_handle_t new_handle);",
-            "",
-            "#ifdef __cplusplus",
-            "}",
-            "#endif",
+            f"extern \"C\" pcm::FlowDesc* __{self.algorithm_name}_spec_get();",
             "",
             "#endif",
             f"#endif /* _{self.algorithm_name_upper}_H_ */",
