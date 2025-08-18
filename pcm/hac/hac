@@ -19,6 +19,7 @@
 import sys
 import argparse
 import codegen
+import codegen_v2
 
 def main() -> None:
     # TODO: support options below
@@ -48,6 +49,13 @@ def main() -> None:
        help="Generate <algo_name>_.h and <algo_name>_pcmc.c files from algorithm YAML config (--algoconf option)"
     )
     parser.add_argument(
+       "-v",
+       "--v2",
+       action='store_true',
+       required=False,
+       help="Generate <algo_name>_.h and <algo_name>_pcmc.c files from algorithm YAML config (--algoconf option)"
+    )
+    parser.add_argument(
         "-a",
         "--algoconf",
         required=True,
@@ -68,8 +76,12 @@ def main() -> None:
 
     args = parser.parse_args()
     if args.codegen:
-        generator = codegen.AlgorithmCodeGenerator(args.fabricconf, args.algoconf)
-        generator.run(args.output)
+        if args.v2:
+            generator = codegen_v2.AlgorithmCodeGenerator(args.fabricconf, args.algoconf)
+            generator.run(args.output)
+        else:        
+            generator = codegen.AlgorithmCodeGenerator(args.fabricconf, args.algoconf)
+            generator.run(args.output)
     else:
         sys.exit("Other options are not supported yet");
     # elif args.compile_handler:

@@ -16,6 +16,8 @@ function(create_algo_plugin ALGO_NAME)
     set(SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${ALGO_NAME}.c")  # Existing source file
     set(HEADER_FILE "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}.h")  # Generated header
     set(PCMC_FILE "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}_pcmc.c")  # Generated PCMC
+    set(HEADER_FILE_V2 "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}.hpp")  # Generated V2 C++ header
+    set(SPEC_FILE_V2 "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}_spec.cpp")  # Generated V2 C++ spec file
     
     # Create algorithms output directory
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/algorithms")
@@ -29,12 +31,25 @@ function(create_algo_plugin ALGO_NAME)
         COMMENT "Generating ${ALGO_NAME} algorithm header and PCMC source"
     )
     
+    # Custom command to generate V2 header and spec files
+    add_custom_command(
+        OUTPUT ${HEADER_FILE_V2} ${SPEC_FILE_V2}
+        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../hac/hac --codegen --v2
+                --output ${CMAKE_BINARY_DIR}/algorithms --algoconf ${YAML_FILE} --fabricconf ${FABRIC_FILE}
+        DEPENDS ${YAML_FILE} ${FABRIC_FILE}
+        COMMENT "Generating ${ALGO_NAME} V2 algorithm header and spec source"
+    )
+    
     # Create algorithm library using existing .c file
     add_library(${ALGO_NAME} SHARED ${SOURCE_FILE})
     
     # Add dependency on generated header
     add_custom_target(${ALGO_NAME}_gen DEPENDS ${HEADER_FILE})
     add_dependencies(${ALGO_NAME} ${ALGO_NAME}_gen)
+    
+    # Add dependency on generated V2 header
+    add_custom_target(${ALGO_NAME}_gen_v2 DEPENDS ${HEADER_FILE_V2})
+    add_dependencies(${ALGO_NAME} ${ALGO_NAME}_gen_v2)
     
     # Special handling for dctcp and newreno
     if(ALGO_NAME STREQUAL "dctcp" OR ALGO_NAME STREQUAL "newreno")
@@ -52,7 +67,7 @@ function(create_algo_plugin ALGO_NAME)
     target_compile_options(${ALGO_NAME} PRIVATE -save-temps=obj -gno-record-gcc-switches -Wa,--no-warn)
     
     # Link with PCM and math library
-    target_link_libraries(${ALGO_NAME} PRIVATE pcm m)
+    target_link_libraries(${ALGO_NAME} PRIVATE m)
     
     # Set library properties
     set_target_properties(${ALGO_NAME} PROPERTIES
@@ -73,6 +88,16 @@ function(create_algo_plugin ALGO_NAME)
         SUFFIX ".so"
     )
     install(TARGETS ${ALGO_NAME}_pcmc LIBRARY DESTINATION lib)
+    
+    # Create PCMC V2 version (using generated V2 C++ spec file from build directory)
+    add_library(${ALGO_NAME}_spec SHARED ${SPEC_FILE_V2})
+    target_link_libraries(${ALGO_NAME}_spec PRIVATE pcm)
+    set_target_properties(${ALGO_NAME}_spec PROPERTIES
+        OUTPUT_NAME ${ALGO_NAME}_spec
+        PREFIX "lib"
+        SUFFIX ".so"
+    )
+    install(TARGETS ${ALGO_NAME}_spec LIBRARY DESTINATION lib)
 endfunction()
 
 # Create all algorithm plugins
