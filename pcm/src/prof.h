@@ -3,9 +3,13 @@
 
 #ifdef ENABLE_PROFILING
 
+#include "../include/pcm_log.h"
+
 #ifdef __linux__
 #include <asm/unistd.h>
 #include <linux/perf_event.h>
+#include <sys/ioctl.h>
+#include <sys/syscall.h>
 
 static long perf_event_open(struct perf_event_attr *hw_event, pid_t pid,
                             int cpu, int group_fd, unsigned long flags) {
@@ -31,7 +35,8 @@ struct pcm_perf_context {
 
 #define PCM_PERF_PROF_REGION_START(perf_obj)                                   \
     {                                                                          \
-        struct perf_event_attr pe_cycles = {0};                                \
+        struct perf_event_attr pe_cycles;                                      \
+        memset(&pe_cycles, 0, sizeof(pe_cycles));                              \
         pe_cycles.type = PERF_TYPE_HARDWARE;                                   \
         pe_cycles.size = sizeof(struct perf_event_attr);                       \
         pe_cycles.config = PERF_COUNT_HW_CPU_CYCLES;                           \

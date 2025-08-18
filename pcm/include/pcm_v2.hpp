@@ -9,6 +9,7 @@
 #include <functional>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <optional>
 #include <stdexcept>
 #include <tuple>
@@ -19,6 +20,8 @@
 
 #include "pcm.h"
 #include "pcmh.h"
+
+#include "../src/prof.h"
 
 /*
  Style guide:
@@ -412,6 +415,8 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
     }
 
     [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
+        PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
+        PCM_PERF_PROF_REGION_START(trigger_cycle);
         pcm_uint trigger_mask = 0;
 
         // collect triggers into the mask
@@ -433,8 +438,10 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
          }(this)),
          ...);
 
-        if (!trigger_mask)
+        if (!trigger_mask) {
+            PCM_PERF_PROF_REGION_END(trigger_cycle, trigger_mask);
             return false;
+        }
 
         update_signals<PCM_SIG_ELAPSED_TIME>(0);
         static_cast<FlowImplT *>(this)->prepare_pre_trigger_snapshot_impl(
@@ -454,7 +461,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
              }
          }(this)),
          ...);
-
+        PCM_PERF_PROF_REGION_END(trigger_cycle, trigger_mask);
         return true;
     }
 };
