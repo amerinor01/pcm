@@ -122,7 +122,7 @@ struct ControlPolicy {
     }
 };
 
-// user-facing control descriptor -> rebind to policy implementation
+// user-facing control descriptor
 template <pcm_control_t Type, pcm_uint InitialValue, pcm_uint Index>
 struct ControlDesc {
     template <typename StorageT>
@@ -160,8 +160,7 @@ struct SignalPolicy {
         const StorageT v = static_cast<StorageT>(update_value);
         if constexpr (Type == PCM_SIG_ELAPSED_TIME) {
             if constexpr (kIsTrigger) {
-                // this is a timer and handled in the TriggerSignal, so nothing
-                // to do
+                // this is a timer handled in the TriggerSignal: nothing to do
             } else {
                 cur = util::get_time_diff(start_ts, get_time());
             }
@@ -217,7 +216,7 @@ struct SignalPolicy {
     }
 };
 
-// user-facing signal descriptor -> rebind to policy
+// user-facing signal descriptor
 template <pcm_signal_t Type, pcm_signal_accum_t Accum,
           pcm_uint TriggerThreshold, pcm_uint Mask>
 struct SignalDesc {
@@ -417,6 +416,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
     [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
         PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
         PCM_PERF_PROF_REGION_START(trigger_cycle);
+
         pcm_uint trigger_mask = 0;
 
         // collect triggers into the mask
@@ -471,10 +471,9 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
 // ============================================================================
 
 // Primary template
+// AlgoName is raw pointer because templates can't accept std::string
 template <const char *AlgoName, typename Tuple> struct SimpleFlow;
 
-// The only place where we need to expose raw pointers because templates can't
-// accept std::string
 template <const char *AlgoName, typename... Ds>
 struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     : Flow<SimpleFlow<AlgoName, std::tuple<Ds...>>,
@@ -483,9 +482,22 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     using SelfType = SimpleFlow<AlgoName, std::tuple<Ds...>>;
     using Base = Flow<SelfType, typename Ds::template Rebind<pcm_uint>...>;
 
-    // algorithm shared library is shared between all flow instances
     std::shared_ptr<void> algorithm_so_handle_;
     pcm_cc_algorithm_cb algorithm_cb_{nullptr};
+
+    flow_datapath_snapshot snapshot_{};
+
+    using ControlsTupleT = typename Base::ControlsTupleT;
+    using SignalsTupleT = typename Base::SignalsTupleT;
+
+    static constexpr std::size_t kNumControls =
+        std::tuple_size<ControlsTupleT>::value;
+    static constexpr std::size_t kNumSignals =
+        std::tuple_size<SignalsTupleT>::value;
+
+    std::array<pcm_uint, kNumControls> controls_storage_{};
+    std::array<pcm_uint, kNumSignals> signals_storage_{};
+    std::array<pcm_uint, kNumSignals> thresholds_storage_{};
 
     explicit SimpleFlow() {
         auto result = util::shared_symbol_open(
@@ -520,21 +532,6 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
          }()),
          ...);
     }
-
-    flow_datapath_snapshot
-        snapshot_{}; // TODO: have cache for the snapshot shared between flows?
-
-    using ControlsTupleT = typename Base::ControlsTupleT;
-    using SignalsTupleT = typename Base::SignalsTupleT;
-
-    static constexpr std::size_t kNumControls =
-        std::tuple_size<ControlsTupleT>::value;
-    static constexpr std::size_t kNumSignals =
-        std::tuple_size<SignalsTupleT>::value;
-
-    std::array<pcm_uint, kNumControls> controls_storage_{};
-    std::array<pcm_uint, kNumSignals> signals_storage_{};
-    std::array<pcm_uint, kNumSignals> thresholds_storage_{};
 
     [[nodiscard]] pcm_err_t execute_algorithm_impl() {
         if (!algorithm_cb_)
@@ -606,7 +603,6 @@ struct Device {
         return address;
     }
 
-    // Register a flow spec
     void add_flow_spec_factory(std::function<FlowDesc *()> spec_factory,
                                uint32_t matching_rule) {
         if (!get_time_source_)
@@ -619,8 +615,6 @@ struct Device {
             });
     }
 
-    // Create a new flow instance for a matching address and return it for
-    // further configuration
     FlowDesc &create_flow(uint32_t new_address) {
         // address has to be unique
         if (std::any_of(
@@ -629,12 +623,14 @@ struct Device {
             throw std::runtime_error("Flow with this address already exists");
         }
 
+        if (configs_.size() > 1)
+            throw std::runtime_error("Device supports only a single CC config");
+
         // find spec and create
         for (const auto &[mask, factory] : configs_) {
-            std::cerr << "Checking mask=" << mask << " addr=" << new_address
-                      << std::endl;
+            // for now we don't really support matching
             // if (new_address & mask) {
-            if (true) { // for now we don't really support matching
+            if (true) {
                 auto &new_flow_pair =
                     active_flows_.emplace_back(new_address, factory());
                 // ensure scheduler cursor is within bounds
