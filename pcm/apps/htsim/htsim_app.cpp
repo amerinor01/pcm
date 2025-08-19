@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
     std::string pcm_algo_name;
     simtime_picosec pcm_handler_delay = pcm::Device::default_handlerDelayPs;
     simtime_picosec pcm_sched_poll_delay = pcm::Device::default_schedulerPollDelayPs;
-    pcm::DeviceSchedulerType pcm_sched_type = pcm::DeviceSchedulerType::SCHEDULER_TYPE_SYNC;
+    pcm::ProgressType pcm_sched_type = pcm::ProgressType::SCHEDULER_TYPE_SYNC;
 
     while (i < argc) {
         if (!strcmp(argv[i], "-o")) {
@@ -524,7 +524,7 @@ int main(int argc, char **argv) {
             cout << "PCM algorithm handler delay is set to " << pcm_handler_delay << endl;
             i++;
         } else if (!strcmp(argv[i], "-pcm_async_sched")) {
-            pcm_sched_type = pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC;
+            pcm_sched_type = pcm::ProgressType::SCHEDULER_TYPE_ASYNC;
             cout << "PCM algorithm handler delay is set to async" << endl;
         } else {
             cout << "Unknown parameter " << argv[i] << endl;

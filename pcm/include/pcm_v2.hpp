@@ -14,6 +14,8 @@
 #include <stdexcept>
 #include <tuple>
 #include <type_traits>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include <dlfcn.h> // dlopen/dlsym
@@ -551,8 +553,17 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     }
 
     void apply_post_trigger_snapshot_impl() {
-        for (std::size_t i = 0; i < kNumSignals; ++i)
-            signals_storage_[i] += snapshot_.signals[i];
+        // update signals from snapshot
+        [this]<std::size_t... Is>(std::index_sequence<Is...>) {
+            (([this]<std::size_t sig_idx>() {
+                 auto &slot = signal_slot_impl<sig_idx>();
+                 using SignalType =
+                     std::tuple_element_t<sig_idx, SignalsTupleT>;
+                 SignalType::update(Base::start_ts_, Base::get_time_, slot,
+                                    snapshot_.signals[sig_idx]);
+             }.template operator()<Is>()),
+             ...);
+        }(std::make_index_sequence<kNumSignals>{});
         std::memcpy(thresholds_storage_.data(), snapshot_.thresholds,
                     kNumSignals * sizeof(pcm_uint));
         std::memcpy(controls_storage_.data(), snapshot_.controls,
@@ -590,18 +601,7 @@ struct Device {
     explicit Device(util::GetTimeFn get_time_source)
         : get_time_source_{get_time_source} {}
 
-    [[nodiscard]] std::optional<uint32_t> progress() {
-        if (active_flows_.empty())
-            return std::nullopt;
-
-        std::optional<uint32_t> address = std::nullopt;
-        bool triggered =
-            active_flows_[cur_rr_idx_].second->invoke_cc_algorithm_on_trigger();
-        if (triggered)
-            address = active_flows_[cur_rr_idx_].first;
-        cur_rr_idx_ = (cur_rr_idx_ + 1) % active_flows_.size();
-        return address;
-    }
+    [[nodiscard]] virtual std::optional<uint32_t> progress() = 0;
 
     void add_flow_spec_factory(std::function<FlowDesc *()> spec_factory,
                                uint32_t matching_rule) {
@@ -617,11 +617,8 @@ struct Device {
 
     FlowDesc &create_flow(uint32_t new_address) {
         // address has to be unique
-        if (std::any_of(
-                active_flows_.begin(), active_flows_.end(),
-                [&](const auto &p) { return p.first == new_address; })) {
+        if (flows_.find(new_address) != flows_.end())
             throw std::runtime_error("Flow with this address already exists");
-        }
 
         if (configs_.size() > 1)
             throw std::runtime_error("Device supports only a single CC config");
@@ -631,25 +628,50 @@ struct Device {
             // for now we don't really support matching
             // if (new_address & mask) {
             if (true) {
-                auto &new_flow_pair =
-                    active_flows_.emplace_back(new_address, factory());
-                // ensure scheduler cursor is within bounds
-                if (cur_rr_idx_ >= active_flows_.size()) {
-                    cur_rr_idx_ = 0;
-                }
-                return *new_flow_pair.second;
+                auto ret = flows_.insert({new_address, factory()});
+                if (!ret.second)
+                    throw std::runtime_error("new flow insertion failed");
+                return *(ret.first->second);
             }
         }
 
         throw std::runtime_error("No matching flow spec for address");
     }
 
-  private:
+  protected:
     using Factory = std::function<std::unique_ptr<FlowDesc>()>;
     std::vector<std::pair<uint32_t, Factory>> configs_; // mask + flow factory
-    std::vector<std::pair<uint32_t, std::unique_ptr<FlowDesc>>>
-        active_flows_{};        // active flows
-    std::size_t cur_rr_idx_{0}; // round robin scheduler cursor
+    using FlowStorage = std::unordered_map<uint32_t, std::unique_ptr<FlowDesc>>;
+    FlowStorage flows_{}; // flows
+};
+
+struct DeviceCheckOnSched final : Device {
+    explicit DeviceCheckOnSched(util::GetTimeFn get_time_source)
+        : Device::Device{get_time_source} {}
+
+    std::optional<uint32_t> progress() override {
+        if (flows_.empty())
+            return std::nullopt;
+
+        std::optional<uint32_t> address = std::nullopt;
+        auto triggered = cur_rr_it_->second->invoke_cc_algorithm_on_trigger();
+        if (triggered)
+            address = cur_rr_it_->first;
+
+        ++cur_rr_it_;
+        if (cur_rr_it_ == flows_.end())
+            cur_rr_it_ = flows_.begin();
+        return address;
+    }
+
+    FlowDesc &create_flow(uint32_t new_address) {
+        auto &new_flow = Device::create_flow(new_address);
+        cur_rr_it_ = flows_.begin();
+        return new_flow;
+    }
+
+  private:
+    Device::FlowStorage::iterator cur_rr_it_{Device::flows_.end()};
 };
 
 } // namespace pcm
