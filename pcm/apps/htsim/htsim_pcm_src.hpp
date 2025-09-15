@@ -44,7 +44,7 @@ class Src final : public UecSrc {
         _pcm_flow.signalUpdate(PCM_SIG_IN_FLIGHT, UecSrc::_in_flight);
         _pcm_flow.signalUpdate(PCM_SIG_RTT, UecSrc::_raw_rtt);
 
-        if (_pcm_device.schedulerTypeGet() == pcm::DeviceSchedulerType::SCHEDULER_TYPE_SYNC) {
+        if (_pcm_device.schedulerTypeGet() == pcm::ProgressType::SCHEDULER_TYPE_SYNC) {
             _pcm_device.doNextEvent();
         }
     }
@@ -61,7 +61,7 @@ class Src final : public UecSrc {
         _pcm_flow.signalUpdate(PCM_SIG_DATA_NACKED, nacked_bytes);
         _pcm_flow.signalUpdate(PCM_SIG_RTT, UecSrc::_base_rtt + UecSrc::_network_rtt);
 
-        if (_pcm_device.schedulerTypeGet() == pcm::DeviceSchedulerType::SCHEDULER_TYPE_SYNC) {
+        if (_pcm_device.schedulerTypeGet() == pcm::ProgressType::SCHEDULER_TYPE_SYNC) {
             _pcm_device.doNextEvent();
         }
     }

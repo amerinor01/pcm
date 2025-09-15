@@ -1,0 +1,3 @@
+[submodule "uet-htsim"]
+	path = uet-htsim
+	url = https://github.com/ultraethernet/uet-htsim.git

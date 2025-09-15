@@ -161,8 +161,8 @@ int main(int argc, char **argv) {
         pcm_htsim::PcmNic::default_handlerDelayPs;
     simtime_picosec pcm_sched_poll_delay =
         pcm_htsim::PcmNic::default_schedulerPollDelayPs;
-    pcm_htsim::DeviceSchedulerType pcm_sched_type =
-        pcm_htsim::DeviceSchedulerType::SCHEDULER_TYPE_SYNC;
+    pcm_htsim::ProgressType pcm_sched_type =
+        pcm_htsim::ProgressType::SCHEDULER_TYPE_SYNC;
 
     while (i < argc) {
         if (!strcmp(argv[i], "-o")) {
@@ -548,7 +548,7 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-pcm_async_sched")) {
             pcm_sched_type =
-                pcm_htsim::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC;
+                pcm_htsim::ProgressType::SCHEDULER_TYPE_ASYNC;
             cout << "PCM algorithm handler delay is set to async" << endl;
         } else {
             cout << "Unknown parameter " << argv[i] << endl;

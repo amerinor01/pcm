@@ -24,13 +24,13 @@ class DeviceException final : public std::runtime_error {
     }
 };
 
-enum class DeviceSchedulerType { SCHEDULER_TYPE_SYNC, SCHEDULER_TYPE_ASYNC };
+enum class ProgressType { SCHEDULER_TYPE_SYNC, SCHEDULER_TYPE_ASYNC };
 
 class PcmScheduler final : public EventSource {
   public:
     PcmScheduler(EventList &eventList, std::string_view pcmAlgoName,
                  simtime_picosec handlerDelay, simtime_picosec pollDelay,
-                 DeviceSchedulerType schedType)
+                 ProgressType schedType)
         : EventSource(eventList, "PcmScheduler"), _event_list{eventList},
           _pcm_algo_name{pcmAlgoName}, _handler_delay{handlerDelay},
           _poll_delay{pollDelay}, _sched_type{schedType},
@@ -74,7 +74,7 @@ class PcmScheduler final : public EventSource {
             },
             std::numeric_limits<uint32_t>::max());
 
-        if (_sched_type == DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+        if (_sched_type == ProgressType::SCHEDULER_TYPE_ASYNC) {
             _next_sched = eventList.now() + _poll_delay;
             _event_list.sourceIsPending(*this, _next_sched);
         }
@@ -91,7 +91,7 @@ class PcmScheduler final : public EventSource {
         return _dev.create_flow(new_flow_addr);
     }
 
-    [[nodiscard]] DeviceSchedulerType schedulerTypeGet() noexcept {
+    [[nodiscard]] ProgressType schedulerTypeGet() noexcept {
         return _sched_type;
     }
 
@@ -102,8 +102,8 @@ class PcmScheduler final : public EventSource {
     std::string _pcm_algo_name;
     simtime_picosec _handler_delay;
     simtime_picosec _poll_delay;
-    DeviceSchedulerType _sched_type;
-    pcm::Device _dev;
+    ProgressType _sched_type;
+    pcm::DeviceCheckOnSched _dev;
     simtime_picosec _next_sched;
     uint32_t flow_addr_count{0};
     std::unordered_map<uint32_t, PcmSrc *> _flow_addr_to_src_mapping;
@@ -117,7 +117,7 @@ class PcmNic final : public UecNIC {
     PcmNic(id_t src_num, EventList &eventList, linkspeed_bps linkspeed,
            uint32_t ports, std::string_view pcmAlgoName,
            simtime_picosec handlerDelay, simtime_picosec pollDelay,
-           DeviceSchedulerType schedType)
+           ProgressType schedType)
         : UecNIC{src_num, eventList, linkspeed, ports},
           _scheduler{eventList, pcmAlgoName, handlerDelay, pollDelay,
                      schedType} {}
@@ -169,7 +169,7 @@ class PcmSrc final : public UecSrc {
         _pcm_flow.update_signals_runtime(PCM_SIG_RTT, UecSrc::_raw_rtt);
 
         if (_nic._scheduler.schedulerTypeGet() ==
-            DeviceSchedulerType::SCHEDULER_TYPE_SYNC) {
+            ProgressType::SCHEDULER_TYPE_SYNC) {
             _nic._scheduler.doNextEvent();
         }
     }
@@ -189,7 +189,7 @@ class PcmSrc final : public UecSrc {
                                                           UecSrc::_network_rtt);
 
         if (_nic._scheduler.schedulerTypeGet() ==
-            DeviceSchedulerType::SCHEDULER_TYPE_SYNC) {
+            ProgressType::SCHEDULER_TYPE_SYNC) {
             _nic._scheduler.doNextEvent();
         }
     }
@@ -201,7 +201,7 @@ class PcmSrc final : public UecSrc {
 
 // PcmScheduler method implementations that need complete PcmSrc definition
 void PcmScheduler::doNextEvent() {
-    if (schedulerTypeGet() == DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+    if (schedulerTypeGet() == ProgressType::SCHEDULER_TYPE_ASYNC) {
         if (eventlist().now() != _next_sched)
             throw DeviceException{
                 "Current time is not equal to the _next_sched time"};
@@ -226,7 +226,7 @@ void PcmScheduler::doNextEvent() {
         pcm_src->fetchCwndUpdate();
     }
 
-    if (schedulerTypeGet() == DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+    if (schedulerTypeGet() == ProgressType::SCHEDULER_TYPE_ASYNC) {
         if (address.has_value())
             _next_sched += _handler_delay; // if handler execution happened,
                                            // penalize it as well

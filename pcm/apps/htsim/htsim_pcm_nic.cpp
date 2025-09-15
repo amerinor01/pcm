@@ -29,7 +29,7 @@ void Device::setEventList(EventList *eventList) {
 }
 
 Device::Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picosec handlerDelay,
-               simtime_picosec pollDelay, DeviceSchedulerType schedType)
+               simtime_picosec pollDelay, ProgressType schedType)
     : EventSource{eventList, "PcmDevice"}, _pcm_algo_name{pcmAlgoName}, _handler_delay{handlerDelay},
       _poll_delay{pollDelay}, _sched_type{schedType} {
 
@@ -41,7 +41,7 @@ Device::Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picos
     if (device_pcmc_init(_pcm_device_ptr, _pcm_algo_name.c_str(), &_pcm_algo_handler) != PCM_SUCCESS)
         throw DeviceException{"Failed to initialize PCMC with algorithm " + _pcm_algo_name};
 
-    if (_sched_type == pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+    if (_sched_type == pcm::ProgressType::SCHEDULER_TYPE_ASYNC) {
         _next_sched = eventlist().now() + _poll_delay;
         eventlist().sourceIsPending(*this, _next_sched);
     }
@@ -60,7 +60,7 @@ Device::~Device() {
 }
 
 void Device::doNextEvent() {
-    if (_sched_type == pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+    if (_sched_type == pcm::ProgressType::SCHEDULER_TYPE_ASYNC) {
         if (eventlist().now() != _next_sched)
             throw DeviceException{"Current time is not equal to the _next_sched time"};
         _next_sched = eventlist().now() + _poll_delay; // penalize call to sched progress
@@ -84,7 +84,7 @@ void Device::doNextEvent() {
         src->datapathCwndUpdate();
     }
 
-    if (_sched_type == pcm::DeviceSchedulerType::SCHEDULER_TYPE_ASYNC) {
+    if (_sched_type == pcm::ProgressType::SCHEDULER_TYPE_ASYNC) {
         if (triggered)
             _next_sched += _handler_delay; // if handler execution happened, penalize it as well
         auto num_finished_srcs =

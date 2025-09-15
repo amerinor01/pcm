@@ -1204,7 +1204,6 @@ void UecSrc::fair_increase(uint32_t newly_acked_bytes){
     mem_b before = _inc_bytes;
     _inc_bytes += _fi * newly_acked_bytes; //increase by 16Million!
     _nscc_fulfill_stats.inc_fair_bytes += _inc_bytes - before;
-    printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=FI _cwnd=%llu\n", this, eventlist().now(), _cwnd + _inc_bytes / _cwnd);
 }
 
 void UecSrc::proportional_increase(uint32_t newly_acked_bytes,simtime_picosec delay){
@@ -1218,8 +1217,6 @@ void UecSrc::proportional_increase(uint32_t newly_acked_bytes,simtime_picosec de
     mem_b before = _inc_bytes;
     _inc_bytes += _alpha * newly_acked_bytes * (_target_Qdelay - delay);
     _nscc_fulfill_stats.inc_prop_bytes += _inc_bytes - before;
-
-    printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=PI _cwnd=%llu\n", this, eventlist().now(), _cwnd + _inc_bytes / _cwnd);
 }
 
 void UecSrc::fast_increase(uint32_t newly_acked_bytes,simtime_picosec delay){
@@ -1256,7 +1253,6 @@ void UecSrc::multiplicative_decrease() {
             _last_dec_time = eventlist().now();
         }
     }
-    printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=MD _cwnd=%llu\n", this, eventlist().now(), _cwnd);
 }
 
 void UecSrc::fulfill_adjustment(){
@@ -1295,7 +1291,6 @@ void UecSrc::fulfill_adjustment(){
 
     _inc_bytes = 0;
     _received_bytes = 0;
-    _last_adjust_time = eventlist().now();
 
     _nscc_fulfill_stats = {};
 }
@@ -1318,7 +1313,6 @@ void UecSrc::updateCwndOnAck_NSCC(bool skip, simtime_picosec delay, mem_b newly_
     printf("DELAY ESTIMATION: t_now=%llu delay=%llu\n", eventlist().now(), delay);
 
     if (quick_adapt(false, skip, delay)) {
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=QA-ACK _cwnd=%llu\n", this, eventlist().now(), _cwnd);
         return;
     }
 
@@ -1340,7 +1334,6 @@ void UecSrc::updateCwndOnAck_NSCC(bool skip, simtime_picosec delay, mem_b newly_
             cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " multiplicative_decrease _nscc_cwnd " << _cwnd << endl;
         }
     } else if (skip && delay < _target_Qdelay) {
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=NOOP _cwnd=%llu\n", this, eventlist().now(), _cwnd);
         // NOOP, just switch path
     }
 
@@ -1359,17 +1352,6 @@ void UecSrc::updateCwndOnAck_NSCC(bool skip, simtime_picosec delay, mem_b newly_
             cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " fulfill_adjustment _nscc_cwnd " << _cwnd << endl;
         }
     }
-
-    // if (eventlist().now() - _last_eta_time > _adjust_period_threshold ) {
-    //     _cwnd += _eta;
-    //     _nscc_overall_stats.inc_eta_bytes += _eta;
-    //     _nscc_fulfill_stats.inc_eta_bytes += _eta;
-
-    //     _last_eta_time = eventlist().now();
-    //     if (_flow.flow_id() == _debug_flowid) {
-    //         cout << timeAsUs(eventlist().now()) <<" flowid " << _flow.flow_id()<< " " << _flow.str() << " eta _nscc_cwnd " << _cwnd << " target_q_delay " <<timeAsUs(_target_Qdelay) << endl;
-    //     }
-    // }
 
     set_cwnd_bounds();
 
@@ -1395,13 +1377,11 @@ void UecSrc::updateCwndOnNack_NSCC(bool skip, mem_b nacked_bytes, bool last_hop)
 
     _trigger_qa = true;
     if (quick_adapt(true, true, 0)) {
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=QA-LOSS _cwnd=%llu\n", this, eventlist().now(), _cwnd);
         adjust_cwnd = false;
     }
 
     if (adjust_cwnd && (!_receiver_based_cc || !last_hop)) {
         _cwnd -= nacked_bytes;
-        printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=LOSS _cwnd=%llu\n", this, eventlist().now(), _cwnd);
         set_cwnd_bounds();
     }
 }

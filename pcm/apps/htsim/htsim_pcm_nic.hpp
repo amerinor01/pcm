@@ -29,7 +29,7 @@ class DeviceException final : public std::runtime_error {
     }
 };
 
-enum class DeviceSchedulerType { SCHEDULER_TYPE_SYNC, SCHEDULER_TYPE_ASYNC };
+enum class ProgressType { SCHEDULER_TYPE_SYNC, SCHEDULER_TYPE_ASYNC };
 
 class Device final : public EventSource {
     // expose time to htsim datapath plugin in PCM
@@ -41,7 +41,7 @@ class Device final : public EventSource {
 
   public:
     explicit Device(EventList &eventList, std::string_view pcmAlgoName, simtime_picosec handlerDelay,
-                    simtime_picosec pollDelay, DeviceSchedulerType schedType);
+                    simtime_picosec pollDelay, ProgressType schedType);
 
     ~Device();
 
@@ -49,7 +49,7 @@ class Device final : public EventSource {
     static void setEventList(EventList *eventList);
 
     [[nodiscard]] pcm_device_t getImplPtr() const noexcept { return _pcm_device_ptr; }
-    [[nodiscard]] DeviceSchedulerType schedulerTypeGet() noexcept { return _sched_type; }
+    [[nodiscard]] ProgressType schedulerTypeGet() noexcept { return _sched_type; }
     void registerFlow(pcm_flow_t pcm_flow_handle, pcm::Src *src) { _flow_to_src_mapping[pcm_flow_handle] = src; }
 
   private:
@@ -60,7 +60,7 @@ class Device final : public EventSource {
     pcm_handle_t _pcm_algo_handler{};
     simtime_picosec _next_sched;
     std::unordered_map<pcm_flow_t, pcm::Src *> _flow_to_src_mapping;
-    DeviceSchedulerType _sched_type;
+    ProgressType _sched_type;
 };
 
 class Flow final {
@@ -96,7 +96,7 @@ class Nic final : public UecNIC {
 
   public:
     Nic(id_t src_num, EventList &eventList, linkspeed_bps linkspeed, uint32_t ports, std::string_view pcmAlgoName,
-        simtime_picosec handlerDelay, simtime_picosec pollDelay, DeviceSchedulerType schedType)
+        simtime_picosec handlerDelay, simtime_picosec pollDelay, ProgressType schedType)
         : UecNIC{src_num, eventList, linkspeed, ports},
           _pcm_device{eventList, pcmAlgoName, handlerDelay, pollDelay, schedType} {}
 
