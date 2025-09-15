@@ -19,9 +19,25 @@
 python3 build.py
 ```
 
-### HTSIM Plugin Build
+### HTSIM Build
+1. Build patched htsim (execute from the repo **root directory**!):
 ```bash
-python3 build.py --htsim --htsim-dir /path/to/htsim/sim/
+git submodule update --init --recursive
+cp ./uet-htsim-patch/* ./uet-htsim/htsim/sim/
+cd ./uet-htsim/htsim/sim/
+cmake -S . -B build 
+cmake --build build --parallel
+```
+
+2. Build PCM runtime from the directory this README placed in:
+```bash
+./build.py --clean --htsim --htsim-dir=$(pwd)/../uet-htsim/htsim/sim/ --relwithdebinfo
+```
+
+3. Test build:
+```bash
+export LD_LIBRARY_PATH=$(pwd)/build/lib/:$LD_LIBRARY_PATH
+python3 ./apps/htsim_v2/batch_simulations.py --conf=./apps/htsim_v2/all_algos_incast.json --out=results --plot
 ```
 
 ### Debug Build with Clean
