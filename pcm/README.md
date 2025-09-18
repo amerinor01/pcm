@@ -23,7 +23,7 @@ python3 build.py
 1. Build patched htsim (execute from the repo **root directory**!):
 ```bash
 git submodule update --init --recursive
-cp ./uet-htsim-patch/* ./uet-htsim/htsim/sim/
+cp -r ./uet-htsim-patch/* ./uet-htsim/htsim/sim/
 cd ./uet-htsim/htsim/sim/
 cmake -S . -B build 
 cmake --build build --parallel
