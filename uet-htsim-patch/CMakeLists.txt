@@ -16,7 +16,7 @@ add_compile_options(
     -g
     -Wsign-compare
     -Wuninitialized
-    -fPIE
+    -fPIC
     -O3
 )
 # Optionally enable sanitizers
@@ -125,6 +125,9 @@ set(SOURCE_FILES
 # Create shared library
 add_library(htsim SHARED ${SOURCE_FILES})
 target_include_directories(htsim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}) # Needed for header-only libraries (e.g., loggertypes.h).
+
+# Link required system libraries
+#target_link_libraries(htsim PUBLIC stdc++ m)
 
 # Set library version and soname for shared library
 set_target_properties(htsim PROPERTIES
