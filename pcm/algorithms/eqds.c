@@ -26,7 +26,7 @@ int algorithm_main() {
     set_control(CTRL_CUMULATIVE_CREDIT, cumulative_credit);
 
     if (cumulative_credit - credit_target >= MAX_CWND) {
-        // source was granted with speculative budget, 
+        // source was granted with speculative budget,
         // therefore this flow can be unsubscribed from the shared timer for now
         set_signal(SIG_CREDIT_TIMER, PCM_SIG_NO_TRIGGER);
         // serve this source again as soon as starts to consume credit
