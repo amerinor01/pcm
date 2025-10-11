@@ -339,6 +339,9 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
         case PCM_CTRL_RATE:
             out = get_control_first_match<PCM_CTRL_RATE>();
             break;
+        case PCM_CTRL_EV:
+            out = get_control_first_match<PCM_CTRL_EV>();
+            break;
         default:
             throw std::runtime_error("unsupported control");
         }
@@ -355,6 +358,9 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
             break;
         case PCM_CTRL_RATE:
             found = set_first_match_control<PCM_CTRL_RATE>(value);
+            break;
+        case PCM_CTRL_EV:
+            found = set_first_match_control<PCM_CTRL_EV>(value);
             break;
         default:
             throw std::runtime_error("unsupported control");
@@ -392,6 +398,18 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
             break;
         case PCM_SIG_ELAPSED_TIME:
             update_signals<PCM_SIG_ELAPSED_TIME>(value);
+            break;
+        case PCM_SIG_ACK_EV:
+            update_signals<PCM_SIG_ACK_EV>(value);
+            break;
+        case PCM_SIG_ECN_EV:
+            update_signals<PCM_SIG_ECN_EV>(value);
+            break;
+        case PCM_SIG_NACK_EV:
+            update_signals<PCM_SIG_NACK_EV>(value);
+            break;
+        case PCM_SIG_TX_BACKLOG_PKTS:
+            update_signals<PCM_SIG_TX_BACKLOG_PKTS>(value);
             break;
         default:
             throw std::runtime_error("unsupported signal");
