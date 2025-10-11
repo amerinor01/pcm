@@ -1,0 +1,47 @@
+algorithm:
+  name: bitmap_lb_v2
+  description: "UEC bitmap-based LB algorithm"
+
+constants:
+  - name: EVS_SIZE
+    type: uint
+    value: 64
+    description: "Entropy value set size"
+
+variables:
+  - name: EVS_BITMAP
+    initial_value: 0
+    type: uint
+    description: "Entrop value set bitmap"
+
+signals:
+  - name: ECN_EV
+    type: PCM_SIG_ECN_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NACK_EV
+    type: PCM_SIG_NACK_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: ACK_EV
+    type: PCM_SIG_ACK_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: TX_BACKLOG_SIZE
+    type: PCM_SIG_TX_BACKLOG_PKTS
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+
+controls:
+  - name: NEXT_PKT_EV
+    type: PCM_CTRL_EV
+    initial_value: 0
