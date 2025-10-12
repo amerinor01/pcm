@@ -620,6 +620,7 @@ struct Device {
         : get_time_source_{get_time_source} {}
 
     [[nodiscard]] virtual std::optional<uint32_t> progress() = 0;
+    [[nodiscard]] virtual bool progress(uint32_t id) = 0;
 
     void add_flow_spec_factory(std::function<FlowDesc *()> spec_factory,
                                uint32_t matching_rule) {
@@ -633,10 +634,10 @@ struct Device {
             });
     }
 
-    FlowDesc &create_flow(uint32_t new_address) {
-        // address has to be unique
-        if (flows_.find(new_address) != flows_.end())
-            throw std::runtime_error("Flow with this address already exists");
+    FlowDesc &create_flow(uint32_t new_id) {
+        // id has to be unique
+        if (flows_.find(new_id) != flows_.end())
+            throw std::runtime_error("Flow with this id already exists");
 
         if (configs_.size() > 1)
             throw std::runtime_error("Device supports only a single CC config");
@@ -644,16 +645,23 @@ struct Device {
         // find spec and create
         for (const auto &[mask, factory] : configs_) {
             // for now we don't really support matching
-            // if (new_address & mask) {
+            // if (new_id & mask) {
             if (true) {
-                auto ret = flows_.insert({new_address, factory()});
+                auto ret = flows_.insert({new_id, factory()});
                 if (!ret.second)
                     throw std::runtime_error("new flow insertion failed");
                 return *(ret.first->second);
             }
         }
 
-        throw std::runtime_error("No matching flow spec for address");
+        throw std::runtime_error("No matching flow spec for id");
+    }
+
+    void destroy_flow(uint32_t id) {
+        auto it = flows_.find(id);
+        if (it == flows_.end())
+            throw std::runtime_error("Flow with this id doesn't exist");
+        flows_.erase(it);
     }
 
   protected:
@@ -671,19 +679,34 @@ struct DeviceCheckOnSched final : Device {
         if (flows_.empty())
             return std::nullopt;
 
-        std::optional<uint32_t> address = std::nullopt;
+        std::optional<uint32_t> id = std::nullopt;
         auto triggered = cur_rr_it_->second->invoke_cc_algorithm_on_trigger();
         if (triggered)
-            address = cur_rr_it_->first;
+            id = cur_rr_it_->first;
 
         ++cur_rr_it_;
         if (cur_rr_it_ == flows_.end())
             cur_rr_it_ = flows_.begin();
-        return address;
+        return id;
     }
 
-    FlowDesc &create_flow(uint32_t new_address) {
-        auto &new_flow = Device::create_flow(new_address);
+    bool progress(uint32_t id) override {
+        if (flows_.empty())
+            throw std::runtime_error("Device flow storage is empty");
+
+        auto it = flows_.find(id);
+        if (it == flows_.end())
+            throw std::runtime_error("id doesn't exist in flow storage");
+
+        auto triggered = it->second->invoke_cc_algorithm_on_trigger();
+        if (triggered)
+            return true;
+
+        return false;
+    }
+
+    FlowDesc &create_flow(uint32_t new_id) {
+        auto &new_flow = Device::create_flow(new_id);
         cur_rr_it_ = flows_.begin();
         return new_flow;
     }

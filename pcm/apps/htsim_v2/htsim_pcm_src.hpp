@@ -79,21 +79,32 @@ class PcmScheduler final : public EventSource {
             _event_list.sourceIsPending(*this, _next_sched);
         }
     }
-    virtual ~PcmScheduler() = default;
+
+    virtual ~PcmScheduler() {
+        for (auto &cur : _flow_id_to_src_mapping) {
+            _dev.destroy_flow(cur.first);
+        }
+        _flow_id_to_src_mapping.clear();
+    }
 
     static pcm_uint get_current_time() {
         return EventList::getTheEventList().now();
     }
 
-    pcm::FlowDesc &createFlow(PcmSrc *src) {
-        auto new_flow_addr = flow_addr_count++;
-        _flow_addr_to_src_mapping[new_flow_addr] = src;
-        return _dev.create_flow(new_flow_addr);
+    std::pair<uint32_t, pcm::FlowDesc &> createFlow(PcmSrc *src) {
+        if (!src)
+            assert(schedulerTypeGet() == ProgressType::SCHEDULER_TYPE_SYNC);
+        auto new_flow_id = flow_id_count++;
+        _flow_id_to_src_mapping[new_flow_id] = src;
+        return {new_flow_id, _dev.create_flow(new_flow_id)};
     }
 
     [[nodiscard]] ProgressType schedulerTypeGet() noexcept {
         return _sched_type;
     }
+
+    std::optional<uint32_t> progress() { return _dev.progress(); }
+    bool progress(uint32_t id) { return _dev.progress(id); }
 
     void doNextEvent(); // Declaration only - implementation after PcmSrc class
 
@@ -105,8 +116,8 @@ class PcmScheduler final : public EventSource {
     ProgressType _sched_type;
     pcm::DeviceCheckOnSched _dev;
     simtime_picosec _next_sched;
-    uint32_t flow_addr_count{0};
-    std::unordered_map<uint32_t, PcmSrc *> _flow_addr_to_src_mapping;
+    uint32_t flow_id_count{0};
+    std::unordered_map<uint32_t, PcmSrc *> _flow_id_to_src_mapping;
     std::shared_ptr<void> _spec_so_handle;
 };
 
@@ -148,7 +159,7 @@ class PcmSrc final : public UecSrc {
 
     void fetchCwndUpdate() noexcept {
         UecSrc::_cwnd =
-            _pcm_flow.get_control_first_match_runtime(PCM_CTRL_CWND);
+            _pcm_flow.second.get_control_first_match_runtime(PCM_CTRL_CWND);
         UecSrc::set_cwnd_bounds();
     }
 
@@ -162,15 +173,19 @@ class PcmSrc final : public UecSrc {
         (void)delay; // if needed, queuing delay is computed on the handler
                      // side, RTT sample is delivered instead
 
-        _pcm_flow.update_signals_runtime(PCM_SIG_ECN, skip ? 1 : 0);
-        _pcm_flow.update_signals_runtime(PCM_SIG_DATA_TX, newly_acked_bytes);
-        _pcm_flow.update_signals_runtime(PCM_SIG_ACK, 1);
-        _pcm_flow.update_signals_runtime(PCM_SIG_IN_FLIGHT, UecSrc::_in_flight);
-        _pcm_flow.update_signals_runtime(PCM_SIG_RTT, UecSrc::_raw_rtt);
+        _pcm_flow.second.update_signals_runtime(PCM_SIG_ECN, skip ? 1 : 0);
+        _pcm_flow.second.update_signals_runtime(PCM_SIG_DATA_TX,
+                                                newly_acked_bytes);
+        _pcm_flow.second.update_signals_runtime(PCM_SIG_ACK, 1);
+        _pcm_flow.second.update_signals_runtime(PCM_SIG_IN_FLIGHT,
+                                                UecSrc::_in_flight);
+        _pcm_flow.second.update_signals_runtime(PCM_SIG_RTT, UecSrc::_raw_rtt);
 
         if (_nic._scheduler.schedulerTypeGet() ==
             ProgressType::SCHEDULER_TYPE_SYNC) {
-            _nic._scheduler.doNextEvent();
+            if (_nic._scheduler.progress(_pcm_flow.first)) {
+                fetchCwndUpdate();
+            }
         }
     }
 
@@ -183,33 +198,34 @@ class PcmSrc final : public UecSrc {
         // std::cout << "PCM::updateCwndOnNack nacked_bytes=" << nacked_bytes <<
         // std::endl;
 
-        _pcm_flow.update_signals_runtime(PCM_SIG_NACK, 1);
-        _pcm_flow.update_signals_runtime(PCM_SIG_DATA_NACKED, nacked_bytes);
-        _pcm_flow.update_signals_runtime(PCM_SIG_RTT, UecSrc::_base_rtt +
-                                                          UecSrc::_network_rtt);
+        _pcm_flow.second.update_signals_runtime(PCM_SIG_NACK, 1);
+        _pcm_flow.second.update_signals_runtime(PCM_SIG_DATA_NACKED,
+                                                nacked_bytes);
+        _pcm_flow.second.update_signals_runtime(
+            PCM_SIG_RTT, UecSrc::_base_rtt + UecSrc::_network_rtt);
 
         if (_nic._scheduler.schedulerTypeGet() ==
             ProgressType::SCHEDULER_TYPE_SYNC) {
-            _nic._scheduler.doNextEvent();
+            if (_nic._scheduler.progress(_pcm_flow.first)) {
+                fetchCwndUpdate();
+            }
         }
     }
 
   private:
     PcmNic &_nic;
-    pcm::FlowDesc &_pcm_flow;
+    std::pair<uint32_t, pcm::FlowDesc &> _pcm_flow;
 };
 
 // PcmScheduler method implementations that need complete PcmSrc definition
 void PcmScheduler::doNextEvent() {
-    if (schedulerTypeGet() == ProgressType::SCHEDULER_TYPE_ASYNC) {
-        if (eventlist().now() != _next_sched)
-            throw DeviceException{
-                "Current time is not equal to the _next_sched time"};
-        _next_sched =
-            eventlist().now() + _poll_delay; // penalize call to sched progress
-    }
+    if (eventlist().now() != _next_sched)
+        throw DeviceException{
+            "Current time is not equal to the _next_sched time"};
+    _next_sched =
+        eventlist().now() + _poll_delay; // penalize call to sched progress
 
-    for (auto &it : _flow_addr_to_src_mapping) {
+    for (auto &it : _flow_id_to_src_mapping) {
         auto pcm_src = static_cast<PcmSrc *>(it.second);
         auto cwnd = pcm_src->datapathCwndGet();
         // flow_cwnd_set(it.first, cwnd);
@@ -217,8 +233,8 @@ void PcmScheduler::doNextEvent() {
 
     auto address = _dev.progress();
     if (address.has_value()) {
-        auto it = _flow_addr_to_src_mapping.find(address.value());
-        if (it == _flow_addr_to_src_mapping.end()) [[unlikely]]
+        auto it = _flow_id_to_src_mapping.find(address.value());
+        if (it == _flow_id_to_src_mapping.end()) [[unlikely]]
             throw DeviceException{"PCM source not found in mapping"};
         auto pcm_src = it->second;
         if (!pcm_src) [[unlikely]]
@@ -226,20 +242,18 @@ void PcmScheduler::doNextEvent() {
         pcm_src->fetchCwndUpdate();
     }
 
-    if (schedulerTypeGet() == ProgressType::SCHEDULER_TYPE_ASYNC) {
-        if (address.has_value())
-            _next_sched += _handler_delay; // if handler execution happened,
-                                           // penalize it as well
-        auto num_finished_srcs = std::ranges::count_if(
-            _flow_addr_to_src_mapping.begin(), _flow_addr_to_src_mapping.end(),
-            [](const auto &pair) {
-                return pair.second && pair.second->isTotallyFinished();
-            });
-        if (static_cast<std::size_t>(num_finished_srcs) ==
-            _flow_addr_to_src_mapping.size())
-            return;
-        eventlist().sourceIsPending(*this, _next_sched);
-    }
+    if (address.has_value())
+        _next_sched += _handler_delay; // if handler execution happened,
+                                       // penalize it as well
+    auto num_finished_srcs = std::ranges::count_if(
+        _flow_id_to_src_mapping.begin(), _flow_id_to_src_mapping.end(),
+        [](const auto &pair) {
+            return pair.second && pair.second->isTotallyFinished();
+        });
+    if (static_cast<std::size_t>(num_finished_srcs) ==
+        _flow_id_to_src_mapping.size())
+        return;
+    eventlist().sourceIsPending(*this, _next_sched);
 }
 
 } // namespace pcm_htsim

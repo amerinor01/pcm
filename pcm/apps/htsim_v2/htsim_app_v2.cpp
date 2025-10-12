@@ -27,6 +27,7 @@
 #include "fat_tree_switch.h"
 #include "fat_tree_topology.h"
 
+#include <htsim_pcm_lb.hpp>
 #include <htsim_pcm_src.hpp>
 
 #include <list>
@@ -163,6 +164,14 @@ int main(int argc, char **argv) {
         pcm_htsim::PcmNic::default_schedulerPollDelayPs;
     pcm_htsim::ProgressType pcm_sched_type =
         pcm_htsim::ProgressType::SCHEDULER_TYPE_SYNC;
+
+    std::string pcm_lb_algo_name;
+    simtime_picosec pcm_lb_handler_delay =
+        pcm_htsim::PcmNic::default_handlerDelayPs;
+    simtime_picosec pcm_lb_sched_poll_delay =
+        pcm_htsim::PcmNic::default_schedulerPollDelayPs;
+    bool pcm_lb_enable = false;
+    vector<unique_ptr<UecNIC>> pcm_lb_nics;
 
     while (i < argc) {
         if (!strcmp(argv[i], "-o")) {
@@ -547,9 +556,14 @@ int main(int argc, char **argv) {
                  << pcm_handler_delay << endl;
             i++;
         } else if (!strcmp(argv[i], "-pcm_async_sched")) {
-            pcm_sched_type =
-                pcm_htsim::ProgressType::SCHEDULER_TYPE_ASYNC;
+            pcm_sched_type = pcm_htsim::ProgressType::SCHEDULER_TYPE_ASYNC;
             cout << "PCM algorithm handler delay is set to async" << endl;
+        } else if (!strcmp(argv[i], "-pcm_lb_algorithm")) {
+            pcm_lb_enable = true;
+            pcm_lb_algo_name = argv[i + 1];
+            cout << "PCM load balancing enabled with algorithm "
+                 << pcm_lb_algo_name << endl;
+            i++;
         } else {
             cout << "Unknown parameter " << argv[i] << endl;
             exit_error(argv[0]);
@@ -837,6 +851,12 @@ int main(int argc, char **argv) {
         if (log_nic) {
             nic_logger->monitorNic(nic.get());
         }
+        if (pcm_lb_enable) {
+            pcm_lb_nics.emplace_back(make_unique<pcm_htsim::PcmNic>(
+                ix, eventlist, linkspeed, ports, pcm_lb_algo_name,
+                pcm_lb_handler_delay, pcm_lb_sched_poll_delay,
+                pcm_htsim::ProgressType::SCHEDULER_TYPE_SYNC));
+        }
     }
 
     // used just to print out stats data at the end
@@ -881,8 +901,22 @@ int main(int argc, char **argv) {
 
         if (!conn_reuse ||
             (crt->flowid and flowmap.find(crt->flowid) == flowmap.end())) {
+            pcm_htsim::PcmNic *pcm_lb_nic;
+            if (pcm_lb_enable) {
+                pcm_lb_nic = dynamic_cast<pcm_htsim::PcmNic *>(
+                    pcm_lb_nics.at(src).get());
+                if (!pcm_lb_nic) {
+                    cerr << "Error: dynamic_cast<pcm_htsim::PcmNic> failed"
+                         << endl;
+                    abort();
+                }
+            }
+
             unique_ptr<UecMultipath> mp = nullptr;
-            if (load_balancing_algo == BITMAP) {
+            if (pcm_lb_enable) {
+                mp = make_unique<pcm_htsim::UecPcmMp>(UecSrc::_debug,
+                                                      *pcm_lb_nic);
+            } else if (load_balancing_algo == BITMAP) {
                 mp =
                     make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == REPS) {
