@@ -56,12 +56,14 @@ class UecPcmMp : public UecMultipath {
         bool ret;
         ret = _nic._scheduler.progress(_pcm_flow.first);
         assert(ret);
+        (void)ret;
     }
 
     uint16_t nextEntropy(uint64_t seq_sent,
                          uint64_t cur_cwnd_in_pkts) override {
+        (void)seq_sent;
+        (void)cur_cwnd_in_pkts;
         _pcm_flow.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_PKTS, 1);
-        std::optional<uint32_t> ret = std::nullopt;
         _nic._scheduler.progress(_pcm_flow.first);
         // std::cout << "pcm_htsim::UecPcmMp: Generate EV: "
         //           <<

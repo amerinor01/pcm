@@ -15,9 +15,9 @@ union pcm_var_converter {
 };
 
 // number of signals is limited by the trigger_mask type width
-#define ALGO_CONF_MAX_NUM_SIGNALS (sizeof(pcm_uint) * 8)
+#define ALGO_CONF_MAX_NUM_SIGNALS (sizeof(pcm_uint) * 16)
 #define ALGO_CONF_MAX_NUM_CONTROLS 2
-#define ALGO_CONF_MAX_VARS 16
+#define ALGO_CONF_MAX_VARS 128
 
 struct flow_datapath_snapshot {
     pcm_uint trigger_mask;
@@ -106,6 +106,17 @@ static PCM_FORCE_INLINE void
 __flow_var_uint_set(struct flow_datapath_snapshot *snapshot, size_t idx,
                     pcm_uint val) {
     snapshot->vars[idx] = val;
+}
+
+static PCM_FORCE_INLINE pcm_uint __flow_arr_uint_get(
+    const struct flow_datapath_snapshot *snapshot, size_t arr_id, size_t idx) {
+    return snapshot->vars[arr_id + idx];
+}
+
+static PCM_FORCE_INLINE void
+__flow_arr_uint_set(struct flow_datapath_snapshot *snapshot, size_t arr_id,
+                    size_t idx, pcm_uint val) {
+    snapshot->vars[arr_id + idx] = val;
 }
 
 static PCM_FORCE_INLINE pcm_int
@@ -198,6 +209,25 @@ __flow_var_float_set(struct flow_datapath_snapshot *snapshot, size_t idx,
  * @param[in] val          New float state value.
  */
 #define set_var_float(idx, val) __flow_var_float_set(snapshot, idx, val);
+
+/**
+ * @brief Get the unsigned integer current persistent array state within a
+ * handler.
+ *
+ * @param[in] arr_id   User-defined state index.
+ * @param[in] idx     Index inside array
+ * @return Current state unsigned integer value.
+ */
+#define get_arr_uint(arr_id, idx) __flow_arr_uint_get(snapshot, arr_id, idx)
+
+/**
+ * @brief Update the unsigned integer persistent array state within a handler.
+ *
+ * @param[in] arr_id   User-defined state index.
+ * @param[in] idx     Index inside array
+ * @param[in] val          New unsigned integer state value.
+ */
+#define set_arr_uint(arr_id, idx, val) __flow_arr_uint_set(snapshot, arr_id, idx, val);
 
 /**
  * @brief Read the latest signal value within a handler.

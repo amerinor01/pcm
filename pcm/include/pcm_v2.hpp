@@ -263,6 +263,13 @@ concept HasDenseIndices =
         return true;
     }(std::type_identity<Tuple>{});
 
+template <typename Tuple, size_t MaxSize>
+concept FitsSnapshot =
+    []<typename... Ts>(std::type_identity<std::tuple<Ts...>>) {
+        constexpr std::size_t n = sizeof...(Ts);
+        return n <= MaxSize;
+    }(std::type_identity<Tuple>{});
+
 template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
     using VariablesTupleT = decltype(std::tuple_cat(
         std::conditional_t<is_variable_v<Objs>, std::tuple<Objs>,
@@ -274,6 +281,12 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
         std::conditional_t<is_signal_v<Objs>, std::tuple<Objs>,
                            std::tuple<>>{}...));
 
+    static_assert(FitsSnapshot<VariablesTupleT, ALGO_CONF_MAX_VARS>,
+                  "Variable tuple size is larger than snapshot");
+    static_assert(FitsSnapshot<ControlsTupleT, ALGO_CONF_MAX_NUM_CONTROLS>,
+                  "Control tuple size is larger than snapshot");
+    static_assert(FitsSnapshot<SignalsTupleT, ALGO_CONF_MAX_NUM_SIGNALS>,
+                  "Signal tuple size is larger than snapshot");
     static_assert(HasDenseIndices<VariablesTupleT>,
                   "Duplicate/non-uniform indices among variables");
     static_assert(HasDenseIndices<ControlsTupleT>,

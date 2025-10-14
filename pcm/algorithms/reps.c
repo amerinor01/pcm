@@ -1,24 +1,10 @@
+#include "reps.h"
+#include "algo_utils.h"
 #include "pcmh.h"
+#include "stdlib.h"
 
-// signals
-#define SIG_NUM_ACK 0 // trigger w threshold=1, sum
-#define SIG_NUM_SENDS 1 // trigger w threshold=1, sum
-#define SIG_LAST_PKT_IS_ECN 2 // not trigger, last
-#define SIG_LAST_PKT_EV 3 // not trigger, last
-
-// controls 
-#define CTRL_PKT_EV 0
-
-// variables
-#define VAR_EVC_HEAD_IDX 0
-#define VAR_EVC_NUM_VALID_EVS 1
-#define VAR_EV_EXPLORE_COUNTER 2
-
-#define ARRAY_EVC 0
-#define BITMAP_EVC 0
-
-// constants 
-#define EVS_SIZE 256
+#define PATH_MASK (EVS_SIZE - 1) // EVS_SIZE shall be power of two!!
+BITMAP_HELPERS_DEFINE(VAR_EVC_BITMAP)
 
 // for now we assume that handler keeps up with the arrival rate of TX/ACK packets
 // we also don't handle path failure (which should be exposed as a datapath signal)
@@ -29,30 +15,32 @@ int algorithm_main() {
     pcm_uint num_valid_evs = get_var_uint(VAR_EVC_NUM_VALID_EVS);
 
     if (trigger_mask & SIG_NUM_ACK) {
-        if (!get_signal(SIG_LAST_PKT_IS_ECN)) {
-            set_array_entry_uint(ARRAY_EVC, head_idx, get_signal(SIG_LAST_PKT_EV));
-            if (!get_bitmap_entry(BITMAP_EVC, head_idx)) {
+        if (!get_signal(SIG_NUM_ECN)) {
+            set_arr_uint(VAR_EVC, head_idx, get_signal(SIG_ACK_EV));
+            if (!BITMAP_HELPER_GET_ENTRY(VAR_EVC_BITMAP, head_idx)) {
                 ++num_valid_evs;
-                set_bitmap_entry(BITMAP_EVC, head_idx, 1);
+                BITMAP_HELPER_SET_ENTRY(VAR_EVC_BITMAP, head_idx, 1);
             }
-            head_idx = (head_idx + 1) % get_array_size(ARRAY_EVC);
+            head_idx = (head_idx + 1) & PATH_MASK;
+        } else {
+            set_signal(SIG_NUM_ECN, 0);
         }
-        update_signal(SIG_NUM_ACK, -1);
+        set_signal(SIG_NUM_ACK, 0);
     }
 
-    if (trigger_mask & SIG_NUM_SENDS) {
+    if (trigger_mask & SIG_TX_BACKLOG_SIZE) {
         pcm_uint packet_ev = 0;
         if (num_valid_evs == 0 || get_var_uint(VAR_EV_EXPLORE_COUNTER) > 0) {
-            packet_ev = rand() % EVS_SIZE;
+            packet_ev = rand() & PATH_MASK;
             set_var_uint(VAR_EV_EXPLORE_COUNTER, get_var_uint(VAR_EV_EXPLORE_COUNTER) - 1);
         } else {
-            pcm_uint ev_cache_idx = (head_idx - num_valid_evs) % get_array_size(ARRAY_EVC);
-            packet_ev = get_array_entry_uint(ARRAY_EVC, ev_cache_idx);
-            set_bitmap_entry(BITMAP_EVC, ev_cache_idx, 0);
+            pcm_uint ev_cache_idx = (head_idx - num_valid_evs) % EVC_SIZE;
+            packet_ev = get_arr_uint(VAR_EVC, ev_cache_idx);
+            BITMAP_HELPER_SET_ENTRY(VAR_EVC_BITMAP, ev_cache_idx, 0);
             --num_valid_evs;
         }
-        set_control(CTRL_PKT_EV, packet_ev);
-        update_signal(SIG_NUM_SENDS, -1);
+        set_control(CTRL_NEXT_PKT_EV, packet_ev);
+        update_signal(SIG_TX_BACKLOG_SIZE, -1);
     }
 
     set_var_uint(VAR_EVC_HEAD_IDX, head_idx);

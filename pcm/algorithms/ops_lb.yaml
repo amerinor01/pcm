@@ -1,0 +1,38 @@
+algorithm:
+  name: ops_lb
+  description: "Obvious packet spraying LB algorithm"
+
+constants:
+  - name: NO_OF_PATHS
+    type: uint
+    value: 32
+    description: "Number of paths"
+
+variables:
+  - name: IS_INITIALIZED
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: PATH_RANDOM
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: PATH_XOR
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: CURRENT_EV_IDX
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+
+signals:
+  - name: TX_BACKLOG_SIZE
+    type: PCM_SIG_TX_BACKLOG_PKTS
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+
+controls:
+  - name: NEXT_PKT_EV
+    type: PCM_CTRL_EV
+    initial_value: 0

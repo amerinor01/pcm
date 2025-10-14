@@ -1,66 +1,68 @@
 #include "bitmap_lb_v2.h"
+#include "algo_utils.h"
 #include "pcmh.h"
 #include "stdbool.h"
+#include "stdio.h"
 #include "stdlib.h"
 
-// Bitmap manipulation helpers
-#define BITS_PER_UINT (sizeof(pcm_uint) * 8)
-#define BITMAP_ARRAY_SIZE ((EVS_SIZE + BITS_PER_UINT - 1) / BITS_PER_UINT)
-
-static PCM_FORCE_INLINE void set_bitmap_entry(ALGO_CTX_ARGS, pcm_uint bit_idx, pcm_uint bit) {
-    // pcm_uint word_idx = bit_idx / BITS_PER_UINT;
-    pcm_uint bit_offset = bit_idx % BITS_PER_UINT;
-    pcm_uint mask = 1ULL << bit_offset;
-
-    // word = get_array_uint(EVS_BITMAP, word_idx);
-    pcm_uint word = get_var_uint(VAR_EVS_BITMAP);
-    word |= mask; // Set bit
-
-    // set_array_uint(EVS_BITMAP, word_idx, word);
-    set_var_uint(VAR_EVS_BITMAP, word);
-}
-
-static PCM_FORCE_INLINE pcm_uint get_bitmap_entry(ALGO_CTX_ARGS, pcm_uint bit_idx) {
-    // pcm_uint word_idx = bit_idx / BITS_PER_UINT;
-    pcm_uint bit_offset = bit_idx % BITS_PER_UINT;
-    pcm_uint mask = 1ULL << bit_offset;
-
-    // word = get_array_uint(EVS_BITMAP, word_idx);
-    pcm_uint word = get_var_uint(VAR_EVS_BITMAP);
-    return word & mask;
-}
+#define PATH_MASK (NO_OF_PATHS - 1)
+BITMAP_HELPERS_DEFINE(VAR_ARR_EVS_BITMAP)
 
 // for now we assume that handler keeps up with the arrival rate of TX/ACK packets
 // we also don't handle path failure (which should be exposed as a datapath signal)
 // and, therefore, don't support implement freezing mode
-
 int algorithm_main() {
+    printf("BITMAP LB HANDLER\n");
+
+    if (!get_var_uint(VAR_IS_INITIALIZED)) {
+        set_var_uint(VAR_PATH_RANDOM, rand() & 0xFFFF);
+        set_var_uint(VAR_PATH_XOR, rand() & NO_OF_PATHS);
+        set_var_uint(VAR_IS_INITIALIZED, 1);
+    }
+
     pcm_uint trigger_mask = get_signal_trigger_mask();
 
     // RX path
     if (trigger_mask & SIG_NUM_ACK) {
-        set_bitmap_entry(ALGO_CTX_PASS, get_signal(SIG_ACK_EV), 1);
+        BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_ACK_EV) & PATH_MASK, 1);
         set_signal(SIG_NUM_ACK, 0);
     }
     if (trigger_mask & SIG_NUM_ECN) {
-        set_bitmap_entry(ALGO_CTX_PASS, get_signal(SIG_ECN_EV), 1);
+        BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_ECN_EV) & PATH_MASK, 1);
         set_signal(SIG_NUM_ECN, 0);
     }
     if (trigger_mask & SIG_NUM_NACK) {
-        set_bitmap_entry(ALGO_CTX_PASS, get_signal(SIG_NACK_EV), 1);
+        BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_NACK_EV) & PATH_MASK, 1);
         set_signal(SIG_NUM_NACK, 0);
     }
 
     // TX path
     if (trigger_mask & SIG_TX_BACKLOG_SIZE) {
-        pcm_uint i = 0;
-        pcm_uint ev = rand() % EVS_SIZE;
-        bool is_marked = get_bitmap_entry(ALGO_CTX_PASS, ev);
-        while (is_marked && i++ < EVS_SIZE) {
-            set_bitmap_entry(ALGO_CTX_PASS, ev, 0);
-            ev = (ev + 1) % EVS_SIZE;
-            is_marked = get_bitmap_entry(ALGO_CTX_PASS, ev);
+        pcm_uint ev = (get_var_uint(VAR_CUR_EV_IDX) ^ get_var_uint(VAR_PATH_XOR)) & PATH_MASK;
+        if (!BITMAP_HELPER_GET_ENTRY(VAR_ARR_EVS_BITMAP, ev)) {
+            // EV is clean, so we just bump index
+            set_var_uint(VAR_CUR_EV_IDX, get_var_uint(VAR_CUR_EV_IDX) + 1);
+            if (get_var_uint(VAR_CUR_EV_IDX) == NO_OF_PATHS) {
+                set_var_uint(VAR_CUR_EV_IDX, 0);
+                set_var_uint(VAR_PATH_XOR, rand() & PATH_MASK);
+            }
+        } else {
+            pcm_uint rr_counter = 0; // Do round robin across EVs
+            bool reset_flag = false; // One packet can consume only one EV
+            while (BITMAP_HELPER_GET_ENTRY(VAR_ARR_EVS_BITMAP, ev) && (rr_counter++ <= NO_OF_PATHS)) {
+                if (!reset_flag) {
+                    BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, ev, 0);
+                    reset_flag = true;
+                }
+                set_var_uint(VAR_CUR_EV_IDX, get_var_uint(VAR_CUR_EV_IDX) + 1);
+                if (get_var_uint(VAR_CUR_EV_IDX) == NO_OF_PATHS) {
+                    set_var_uint(VAR_CUR_EV_IDX, 0);
+                    set_var_uint(VAR_PATH_XOR, rand() & PATH_MASK);
+                }
+                ev = (get_var_uint(VAR_CUR_EV_IDX) ^ get_var_uint(VAR_PATH_XOR)) & PATH_MASK;
+            }
         }
+        ev |= get_var_uint(VAR_PATH_RANDOM) ^ (get_var_uint(VAR_PATH_RANDOM) & PATH_MASK);
         set_control(CTRL_NEXT_PKT_EV, ev);
         update_signal(SIG_TX_BACKLOG_SIZE, -1);
     }

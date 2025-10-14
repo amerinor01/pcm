@@ -55,8 +55,13 @@ class AlgorithmCodeGenerator:
             signal["index"] = idx
         for idx, control in enumerate(self.config.get("controls", [])):
             control["index"] = idx
+        idx_offset = 0
         for idx, var in enumerate(self.config.get("variables", [])):
-            var["index"] = idx
+            var["index"] = idx_offset
+            var["num_entries"] = 1
+            if "arr_len" in var:
+                var["num_entries"] = int(var["arr_len"])
+            idx_offset = idx_offset + var["num_entries"]
 
     def _compute_all_values(self) -> None:
         """Compute constants, thresholds, and initial values from expressions or refs."""
@@ -143,9 +148,10 @@ class AlgorithmCodeGenerator:
                 name = f"VAR_{var['name']}"
                 init = var.get("initial_value")
                 dtype = var.get("type")
-                variable_defs.append(f"inline constexpr pcm_{dtype} var_{name} = {init};")
-                tuple_elements.append(f"    pcm::VariableDesc<pcm_{dtype}, var_{name}, {name}>")
-        
+                variable_defs.append(f"inline constexpr pcm_{dtype} init_val_{name} = {init};")
+                for elem_idx in range(var.get("num_entries")):
+                    tuple_elements.append(f"    pcm::VariableDesc<pcm_{dtype}, init_val_{name}, {name} + {elem_idx}>")
+
         lines: List[str] = []
         lines.append('#include <tuple>')
         lines.append('#include "pcm_v2.hpp"')

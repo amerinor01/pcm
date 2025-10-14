@@ -3,16 +3,33 @@ algorithm:
   description: "UEC bitmap-based LB algorithm"
 
 constants:
-  - name: EVS_SIZE
+  - name: NO_OF_PATHS
     type: uint
-    value: 64
-    description: "Entropy value set size"
+    value: 128
+    description: "Number of paths"
 
 variables:
-  - name: EVS_BITMAP
+  - name: ARR_EVS_BITMAP
+    arr_len: 2 # NO_OF_PATHS / sizeof(pcm_uint) which is 64 bits
     initial_value: 0
     type: uint
     description: "Entrop value set bitmap"
+  - name: IS_INITIALIZED
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: PATH_RANDOM
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: PATH_XOR
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: CUR_EV_IDX
+    initial_value: 0
+    type: uint
+    description: "Current EV index"
 
 signals:
   - name: ECN_EV
