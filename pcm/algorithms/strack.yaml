@@ -1,5 +1,5 @@
 algorithm:
-  name: bitmap_lb_v2
+  name: strack
   description: "UEC bitmap-based LB algorithm"
 
 constants:
@@ -10,7 +10,7 @@ constants:
 
 variables:
   - name: ARR_EVS_BITMAP
-    arr_len: 2 # NO_OF_PATHS / sizeof(pcm_uint) which is 64 bits
+    arr_len: 128 # same as NO_OF_PATHS
     initial_value: 0
     type: uint
     description: "Entrop value set bitmap"

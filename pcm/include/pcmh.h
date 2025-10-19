@@ -17,7 +17,7 @@ union pcm_var_converter {
 // number of signals is limited by the trigger_mask type width
 #define ALGO_CONF_MAX_NUM_SIGNALS (sizeof(pcm_uint) * 16)
 #define ALGO_CONF_MAX_NUM_CONTROLS 2
-#define ALGO_CONF_MAX_VARS 128
+#define ALGO_CONF_MAX_VARS 256
 
 struct flow_datapath_snapshot {
     pcm_uint trigger_mask;
