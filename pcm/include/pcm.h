@@ -66,6 +66,7 @@ typedef enum signal {
     PCM_SIG_ECN_EV = 10,          /**< EV in the last ECN-marked ACK */
     PCM_SIG_NACK_EV = 11,         /**< EV in the last NACK */
     PCM_SIG_TX_BACKLOG_PKTS = 12, /**< Number of bytes in send backlog */
+    PCM_SIG_UNKNOWN = 13, /**< Signal unknown - used for error handling */
 } pcm_signal_t;
 
 #define PCM_SIG_REARM (UINT64_MAX - 1)
@@ -88,9 +89,10 @@ typedef enum signal_accum {
  * @brief Identifiers for PCM control knobs.
  */
 typedef enum control {
-    PCM_CTRL_CWND = 0, /**< Sending congestion window */
-    PCM_CTRL_RATE = 1, /**< Sending rate control */
-    PCM_CTRL_EV = 2    /**< New entropy value */
+    PCM_CTRL_CWND = 0,    /**< Sending congestion window */
+    PCM_CTRL_RATE = 1,    /**< Sending rate control */
+    PCM_CTRL_EV = 2,      /**< New entropy value */
+    PCM_CTRL_UNKNOWN = 3, /**< Control unknown - used for error handling */
 } pcm_control_t;
 
 #ifdef __cplusplus

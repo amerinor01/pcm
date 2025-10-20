@@ -16,6 +16,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <dlfcn.h> // dlopen/dlsym
@@ -344,87 +345,64 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
     }
 
     pcm_uint get_control_first_match_runtime(pcm_control_t ctrl) override {
+        // PCM controls are defined as a consecutive enum starting at 0
+        // We iterate [0..PCM_CTRL_UNKNOWN) at compile time and call the
+        // corresponding update_signals<...> when a match is found.
         std::optional<pcm_uint> out = std::nullopt;
-        switch (ctrl) {
-        case PCM_CTRL_CWND:
-            out = get_control_first_match<PCM_CTRL_CWND>();
-            break;
-        case PCM_CTRL_RATE:
-            out = get_control_first_match<PCM_CTRL_RATE>();
-            break;
-        case PCM_CTRL_EV:
-            out = get_control_first_match<PCM_CTRL_EV>();
-            break;
-        default:
-            throw std::runtime_error("unsupported control");
-        }
+        static_assert(static_cast<std::size_t>(PCM_CTRL_UNKNOWN) > 0,
+                      "PCM_CTRL_UNKNOWN must be a positive sentinel value");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            ((static_cast<pcm_control_t>(Is) == ctrl
+                  ? (out = get_control_first_match<static_cast<pcm_control_t>(
+                         Is)>())
+                  : false),
+             ...);
+        }(std::make_index_sequence<static_cast<std::size_t>(
+              PCM_CTRL_UNKNOWN)>{});
+
         if (!out.has_value())
             throw std::runtime_error("control not found");
         return out.value();
     }
 
     void update_controls_runtime(pcm_control_t ctrl, pcm_uint value) override {
+        // PCM controls are defined as a consecutive enum starting at 0
+        // We iterate [0..PCM_CTRL_UNKNOWN) at compile time and call the
+        // corresponding update_signals<...> when a match is found.
         bool found = false;
-        switch (ctrl) {
-        case PCM_CTRL_CWND:
-            found = set_first_match_control<PCM_CTRL_CWND>(value);
-            break;
-        case PCM_CTRL_RATE:
-            found = set_first_match_control<PCM_CTRL_RATE>(value);
-            break;
-        case PCM_CTRL_EV:
-            found = set_first_match_control<PCM_CTRL_EV>(value);
-            break;
-        default:
-            throw std::runtime_error("unsupported control");
-        }
+        static_assert(static_cast<std::size_t>(PCM_CTRL_UNKNOWN) > 0,
+                      "PCM_CTRL_UNKNOWN must be a positive sentinel value");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            ((static_cast<pcm_control_t>(Is) == ctrl
+                  ? (found = set_first_match_control<static_cast<pcm_control_t>(
+                         Is)>(value))
+                  : false),
+             ...);
+        }(std::make_index_sequence<static_cast<std::size_t>(
+              PCM_CTRL_UNKNOWN)>{});
+
         if (!found) {
-            throw std::runtime_error("control not found");
+            throw std::runtime_error("unsupported control");
         }
     }
 
     void update_signals_runtime(pcm_signal_t sig, pcm_uint value) override {
-        switch (sig) {
-        case PCM_SIG_ACK:
-            update_signals<PCM_SIG_ACK>(value);
-            break;
-        case PCM_SIG_RTO:
-            update_signals<PCM_SIG_RTO>(value);
-            break;
-        case PCM_SIG_NACK:
-            update_signals<PCM_SIG_NACK>(value);
-            break;
-        case PCM_SIG_ECN:
-            update_signals<PCM_SIG_ECN>(value);
-            break;
-        case PCM_SIG_RTT:
-            update_signals<PCM_SIG_RTT>(value);
-            break;
-        case PCM_SIG_DATA_TX:
-            update_signals<PCM_SIG_DATA_TX>(value);
-            break;
-        case PCM_SIG_DATA_NACKED:
-            update_signals<PCM_SIG_DATA_NACKED>(value);
-            break;
-        case PCM_SIG_IN_FLIGHT:
-            update_signals<PCM_SIG_IN_FLIGHT>(value);
-            break;
-        case PCM_SIG_ELAPSED_TIME:
-            update_signals<PCM_SIG_ELAPSED_TIME>(value);
-            break;
-        case PCM_SIG_ACK_EV:
-            update_signals<PCM_SIG_ACK_EV>(value);
-            break;
-        case PCM_SIG_ECN_EV:
-            update_signals<PCM_SIG_ECN_EV>(value);
-            break;
-        case PCM_SIG_NACK_EV:
-            update_signals<PCM_SIG_NACK_EV>(value);
-            break;
-        case PCM_SIG_TX_BACKLOG_PKTS:
-            update_signals<PCM_SIG_TX_BACKLOG_PKTS>(value);
-            break;
-        default:
+        // PCM signals are defined as a consecutive enum starting at 0
+        // We iterate [0..PCM_SIG_UNKNOWN) at compile time and call the
+        // corresponding update_signals<...> when a match is found.
+        bool found = false;
+        static_assert(static_cast<std::size_t>(PCM_SIG_UNKNOWN) > 0,
+                      "PCM_SIG_UNKNOWN must be a positive sentinel value");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            ((static_cast<pcm_signal_t>(Is) == sig
+                  ? (update_signals<static_cast<pcm_signal_t>(Is)>(value),
+                     found = true)
+                  : false),
+             ...);
+        }(std::make_index_sequence<static_cast<std::size_t>(
+              PCM_SIG_UNKNOWN)>{});
+
+        if (!found) {
             throw std::runtime_error("unsupported signal");
         }
     }
