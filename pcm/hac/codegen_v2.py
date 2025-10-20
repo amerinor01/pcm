@@ -179,10 +179,10 @@ class AlgorithmCodeGenerator:
         
         lines.append(">;")
         lines.append(f"inline constexpr const char AlgoName[] = \"{self.algorithm_name}\";")
-        lines.append("using FlowSpecType = pcm::SimpleFlow<AlgoName, DatapathSpec>;")
-        lines.append(f"pcm::FlowDesc* __{self.algorithm_name}_spec_get()")
+        lines.append("using PcmHandlerVmSpecType = pcm::SimplePcmHandlerVm<AlgoName, DatapathSpec>;")
+        lines.append(f"pcm::PcmHandlerVmDesc* __{self.algorithm_name}_spec_get()")
         lines.append("{")
-        lines.append("    return new FlowSpecType{};")
+        lines.append("    return new PcmHandlerVmSpecType{};")
         lines.append("}")
         return "\n".join(lines)
 
@@ -227,7 +227,7 @@ class AlgorithmCodeGenerator:
             "int algorithm_main();",
             "#else",
             "",
-            f"extern \"C\" pcm::FlowDesc* __{self.algorithm_name}_spec_get();",
+            f"extern \"C\" pcm::PcmHandlerVmDesc* __{self.algorithm_name}_spec_get();",
             "",
             "#endif",
             f"#endif /* _{self.algorithm_name_upper}_H_ */",

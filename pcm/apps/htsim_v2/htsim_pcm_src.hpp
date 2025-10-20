@@ -54,7 +54,7 @@ class PcmScheduler final : public EventSource {
         auto [so_handle, factory_fn_ptr] = symbol_result.value();
 
         // Cast the function pointer to the expected factory function type
-        using FactoryFn = pcm::FlowDesc *(*)();
+        using FactoryFn = pcm::PcmHandlerVmDesc *(*)();
         auto factory_fn = reinterpret_cast<FactoryFn>(factory_fn_ptr);
 
         // Store the shared object handle for cleanup
@@ -65,8 +65,8 @@ class PcmScheduler final : public EventSource {
         });
 
         // Register the factory function with the PCM device
-        _dev.add_flow_spec_factory(
-            [factory_fn]() -> pcm::FlowDesc * {
+        _dev.add_vm_spec_factory(
+            [factory_fn]() -> pcm::PcmHandlerVmDesc * {
                 if (!factory_fn) {
                     throw std::runtime_error("Factory function is null");
                 }
@@ -82,7 +82,7 @@ class PcmScheduler final : public EventSource {
 
     virtual ~PcmScheduler() {
         for (auto &cur : _flow_id_to_src_mapping) {
-            _dev.destroy_flow(cur.first);
+            _dev.destroy_vm(cur.first);
         }
         _flow_id_to_src_mapping.clear();
     }
@@ -91,12 +91,12 @@ class PcmScheduler final : public EventSource {
         return EventList::getTheEventList().now();
     }
 
-    std::pair<uint32_t, pcm::FlowDesc &> createFlow(PcmSrc *src) {
+    std::pair<uint32_t, pcm::PcmHandlerVmDesc &> createFlow(PcmSrc *src) {
         if (!src)
             assert(schedulerTypeGet() == ProgressType::SCHEDULER_TYPE_SYNC);
         auto new_flow_id = flow_id_count++;
         _flow_id_to_src_mapping[new_flow_id] = src;
-        return {new_flow_id, _dev.create_flow(new_flow_id)};
+        return {new_flow_id, _dev.create_vm(new_flow_id)};
     }
 
     [[nodiscard]] ProgressType schedulerTypeGet() noexcept {
@@ -114,7 +114,7 @@ class PcmScheduler final : public EventSource {
     simtime_picosec _handler_delay;
     simtime_picosec _poll_delay;
     ProgressType _sched_type;
-    pcm::DeviceCheckOnSched _dev;
+    pcm::PcmHandlerVmEngineCheckOnSched _dev;
     simtime_picosec _next_sched;
     uint32_t flow_id_count{0};
     std::unordered_map<uint32_t, PcmSrc *> _flow_id_to_src_mapping;
@@ -214,7 +214,7 @@ class PcmSrc final : public UecSrc {
 
   private:
     PcmNic &_nic;
-    std::pair<uint32_t, pcm::FlowDesc &> _pcm_flow;
+    std::pair<uint32_t, pcm::PcmHandlerVmDesc &> _pcm_flow;
 };
 
 // PcmScheduler method implementations that need complete PcmSrc definition

@@ -32,7 +32,8 @@
         algorithm_so_library_handle_ = so_handle;
         algorithm_cb_ = reinterpret_cast<pcm_cc_algorithm_cb>(raw_fn_ptr);
 
-        (([&] {g., VariableDesc, ControlDesc, SignalDesc, FlowDesc, SimpleFlow).
+        (([&] {g., VariableDesc, ControlDesc, SignalDesc, PcmHandlerVmDesc,
+ etc).
  - Functions and non-type identifiers in lower_snake_case.
  - Class/struct data members end with a trailing underscore (e.g., get_time_,
  start_ts_).
@@ -86,7 +87,7 @@ uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) {
 
 // ============================================================================
 // PCMI-local variable descriptor definitions: the simplest form of object
-// associated with the flow
+// associated with the vm
 // ============================================================================
 
 // User-exposed variable API
@@ -236,14 +237,10 @@ template <typename T>
 inline constexpr bool is_signal_v = is_signal<std::decay_t<T>>::value;
 
 // ============================================================================
-// Flow (type-iterating; no runtime control/signal objects)
+// Handler VM descriptor (type-erased base)
 // ============================================================================
-
-// ============================================================================
-// Flow descriptor (type-erased base)
-// ============================================================================
-struct FlowDesc {
-    virtual ~FlowDesc() = default;
+struct PcmHandlerVmDesc {
+    virtual ~PcmHandlerVmDesc() = default;
     virtual void add_get_time_source(util::GetTimeFn get_time_source) = 0;
     virtual bool invoke_cc_algorithm_on_trigger() = 0;
     virtual void update_controls_runtime(pcm_control_t ctrl,
@@ -271,7 +268,8 @@ concept FitsSnapshot =
         return n <= MaxSize;
     }(std::type_identity<Tuple>{});
 
-template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
+template <typename PcmHandlerVmImplT, typename... Objs>
+struct PcmHandlerVm : PcmHandlerVmDesc {
     using VariablesTupleT = decltype(std::tuple_cat(
         std::conditional_t<is_variable_v<Objs>, std::tuple<Objs>,
                            std::tuple<>>{}...));
@@ -315,7 +313,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
             using T = Objs;
             if constexpr (is_control_v<T>) {
                 if (T::kType == Match) {
-                    auto &slot = static_cast<FlowImplT *>(self)
+                    auto &slot = static_cast<PcmHandlerVmImplT *>(self)
                                      ->template control_slot_impl<T::kIndex>();
                     T::set(slot, val);
                     return true;
@@ -333,7 +331,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
             if constexpr (is_control_v<T>) {
                 if (T::kType == Match) {
                     auto const &slot =
-                        static_cast<FlowImplT const *>(self)
+                        static_cast<PcmHandlerVmImplT const *>(self)
                             ->template control_slot_impl<T::kIndex>();
                     result = T::get(slot);
                     return true;
@@ -414,7 +412,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
                  if constexpr (T::kIsAccum) {
                      if (T::kType == Match) {
                          auto &slot =
-                             static_cast<FlowImplT *>(self)
+                             static_cast<PcmHandlerVmImplT *>(self)
                                  ->template signal_slot_impl<T::kIndex>();
                          T::update(start_ts_, get_time_, slot, v);
                      }
@@ -436,10 +434,10 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
              if constexpr (is_signal_v<T>) {
                  if constexpr (T::kIsTrigger) {
                      auto const &val =
-                         static_cast<FlowImplT const *>(self)
+                         static_cast<PcmHandlerVmImplT const *>(self)
                              ->template signal_slot_impl<T::kIndex>();
                      auto const &thresh =
-                         static_cast<FlowImplT const *>(self)
+                         static_cast<PcmHandlerVmImplT const *>(self)
                              ->template thresh_slot_impl<T::kIndex>();
                      if (T::is_fired(start_ts_, get_time_, val, thresh)) {
                          trigger_mask |= T::kMask;
@@ -455,17 +453,18 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
         }
 
         update_signals<PCM_SIG_ELAPSED_TIME>(0);
-        static_cast<FlowImplT *>(this)->prepare_pre_trigger_snapshot_impl(
-            trigger_mask);
-        (void)static_cast<FlowImplT *>(this)->execute_algorithm_impl();
-        static_cast<FlowImplT *>(this)->apply_post_trigger_snapshot_impl();
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->prepare_pre_trigger_snapshot_impl(trigger_mask);
+        (void)static_cast<PcmHandlerVmImplT *>(this)->execute_algorithm_impl();
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->apply_post_trigger_snapshot_impl();
 
         // rearm triggers
         (([&](auto *self) {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
                  if constexpr (T::kIsTrigger) {
-                     auto &val = static_cast<FlowImplT *>(self)
+                     auto &val = static_cast<PcmHandlerVmImplT *>(self)
                                      ->template signal_slot_impl<T::kIndex>();
                      T::rearm_if_needed(start_ts_, get_time_, val);
                  }
@@ -478,25 +477,26 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
 };
 
 // ============================================================================
-// Simple flow implementation
+// Simple vm implementation
 // ============================================================================
 
 // Primary template
 // AlgoName is raw pointer because templates can't accept std::string
-template <const char *AlgoName, typename Tuple> struct SimpleFlow;
+template <const char *AlgoName, typename Tuple> struct SimplePcmHandlerVm;
 
 template <const char *AlgoName, typename... Ds>
-struct SimpleFlow<AlgoName, std::tuple<Ds...>>
-    : Flow<SimpleFlow<AlgoName, std::tuple<Ds...>>,
-           typename Ds::template Rebind<pcm_uint>...> {
+struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
+    : PcmHandlerVm<SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>,
+                   typename Ds::template Rebind<pcm_uint>...> {
 
-    using SelfType = SimpleFlow<AlgoName, std::tuple<Ds...>>;
-    using Base = Flow<SelfType, typename Ds::template Rebind<pcm_uint>...>;
+    using SelfType = SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>;
+    using Base =
+        PcmHandlerVm<SelfType, typename Ds::template Rebind<pcm_uint>...>;
 
     std::shared_ptr<void> algorithm_so_handle_;
-    pcm_cc_algorithm_cb algorithm_cb_{nullptr};
+    pcm_handler_main_cb handler_main_cb_{nullptr};
 
-    flow_datapath_snapshot snapshot_{};
+    pcm_handler_datapath_snapshot snapshot_{};
 
     using ControlsTupleT = typename Base::ControlsTupleT;
     using SignalsTupleT = typename Base::SignalsTupleT;
@@ -510,7 +510,7 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     std::array<pcm_uint, kNumSignals> signals_storage_{};
     std::array<pcm_uint, kNumSignals> thresholds_storage_{};
 
-    explicit SimpleFlow() {
+    explicit SimplePcmHandlerVm() {
         auto result = util::shared_symbol_open(
             "lib" + std::string(AlgoName) + ".so",
             std::string(__algorithm_entry_point_symbol));
@@ -524,7 +524,7 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
                     util::shared_symbol_close(handle);
                 }
             });
-        algorithm_cb_ = reinterpret_cast<pcm_cc_algorithm_cb>(raw_fn_ptr);
+        handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
 
         (([&] {
              using T = typename Ds::template Rebind<pcm_uint>;
@@ -545,9 +545,9 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     }
 
     [[nodiscard]] pcm_err_t execute_algorithm_impl() {
-        if (!algorithm_cb_)
+        if (!handler_main_cb_)
             throw std::runtime_error("CC Algorithm callback is nullptr");
-        return algorithm_cb_(&snapshot_);
+        return handler_main_cb_(&snapshot_);
     }
 
     void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask) {
@@ -605,69 +605,71 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     }
 };
 
-struct Device {
+struct PcmHandlerVmEngine {
     util::GetTimeFn get_time_source_{nullptr};
-    explicit Device(util::GetTimeFn get_time_source)
+    explicit PcmHandlerVmEngine(util::GetTimeFn get_time_source)
         : get_time_source_{get_time_source} {}
 
     [[nodiscard]] virtual std::optional<uint32_t> progress() = 0;
     [[nodiscard]] virtual bool progress(uint32_t id) = 0;
 
-    void add_flow_spec_factory(std::function<FlowDesc *()> spec_factory,
-                               uint32_t matching_rule) {
+    void add_vm_spec_factory(std::function<PcmHandlerVmDesc *()> spec_factory,
+                             uint32_t matching_rule) {
         if (!get_time_source_)
             throw std::runtime_error("Time source is nullptr");
         configs_.emplace_back(
-            matching_rule, [this, spec_factory]() -> std::unique_ptr<FlowDesc> {
-                std::unique_ptr<FlowDesc> new_flow(spec_factory());
-                new_flow->add_get_time_source(get_time_source_);
-                return new_flow;
+            matching_rule,
+            [this, spec_factory]() -> std::unique_ptr<PcmHandlerVmDesc> {
+                std::unique_ptr<PcmHandlerVmDesc> new_vm(spec_factory());
+                new_vm->add_get_time_source(get_time_source_);
+                return new_vm;
             });
     }
 
-    FlowDesc &create_flow(uint32_t new_id) {
+    PcmHandlerVmDesc &create_vm(uint32_t new_id) {
         // id has to be unique
-        if (flows_.find(new_id) != flows_.end())
-            throw std::runtime_error("Flow with this id already exists");
+        if (vms_.find(new_id) != vms_.end())
+            throw std::runtime_error("VM with this id already exists");
 
         if (configs_.size() > 1)
-            throw std::runtime_error("Device supports only a single CC config");
+            throw std::runtime_error("Engine supports only a single config");
 
         // find spec and create
         for (const auto &[mask, factory] : configs_) {
             // for now we don't really support matching
             // if (new_id & mask) {
             if (true) {
-                auto ret = flows_.insert({new_id, factory()});
+                auto ret = vms_.insert({new_id, factory()});
                 if (!ret.second)
-                    throw std::runtime_error("new flow insertion failed");
+                    throw std::runtime_error("new vm insertion failed");
                 return *(ret.first->second);
             }
         }
 
-        throw std::runtime_error("No matching flow spec for id");
+        throw std::runtime_error("No matching vm spec for id");
     }
 
-    void destroy_flow(uint32_t id) {
-        auto it = flows_.find(id);
-        if (it == flows_.end())
-            throw std::runtime_error("Flow with this id doesn't exist");
-        flows_.erase(it);
+    void destroy_vm(uint32_t id) {
+        auto it = vms_.find(id);
+        if (it == vms_.end())
+            throw std::runtime_error("VM with this id doesn't exist");
+        vms_.erase(it);
     }
 
   protected:
-    using Factory = std::function<std::unique_ptr<FlowDesc>()>;
-    std::vector<std::pair<uint32_t, Factory>> configs_; // mask + flow factory
-    using FlowStorage = std::unordered_map<uint32_t, std::unique_ptr<FlowDesc>>;
-    FlowStorage flows_{}; // flows
+    using Factory = std::function<std::unique_ptr<PcmHandlerVmDesc>()>;
+    std::vector<std::pair<uint32_t, Factory>> configs_; // mask + vm factory
+    using PcmHandlerVmStorage =
+        std::unordered_map<uint32_t, std::unique_ptr<PcmHandlerVmDesc>>;
+    PcmHandlerVmStorage vms_{};
 };
 
-struct DeviceCheckOnSched final : Device {
-    explicit DeviceCheckOnSched(util::GetTimeFn get_time_source)
-        : Device::Device{get_time_source} {}
+struct PcmHandlerVmEngineCheckOnSched final : PcmHandlerVmEngine {
+    explicit PcmHandlerVmEngineCheckOnSched(util::GetTimeFn get_time_source)
+        : PcmHandlerVmEngine::PcmHandlerVmEngine{get_time_source} {}
 
     std::optional<uint32_t> progress() override {
-        if (flows_.empty())
+        if (vms_.empty())
             return std::nullopt;
 
         std::optional<uint32_t> id = std::nullopt;
@@ -676,18 +678,18 @@ struct DeviceCheckOnSched final : Device {
             id = cur_rr_it_->first;
 
         ++cur_rr_it_;
-        if (cur_rr_it_ == flows_.end())
-            cur_rr_it_ = flows_.begin();
+        if (cur_rr_it_ == vms_.end())
+            cur_rr_it_ = vms_.begin();
         return id;
     }
 
     bool progress(uint32_t id) override {
-        if (flows_.empty())
-            throw std::runtime_error("Device flow storage is empty");
+        if (vms_.empty())
+            throw std::runtime_error("Device vm storage is empty");
 
-        auto it = flows_.find(id);
-        if (it == flows_.end())
-            throw std::runtime_error("id doesn't exist in flow storage");
+        auto it = vms_.find(id);
+        if (it == vms_.end())
+            throw std::runtime_error("id doesn't exist in vm storage");
 
         auto triggered = it->second->invoke_cc_algorithm_on_trigger();
         if (triggered)
@@ -696,14 +698,15 @@ struct DeviceCheckOnSched final : Device {
         return false;
     }
 
-    FlowDesc &create_flow(uint32_t new_id) {
-        auto &new_flow = Device::create_flow(new_id);
-        cur_rr_it_ = flows_.begin();
-        return new_flow;
+    PcmHandlerVmDesc &create_vm(uint32_t new_id) {
+        auto &new_vm = PcmHandlerVmEngine::create_vm(new_id);
+        cur_rr_it_ = vms_.begin();
+        return new_vm;
     }
 
   private:
-    Device::FlowStorage::iterator cur_rr_it_{Device::flows_.end()};
+    PcmHandlerVmEngine::PcmHandlerVmStorage::iterator cur_rr_it_{
+        PcmHandlerVmEngine::vms_.end()};
 };
 
 } // namespace pcm

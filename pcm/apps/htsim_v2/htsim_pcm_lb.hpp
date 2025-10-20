@@ -75,7 +75,7 @@ class UecPcmMp : public UecMultipath {
 
   private:
     PcmNic &_nic;
-    std::pair<uint32_t, pcm::FlowDesc &> _pcm_flow;
+    std::pair<uint32_t, pcm::PcmHandlerVmDesc &> _pcm_flow;
 };
 
 } // namespace pcm_htsim

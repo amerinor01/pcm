@@ -15,9 +15,9 @@ using DatapathSpec =
 
 inline constexpr const char AlgoName[] = "dctcp";
 
-using FlowSpecType = SimpleFlow<AlgoName, DatapathSpec>;
+using FlowSpecType = SimplePcmHandlerVm<AlgoName, DatapathSpec>;
 
-extern "C" FlowDesc* dummy_spec() {
+extern "C" PcmHandlerVmDesc* dummy_spec() {
     return new FlowSpecType{};  // Return pointer to concrete type
 }
 
@@ -29,14 +29,14 @@ int main() {
                 .count());
     };
 
-    Device dev{get_time_source};
+    PcmHandlerVmEngine dev{get_time_source};
 
     // For dlsym usage - pass the factory function directly
-    dev.add_flow_spec_factory(dummy_spec, 0xFF);
+    dev.add_vm_spec_factory(dummy_spec, 0xFF);
 
-    auto &fdesc1 = dev.create_flow(0x12);
-    auto &fdesc2 = dev.create_flow(0x13);
-    auto &fdesc3 = dev.create_flow(0x14);
+    auto &fdesc1 = dev.create_vm(0x12);
+    auto &fdesc2 = dev.create_vm(0x13);
+    auto &fdesc3 = dev.create_vm(0x14);
     fdesc1.invoke_cc_algorithm_on_trigger();
     fdesc2.invoke_cc_algorithm_on_trigger();
     fdesc3.invoke_cc_algorithm_on_trigger();

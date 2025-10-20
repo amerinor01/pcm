@@ -126,7 +126,7 @@ struct flow {
     struct slist_entry flow_list_entry;
     const struct algorithm_config *config;
     void *backend_ctx;
-    struct flow_datapath_snapshot datapath_snapshot;
+    struct pcm_handler_datapath_snapshot datapath_snapshot;
 };
 
 #define SCHEDULER_SLEEP_US 1000 // 10 ms
