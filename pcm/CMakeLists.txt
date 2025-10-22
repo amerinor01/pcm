@@ -68,6 +68,31 @@ include_directories(${PCM_MISC_DIR})
 include_directories(${PCM_ALGO_DIR})
 include_directories(${CMAKE_BINARY_DIR}/algorithms)  # For YAML-generated algorithm headers
 
+# If xxHash is present as a git submodule at repo root (../xxHash), expose its
+# headers and any bundled libraries so project code can use <xxhash.h>.
+set(XXHASH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../xxHash)
+if(EXISTS ${XXHASH_DIR}/xxhash.h)
+    message(STATUS "xxHash detected at ${XXHASH_DIR}: adding include dir")
+    include_directories(${XXHASH_DIR})
+
+    # Create IMPORTED targets if prebuilt libraries are available in the submodule
+    if(EXISTS ${XXHASH_DIR}/libxxhash.a)
+        add_library(xxhash_static STATIC IMPORTED)
+        set_target_properties(xxhash_static PROPERTIES
+            IMPORTED_LOCATION ${XXHASH_DIR}/libxxhash.a
+        )
+        target_include_directories(xxhash_static INTERFACE ${XXHASH_DIR})
+    endif()
+
+    if(EXISTS ${XXHASH_DIR}/libxxhash.so)
+        add_library(xxhash_shared SHARED IMPORTED)
+        set_target_properties(xxhash_shared PROPERTIES
+            IMPORTED_LOCATION ${XXHASH_DIR}/libxxhash.so
+        )
+        target_include_directories(xxhash_shared INTERFACE ${XXHASH_DIR})
+    endif()
+endif()
+
 # ===============================================
 # Core PCM Library
 # ===============================================

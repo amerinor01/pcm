@@ -5,7 +5,7 @@ algorithm:
 constants:
   - name: NO_OF_PATHS
     type: uint
-    value: 128
+    value: 64
     description: "Number of paths"
 
 variables:

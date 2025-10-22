@@ -34,7 +34,15 @@ variables:
   - name: EV_EXPLORE_COUNTER
     initial_value: 0
     type: uint
-    description: "Entrop value set bitmap" 
+    description: "Entrop value set bitmap"
+  - name: EV_SEED
+    initial_value: 0
+    type: uint
+    description: "Hash EV seed"
+  - name: IS_INITIALIZED
+    initial_value: 0
+    type: uint
+    description: "Is algorithm initialized"
 
 signals:
   - name: NUM_ECN

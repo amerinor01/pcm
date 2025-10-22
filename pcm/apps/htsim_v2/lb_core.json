@@ -10,14 +10,11 @@
     "nscc",
     "dctcp"
   ],
-  "pcm_config": "-pcm_sched_poll_delay 1000 -pcm_handler_delay 1000 -pcm_algorithm",
+  "pcm_config": "-sender_cc_algo nscc -pcm_lb_algorithm",
   "pcm_algorithms": [
-    "nscc",
-    "uec_dctcp",
-    "newreno",
-    "swift", 
-    "smartt",
-    "dcqcn",
-    "dctcp"
+    "reps",
+    "ops_lb",
+    "strack",
+    "strack_light"
   ]
 }

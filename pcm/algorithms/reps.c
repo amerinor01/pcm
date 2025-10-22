@@ -10,6 +10,11 @@ BITMAP_HELPERS_DEFINE(VAR_EVC_BITMAP)
 // we also don't handle path failure (which should be exposed as a datapath signal)
 // and, therefore, don't support implement freezing mode
 int algorithm_main() {
+    if (!get_var_uint(VAR_IS_INITIALIZED)) {
+        set_var_uint(VAR_EV_SEED, RAND() & PATH_MASK);
+        set_var_uint(VAR_IS_INITIALIZED, 1);
+    }
+
     pcm_uint trigger_mask = get_signal_trigger_mask();
     pcm_uint head_idx = get_var_uint(VAR_EVC_HEAD_IDX);
     pcm_uint num_valid_evs = get_var_uint(VAR_EVC_NUM_VALID_EVS);
@@ -31,7 +36,8 @@ int algorithm_main() {
     if (trigger_mask & SIG_TX_BACKLOG_SIZE) {
         pcm_uint packet_ev = 0;
         if (num_valid_evs == 0 || get_var_uint(VAR_EV_EXPLORE_COUNTER) > 0) {
-            packet_ev = rand() & PATH_MASK;
+            packet_ev = HASH(get_var_uint(VAR_EV_SEED));
+            set_var_uint(VAR_EV_SEED, packet_ev);
             set_var_uint(VAR_EV_EXPLORE_COUNTER, get_var_uint(VAR_EV_EXPLORE_COUNTER) - 1);
         } else {
             pcm_uint ev_cache_idx = (head_idx - num_valid_evs) % EVC_SIZE;

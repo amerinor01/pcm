@@ -12,11 +12,9 @@ BITMAP_HELPERS_DEFINE(VAR_ARR_EVS_BITMAP)
 // we also don't handle path failure (which should be exposed as a datapath signal)
 // and, therefore, don't support implement freezing mode
 int algorithm_main() {
-    printf("BITMAP LB HANDLER\n");
-
     if (!get_var_uint(VAR_IS_INITIALIZED)) {
-        set_var_uint(VAR_PATH_RANDOM, rand() & 0xFFFF);
-        set_var_uint(VAR_PATH_XOR, rand() & NO_OF_PATHS);
+        set_var_uint(VAR_PATH_RANDOM, RAND() & 0xFFFF);
+        set_var_uint(VAR_PATH_XOR, RAND() & NO_OF_PATHS);
         set_var_uint(VAR_IS_INITIALIZED, 1);
     }
 
@@ -44,7 +42,7 @@ int algorithm_main() {
             set_var_uint(VAR_CUR_EV_IDX, get_var_uint(VAR_CUR_EV_IDX) + 1);
             if (get_var_uint(VAR_CUR_EV_IDX) == NO_OF_PATHS) {
                 set_var_uint(VAR_CUR_EV_IDX, 0);
-                set_var_uint(VAR_PATH_XOR, rand() & PATH_MASK);
+                set_var_uint(VAR_PATH_XOR, HASH(get_var_uint(VAR_PATH_XOR)) & PATH_MASK);
             }
         } else {
             pcm_uint rr_counter = 0; // Do round robin across EVs
@@ -57,7 +55,7 @@ int algorithm_main() {
                 set_var_uint(VAR_CUR_EV_IDX, get_var_uint(VAR_CUR_EV_IDX) + 1);
                 if (get_var_uint(VAR_CUR_EV_IDX) == NO_OF_PATHS) {
                     set_var_uint(VAR_CUR_EV_IDX, 0);
-                    set_var_uint(VAR_PATH_XOR, rand() & PATH_MASK);
+                    set_var_uint(VAR_PATH_XOR, HASH(get_var_uint(VAR_PATH_XOR)) & PATH_MASK);
                 }
                 ev = (get_var_uint(VAR_CUR_EV_IDX) ^ get_var_uint(VAR_PATH_XOR)) & PATH_MASK;
             }

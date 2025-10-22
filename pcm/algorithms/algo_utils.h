@@ -2,6 +2,20 @@
 #define _ALGO_UTILS_H_
 
 #include <stdio.h> // all handlers can call to printf to debug
+#include <xxhash.h>
+
+#define HASH(a)                                                                                                                            \
+    ({                                                                                                                                     \
+        pcm_uint __hash_tmp = (a);                                                                                                         \
+        XXH64(&__hash_tmp, sizeof(__hash_tmp), 0);                                                                                         \
+    })
+
+#define RAND()                                                                                                                             \
+    ({                                                                                                                                     \
+        /* this is dirty because it assumes that snapshot object exist at the calling point */                                             \
+        uintptr_t __tmp = (uintptr_t)snapshot;                                                                                             \
+        XXH64(&__tmp, sizeof(__tmp), 0);                                                                                                   \
+    })
 
 #define MAX(a, b)                                                                                                                          \
     ({                                                                                                                                     \
