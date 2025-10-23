@@ -8,20 +8,14 @@
 
 #include "htsim_pcm_src.hpp"
 #include "network.h"
-#include "pcm_v2.hpp"
 
 namespace pcm_htsim {
 
-class UecPcmMp : public UecMultipath {
+class UecPcmMp : public UecMultipath, public PcmScheduledContext {
   public:
-    UecPcmMp(bool debug, PcmNic &nic)
-        : UecMultipath(debug), _nic{nic},
-          _pcm_flow{_nic._scheduler.createFlow(nullptr)} {
-        // Note: passing nullptr into createFlow doesn't break scheduler because
-        // in SCHEDULER_TYPE_SYNC we rely only on the functionality of scheduler
-        // to init pcm::flow according to internal matching rule
-        assert(_nic._scheduler.schedulerTypeGet() ==
-               ProgressType::SCHEDULER_TYPE_SYNC);
+    UecPcmMp(bool debug, PcmScheduler &scheduler)
+        : UecMultipath(debug), _scheduler{scheduler},
+          _pcm_vm{_scheduler.createVm(this, 0)} {
         std::cout << "pcm_htsim::UecPcmMp: initialization completed"
                   << std::endl;
     }
@@ -33,18 +27,18 @@ class UecPcmMp : public UecMultipath {
         // std::endl;
         switch (feedback) {
         case PATH_GOOD:
-            _pcm_flow.second.update_signals_runtime(PCM_SIG_ACK, 1);
-            _pcm_flow.second.update_signals_runtime(
+            _pcm_vm.second.update_signals_runtime(PCM_SIG_ACK, 1);
+            _pcm_vm.second.update_signals_runtime(
                 PCM_SIG_ACK_EV, static_cast<pcm_uint>(path_id));
             break;
         case PATH_ECN:
-            _pcm_flow.second.update_signals_runtime(PCM_SIG_ECN, 1);
-            _pcm_flow.second.update_signals_runtime(
+            _pcm_vm.second.update_signals_runtime(PCM_SIG_ECN, 1);
+            _pcm_vm.second.update_signals_runtime(
                 PCM_SIG_ECN_EV, static_cast<pcm_uint>(path_id));
             break;
         case PATH_NACK:
-            _pcm_flow.second.update_signals_runtime(PCM_SIG_NACK, 1);
-            _pcm_flow.second.update_signals_runtime(
+            _pcm_vm.second.update_signals_runtime(PCM_SIG_NACK, 1);
+            _pcm_vm.second.update_signals_runtime(
                 PCM_SIG_NACK_EV, static_cast<pcm_uint>(path_id));
             break;
         case PATH_TIMEOUT:
@@ -53,29 +47,46 @@ class UecPcmMp : public UecMultipath {
             std::cerr << "pcm_htsim::UecPcmMp: unsupported signal" << std::endl;
             assert(false);
         }
-        bool ret;
-        ret = _nic._scheduler.progress(_pcm_flow.first);
-        assert(ret);
-        (void)ret;
+        if (_scheduler.schedulerTypeGet() ==
+            PcmScheduler::ProgressType::SYNC) {
+            bool ret;
+            ret = _scheduler.pollVm(_pcm_vm.first);
+            assert(ret);
+            (void)ret;
+        }
     }
+
+    void finalize() override { _is_finished = true; }
+    bool isFinished() override { return _is_finished; }
+    void fetchUpdate() override {}
 
     uint16_t nextEntropy(uint64_t seq_sent,
                          uint64_t cur_cwnd_in_pkts) override {
         (void)seq_sent;
         (void)cur_cwnd_in_pkts;
-        _pcm_flow.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_PKTS, 1);
-        _nic._scheduler.progress(_pcm_flow.first);
-        // std::cout << "pcm_htsim::UecPcmMp: Generate EV: "
-        //           <<
-        //           _pcm_flow.get_control_first_match_runtime(PCM_CTRL_EV)
-        //           << std::endl;
+        _pcm_vm.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_PKTS, 1);
+
+        if (_scheduler.schedulerTypeGet() ==
+            PcmScheduler::ProgressType::SYNC) {
+            bool ret;
+            ret = _scheduler.pollVm(_pcm_vm.first);
+            assert(ret);
+            (void)ret;
+        }
+
+        std::cout << "pcm_htsim::UecPcmMp:" << this << " Generate EV: "
+                  << static_cast<uint16_t>(
+                         _pcm_vm.second.get_control_first_match_runtime(
+                             PCM_CTRL_EV))
+                  << std::endl;
         return static_cast<uint16_t>(
-            _pcm_flow.second.get_control_first_match_runtime(PCM_CTRL_EV));
+            _pcm_vm.second.get_control_first_match_runtime(PCM_CTRL_EV));
     }
 
   private:
-    PcmNic &_nic;
-    std::pair<uint32_t, pcm::PcmHandlerVmDesc &> _pcm_flow;
+    PcmScheduler &_scheduler;
+    std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
+    bool _is_finished{false};
 };
 
 } // namespace pcm_htsim

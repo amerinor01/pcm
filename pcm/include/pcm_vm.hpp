@@ -43,7 +43,7 @@
  is_variable_v).
 */
 
-namespace pcm {
+namespace pcm_vm {
 
 namespace util {
 template <typename> inline constexpr bool always_false_v = false;
@@ -603,110 +603,6 @@ struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
         static_assert(I < kNumSignals);
         return thresholds_storage_[I];
     }
-};
-
-struct PcmHandlerVmEngine {
-    util::GetTimeFn get_time_source_{nullptr};
-    explicit PcmHandlerVmEngine(util::GetTimeFn get_time_source)
-        : get_time_source_{get_time_source} {}
-
-    [[nodiscard]] virtual std::optional<uint32_t> progress() = 0;
-    [[nodiscard]] virtual bool progress(uint32_t id) = 0;
-
-    void add_vm_spec_factory(std::function<PcmHandlerVmDesc *()> spec_factory,
-                             uint32_t matching_rule) {
-        if (!get_time_source_)
-            throw std::runtime_error("Time source is nullptr");
-        configs_.emplace_back(
-            matching_rule,
-            [this, spec_factory]() -> std::unique_ptr<PcmHandlerVmDesc> {
-                std::unique_ptr<PcmHandlerVmDesc> new_vm(spec_factory());
-                new_vm->add_get_time_source(get_time_source_);
-                return new_vm;
-            });
-    }
-
-    PcmHandlerVmDesc &create_vm(uint32_t new_id) {
-        // id has to be unique
-        if (vms_.find(new_id) != vms_.end())
-            throw std::runtime_error("VM with this id already exists");
-
-        if (configs_.size() > 1)
-            throw std::runtime_error("Engine supports only a single config");
-
-        // find spec and create
-        for (const auto &[mask, factory] : configs_) {
-            // for now we don't really support matching
-            // if (new_id & mask) {
-            if (true) {
-                auto ret = vms_.insert({new_id, factory()});
-                if (!ret.second)
-                    throw std::runtime_error("new vm insertion failed");
-                return *(ret.first->second);
-            }
-        }
-
-        throw std::runtime_error("No matching vm spec for id");
-    }
-
-    void destroy_vm(uint32_t id) {
-        auto it = vms_.find(id);
-        if (it == vms_.end())
-            throw std::runtime_error("VM with this id doesn't exist");
-        vms_.erase(it);
-    }
-
-  protected:
-    using Factory = std::function<std::unique_ptr<PcmHandlerVmDesc>()>;
-    std::vector<std::pair<uint32_t, Factory>> configs_; // mask + vm factory
-    using PcmHandlerVmStorage =
-        std::unordered_map<uint32_t, std::unique_ptr<PcmHandlerVmDesc>>;
-    PcmHandlerVmStorage vms_{};
-};
-
-struct PcmHandlerVmEngineCheckOnSched final : PcmHandlerVmEngine {
-    explicit PcmHandlerVmEngineCheckOnSched(util::GetTimeFn get_time_source)
-        : PcmHandlerVmEngine::PcmHandlerVmEngine{get_time_source} {}
-
-    std::optional<uint32_t> progress() override {
-        if (vms_.empty())
-            return std::nullopt;
-
-        std::optional<uint32_t> id = std::nullopt;
-        auto triggered = cur_rr_it_->second->invoke_cc_algorithm_on_trigger();
-        if (triggered)
-            id = cur_rr_it_->first;
-
-        ++cur_rr_it_;
-        if (cur_rr_it_ == vms_.end())
-            cur_rr_it_ = vms_.begin();
-        return id;
-    }
-
-    bool progress(uint32_t id) override {
-        if (vms_.empty())
-            throw std::runtime_error("Device vm storage is empty");
-
-        auto it = vms_.find(id);
-        if (it == vms_.end())
-            throw std::runtime_error("id doesn't exist in vm storage");
-
-        auto triggered = it->second->invoke_cc_algorithm_on_trigger();
-        if (triggered)
-            return true;
-
-        return false;
-    }
-
-    PcmHandlerVmDesc &create_vm(uint32_t new_id) {
-        auto &new_vm = PcmHandlerVmEngine::create_vm(new_id);
-        cur_rr_it_ = vms_.begin();
-        return new_vm;
-    }
-
-  private:
-    PcmHandlerVmEngine::PcmHandlerVmStorage::iterator cur_rr_it_{
-        PcmHandlerVmEngine::vms_.end()};
 };
 
 } // namespace pcm

@@ -878,6 +878,10 @@ bool UecSrc::checkFinished(UecDataPacket::seq_t cum_ack) {
              << " rtx_queue " << _rtx_queue.size()
              << " done_sending " << _done_sending << endl;
 
+    if (_done_sending) {
+        _mp->finalize(); // Dirty!
+    }
+
     return _done_sending;
 }
 

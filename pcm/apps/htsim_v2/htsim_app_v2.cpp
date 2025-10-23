@@ -159,19 +159,26 @@ int main(int argc, char **argv) {
     bool pcm_enable = false;
     std::string pcm_algo_name;
     simtime_picosec pcm_handler_delay =
-        pcm_htsim::PcmNic::default_handlerDelayPs;
+        pcm_htsim::PcmScheduler::default_handlerDelayPs;
     simtime_picosec pcm_sched_poll_delay =
-        pcm_htsim::PcmNic::default_schedulerPollDelayPs;
-    pcm_htsim::ProgressType pcm_sched_type =
-        pcm_htsim::ProgressType::SCHEDULER_TYPE_SYNC;
+        pcm_htsim::PcmScheduler::default_schedulerPollDelayPs;
+    pcm_htsim::PcmScheduler::ProgressType pcm_sched_type =
+        pcm_htsim::PcmScheduler::ProgressType::SYNC;
+    vector<unique_ptr<pcm_htsim::PcmScheduler>> pcm_cc_schedulers;
+    pcm_htsim::PcmScheduler::PcmVmTag pcm_cc_algo_dummy_tag =
+        std::numeric_limits<pcm_htsim::PcmScheduler::PcmVmTag>::max();
 
     std::string pcm_lb_algo_name;
     simtime_picosec pcm_lb_handler_delay =
-        pcm_htsim::PcmNic::default_handlerDelayPs;
+        pcm_htsim::PcmScheduler::default_handlerDelayPs;
     simtime_picosec pcm_lb_sched_poll_delay =
-        pcm_htsim::PcmNic::default_schedulerPollDelayPs;
+        pcm_htsim::PcmScheduler::default_schedulerPollDelayPs;
     bool pcm_lb_enable = false;
-    vector<unique_ptr<UecNIC>> pcm_lb_nics;
+    pcm_htsim::PcmScheduler::ProgressType pcm_lb_sched_type =
+        pcm_htsim::PcmScheduler::ProgressType::SYNC;
+    vector<unique_ptr<pcm_htsim::PcmScheduler>> pcm_lb_schedulers;
+    pcm_htsim::PcmScheduler::PcmVmTag pcm_lb_algo_dummy_tag =
+        std::numeric_limits<pcm_htsim::PcmScheduler::PcmVmTag>::max();
 
     while (i < argc) {
         if (!strcmp(argv[i], "-o")) {
@@ -556,8 +563,13 @@ int main(int argc, char **argv) {
                  << pcm_handler_delay << endl;
             i++;
         } else if (!strcmp(argv[i], "-pcm_async_sched")) {
-            pcm_sched_type = pcm_htsim::ProgressType::SCHEDULER_TYPE_ASYNC;
-            cout << "PCM algorithm handler delay is set to async" << endl;
+            pcm_sched_type =
+                pcm_htsim::PcmScheduler::ProgressType::ASYNC;
+            cout << "PCM algorithm scheduling is set to async" << endl;
+        } else if (!strcmp(argv[i], "-pcm_lb_async_sched")) {
+            pcm_lb_sched_type =
+                pcm_htsim::PcmScheduler::ProgressType::ASYNC;
+            cout << "PCM LB algorithm scheduling is set to async" << endl;
         } else if (!strcmp(argv[i], "-pcm_lb_algorithm")) {
             pcm_lb_enable = true;
             pcm_lb_algo_name = argv[i + 1];
@@ -843,19 +855,23 @@ int main(int argc, char **argv) {
                 new OversubscribedCC(eventlist, pacer.get()));
 
         auto &nic = nics.emplace_back(
-            pcm_enable
-                ? make_unique<pcm_htsim::PcmNic>(
-                      ix, eventlist, linkspeed, ports, pcm_algo_name,
-                      pcm_handler_delay, pcm_sched_poll_delay, pcm_sched_type)
-                : make_unique<UecNIC>(ix, eventlist, linkspeed, ports));
+            make_unique<UecNIC>(ix, eventlist, linkspeed, ports));
         if (log_nic) {
             nic_logger->monitorNic(nic.get());
         }
+        if (pcm_enable) {
+            pcm_cc_schedulers.emplace_back(make_unique<pcm_htsim::PcmScheduler>(
+                eventlist, pcm_handler_delay, pcm_sched_poll_delay,
+                pcm_sched_type));
+            pcm_cc_schedulers.back()->attachAlgorithm(pcm_algo_name,
+                                                      pcm_cc_algo_dummy_tag);
+        }
         if (pcm_lb_enable) {
-            pcm_lb_nics.emplace_back(make_unique<pcm_htsim::PcmNic>(
-                ix, eventlist, linkspeed, ports, pcm_lb_algo_name,
-                pcm_lb_handler_delay, pcm_lb_sched_poll_delay,
-                pcm_htsim::ProgressType::SCHEDULER_TYPE_SYNC));
+            pcm_lb_schedulers.emplace_back(make_unique<pcm_htsim::PcmScheduler>(
+                eventlist, pcm_lb_handler_delay, pcm_lb_sched_poll_delay,
+                pcm_lb_sched_type));
+            pcm_lb_schedulers.back()->attachAlgorithm(pcm_lb_algo_name,
+                                                      pcm_lb_algo_dummy_tag);
         }
     }
 
@@ -901,21 +917,11 @@ int main(int argc, char **argv) {
 
         if (!conn_reuse ||
             (crt->flowid and flowmap.find(crt->flowid) == flowmap.end())) {
-            pcm_htsim::PcmNic *pcm_lb_nic;
-            if (pcm_lb_enable) {
-                pcm_lb_nic = dynamic_cast<pcm_htsim::PcmNic *>(
-                    pcm_lb_nics.at(src).get());
-                if (!pcm_lb_nic) {
-                    cerr << "Error: dynamic_cast<pcm_htsim::PcmNic> failed"
-                         << endl;
-                    abort();
-                }
-            }
 
             unique_ptr<UecMultipath> mp = nullptr;
             if (pcm_lb_enable) {
-                mp = make_unique<pcm_htsim::UecPcmMp>(UecSrc::_debug,
-                                                      *pcm_lb_nic);
+                mp = make_unique<pcm_htsim::UecPcmMp>(
+                    UecSrc::_debug, *pcm_lb_schedulers.at(src).get());
             } else if (load_balancing_algo == BITMAP) {
                 mp =
                     make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
@@ -937,17 +943,10 @@ int main(int argc, char **argv) {
             }
 
             if (pcm_enable) {
-                // Dynamic cast to pcm_htsim::PcmNic since we know this was
-                // created as pcm_htsim::Nic when pcm_enable is true
-                pcm_htsim::PcmNic *pcm_nic =
-                    dynamic_cast<pcm_htsim::PcmNic *>(nics.at(src).get());
-                if (!pcm_nic) {
-                    cerr << "Error: dynamic_cast<pcm_htsim::PcmNic> failed"
-                         << endl;
-                    abort();
-                }
-                uec_src = new pcm_htsim::PcmSrc(traffic_logger, eventlist,
-                                                std::move(mp), *pcm_nic, ports);
+                uec_src = new pcm_htsim::PcmSrc(
+                    traffic_logger, eventlist, std::move(mp), *nics.at(src),
+                    ports, *pcm_cc_schedulers.at(src).get(),
+                    pcm_cc_algo_dummy_tag);
             } else {
                 uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp),
                                      *nics.at(src), ports);
