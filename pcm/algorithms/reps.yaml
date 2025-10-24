@@ -1,0 +1,66 @@
+algorithm:
+  name: reps
+  description: "REPS LB algorithm"
+
+constants:
+  - name: EVS_SIZE
+    type: uint
+    value: 65536
+    description: "Entropy value set size"
+  - name: EVC_SIZE
+    type: uint
+    value: 4
+    description: "Entropy value set size"
+
+variables:
+  - name: EVC_BITMAP
+    arr_len: 1
+    initial_value: 0
+    type: uint
+    description: "Entrop value set bitmap"
+  - name: EVC
+    arr_len: 4
+    initial_value: 0
+    type: uint
+    description: "Entrop value set bitmap"
+  - name: EVC_HEAD_IDX
+    initial_value: 0
+    type: uint
+    description: "Entrop value set bitmap" 
+  - name: EVC_NUM_VALID_EVS
+    initial_value: 0
+    type: uint
+    description: "Entrop value set bitmap" 
+  - name: EV_EXPLORE_COUNTER
+    initial_value: 0
+    type: uint
+    description: "Entrop value set bitmap"
+  - name: EV_SEED
+    initial_value: 0
+    type: uint
+    description: "Hash EV seed"
+  - name: IS_INITIALIZED
+    initial_value: 0
+    type: uint
+    description: "Is algorithm initialized"
+
+signals:
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: ACK_EV
+    type: PCM_SIG_ACK_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: TX_BACKLOG_SIZE
+    type: PCM_SIG_TX_BACKLOG_PKTS
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+
+controls:
+  - name: NEXT_PKT_EV
+    type: PCM_CTRL_EV
+    initial_value: 0

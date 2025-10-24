@@ -186,7 +186,7 @@ def main():
         
         # Run with each PCM algorithm
         for pcm_algo in pcm_algorithms:
-            cmd = [binary, '-tm', input_file] + htsim_params + pcm_config + ['-pcm_algorithm', pcm_algo]
+            cmd = [binary, '-tm', input_file] + htsim_params + pcm_config + [pcm_algo]
             test_name = f"{file_name}_pcm_{pcm_algo}"
             success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
             results.append((test_name, success))

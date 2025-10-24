@@ -16,6 +16,7 @@
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include <dlfcn.h> // dlopen/dlsym
@@ -31,7 +32,8 @@
         algorithm_so_library_handle_ = so_handle;
         algorithm_cb_ = reinterpret_cast<pcm_cc_algorithm_cb>(raw_fn_ptr);
 
-        (([&] {g., VariableDesc, ControlDesc, SignalDesc, FlowDesc, SimpleFlow).
+        (([&] {g., VariableDesc, ControlDesc, SignalDesc, PcmHandlerVmDesc,
+ etc).
  - Functions and non-type identifiers in lower_snake_case.
  - Class/struct data members end with a trailing underscore (e.g., get_time_,
  start_ts_).
@@ -41,7 +43,7 @@
  is_variable_v).
 */
 
-namespace pcm {
+namespace pcm_vm {
 
 namespace util {
 template <typename> inline constexpr bool always_false_v = false;
@@ -85,7 +87,7 @@ uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) {
 
 // ============================================================================
 // PCMI-local variable descriptor definitions: the simplest form of object
-// associated with the flow
+// associated with the vm
 // ============================================================================
 
 // User-exposed variable API
@@ -235,14 +237,10 @@ template <typename T>
 inline constexpr bool is_signal_v = is_signal<std::decay_t<T>>::value;
 
 // ============================================================================
-// Flow (type-iterating; no runtime control/signal objects)
+// Handler VM descriptor (type-erased base)
 // ============================================================================
-
-// ============================================================================
-// Flow descriptor (type-erased base)
-// ============================================================================
-struct FlowDesc {
-    virtual ~FlowDesc() = default;
+struct PcmHandlerVmDesc {
+    virtual ~PcmHandlerVmDesc() = default;
     virtual void add_get_time_source(util::GetTimeFn get_time_source) = 0;
     virtual bool invoke_cc_algorithm_on_trigger() = 0;
     virtual void update_controls_runtime(pcm_control_t ctrl,
@@ -263,7 +261,15 @@ concept HasDenseIndices =
         return true;
     }(std::type_identity<Tuple>{});
 
-template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
+template <typename Tuple, size_t MaxSize>
+concept FitsSnapshot =
+    []<typename... Ts>(std::type_identity<std::tuple<Ts...>>) {
+        constexpr std::size_t n = sizeof...(Ts);
+        return n <= MaxSize;
+    }(std::type_identity<Tuple>{});
+
+template <typename PcmHandlerVmImplT, typename... Objs>
+struct PcmHandlerVm : PcmHandlerVmDesc {
     using VariablesTupleT = decltype(std::tuple_cat(
         std::conditional_t<is_variable_v<Objs>, std::tuple<Objs>,
                            std::tuple<>>{}...));
@@ -274,6 +280,12 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
         std::conditional_t<is_signal_v<Objs>, std::tuple<Objs>,
                            std::tuple<>>{}...));
 
+    static_assert(FitsSnapshot<VariablesTupleT, ALGO_CONF_MAX_VARS>,
+                  "Variable tuple size is larger than snapshot");
+    static_assert(FitsSnapshot<ControlsTupleT, ALGO_CONF_MAX_NUM_CONTROLS>,
+                  "Control tuple size is larger than snapshot");
+    static_assert(FitsSnapshot<SignalsTupleT, ALGO_CONF_MAX_NUM_SIGNALS>,
+                  "Signal tuple size is larger than snapshot");
     static_assert(HasDenseIndices<VariablesTupleT>,
                   "Duplicate/non-uniform indices among variables");
     static_assert(HasDenseIndices<ControlsTupleT>,
@@ -301,7 +313,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
             using T = Objs;
             if constexpr (is_control_v<T>) {
                 if (T::kType == Match) {
-                    auto &slot = static_cast<FlowImplT *>(self)
+                    auto &slot = static_cast<PcmHandlerVmImplT *>(self)
                                      ->template control_slot_impl<T::kIndex>();
                     T::set(slot, val);
                     return true;
@@ -319,7 +331,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
             if constexpr (is_control_v<T>) {
                 if (T::kType == Match) {
                     auto const &slot =
-                        static_cast<FlowImplT const *>(self)
+                        static_cast<PcmHandlerVmImplT const *>(self)
                             ->template control_slot_impl<T::kIndex>();
                     result = T::get(slot);
                     return true;
@@ -331,69 +343,64 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
     }
 
     pcm_uint get_control_first_match_runtime(pcm_control_t ctrl) override {
+        // PCM controls are defined as a consecutive enum starting at 0
+        // We iterate [0..PCM_CTRL_UNKNOWN) at compile time and call the
+        // corresponding update_signals<...> when a match is found.
         std::optional<pcm_uint> out = std::nullopt;
-        switch (ctrl) {
-        case PCM_CTRL_CWND:
-            out = get_control_first_match<PCM_CTRL_CWND>();
-            break;
-        case PCM_CTRL_RATE:
-            out = get_control_first_match<PCM_CTRL_RATE>();
-            break;
-        default:
-            throw std::runtime_error("unsupported control");
-        }
+        static_assert(static_cast<std::size_t>(PCM_CTRL_UNKNOWN) > 0,
+                      "PCM_CTRL_UNKNOWN must be a positive sentinel value");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            ((static_cast<pcm_control_t>(Is) == ctrl
+                  ? (out = get_control_first_match<static_cast<pcm_control_t>(
+                         Is)>())
+                  : false),
+             ...);
+        }(std::make_index_sequence<static_cast<std::size_t>(
+              PCM_CTRL_UNKNOWN)>{});
+
         if (!out.has_value())
             throw std::runtime_error("control not found");
         return out.value();
     }
 
     void update_controls_runtime(pcm_control_t ctrl, pcm_uint value) override {
+        // PCM controls are defined as a consecutive enum starting at 0
+        // We iterate [0..PCM_CTRL_UNKNOWN) at compile time and call the
+        // corresponding update_signals<...> when a match is found.
         bool found = false;
-        switch (ctrl) {
-        case PCM_CTRL_CWND:
-            found = set_first_match_control<PCM_CTRL_CWND>(value);
-            break;
-        case PCM_CTRL_RATE:
-            found = set_first_match_control<PCM_CTRL_RATE>(value);
-            break;
-        default:
-            throw std::runtime_error("unsupported control");
-        }
+        static_assert(static_cast<std::size_t>(PCM_CTRL_UNKNOWN) > 0,
+                      "PCM_CTRL_UNKNOWN must be a positive sentinel value");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            ((static_cast<pcm_control_t>(Is) == ctrl
+                  ? (found = set_first_match_control<static_cast<pcm_control_t>(
+                         Is)>(value))
+                  : false),
+             ...);
+        }(std::make_index_sequence<static_cast<std::size_t>(
+              PCM_CTRL_UNKNOWN)>{});
+
         if (!found) {
-            throw std::runtime_error("control not found");
+            throw std::runtime_error("unsupported control");
         }
     }
 
     void update_signals_runtime(pcm_signal_t sig, pcm_uint value) override {
-        switch (sig) {
-        case PCM_SIG_ACK:
-            update_signals<PCM_SIG_ACK>(value);
-            break;
-        case PCM_SIG_RTO:
-            update_signals<PCM_SIG_RTO>(value);
-            break;
-        case PCM_SIG_NACK:
-            update_signals<PCM_SIG_NACK>(value);
-            break;
-        case PCM_SIG_ECN:
-            update_signals<PCM_SIG_ECN>(value);
-            break;
-        case PCM_SIG_RTT:
-            update_signals<PCM_SIG_RTT>(value);
-            break;
-        case PCM_SIG_DATA_TX:
-            update_signals<PCM_SIG_DATA_TX>(value);
-            break;
-        case PCM_SIG_DATA_NACKED:
-            update_signals<PCM_SIG_DATA_NACKED>(value);
-            break;
-        case PCM_SIG_IN_FLIGHT:
-            update_signals<PCM_SIG_IN_FLIGHT>(value);
-            break;
-        case PCM_SIG_ELAPSED_TIME:
-            update_signals<PCM_SIG_ELAPSED_TIME>(value);
-            break;
-        default:
+        // PCM signals are defined as a consecutive enum starting at 0
+        // We iterate [0..PCM_SIG_UNKNOWN) at compile time and call the
+        // corresponding update_signals<...> when a match is found.
+        bool found = false;
+        static_assert(static_cast<std::size_t>(PCM_SIG_UNKNOWN) > 0,
+                      "PCM_SIG_UNKNOWN must be a positive sentinel value");
+        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
+            ((static_cast<pcm_signal_t>(Is) == sig
+                  ? (update_signals<static_cast<pcm_signal_t>(Is)>(value),
+                     found = true)
+                  : false),
+             ...);
+        }(std::make_index_sequence<static_cast<std::size_t>(
+              PCM_SIG_UNKNOWN)>{});
+
+        if (!found) {
             throw std::runtime_error("unsupported signal");
         }
     }
@@ -405,7 +412,7 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
                  if constexpr (T::kIsAccum) {
                      if (T::kType == Match) {
                          auto &slot =
-                             static_cast<FlowImplT *>(self)
+                             static_cast<PcmHandlerVmImplT *>(self)
                                  ->template signal_slot_impl<T::kIndex>();
                          T::update(start_ts_, get_time_, slot, v);
                      }
@@ -427,10 +434,10 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
              if constexpr (is_signal_v<T>) {
                  if constexpr (T::kIsTrigger) {
                      auto const &val =
-                         static_cast<FlowImplT const *>(self)
+                         static_cast<PcmHandlerVmImplT const *>(self)
                              ->template signal_slot_impl<T::kIndex>();
                      auto const &thresh =
-                         static_cast<FlowImplT const *>(self)
+                         static_cast<PcmHandlerVmImplT const *>(self)
                              ->template thresh_slot_impl<T::kIndex>();
                      if (T::is_fired(start_ts_, get_time_, val, thresh)) {
                          trigger_mask |= T::kMask;
@@ -446,17 +453,18 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
         }
 
         update_signals<PCM_SIG_ELAPSED_TIME>(0);
-        static_cast<FlowImplT *>(this)->prepare_pre_trigger_snapshot_impl(
-            trigger_mask);
-        (void)static_cast<FlowImplT *>(this)->execute_algorithm_impl();
-        static_cast<FlowImplT *>(this)->apply_post_trigger_snapshot_impl();
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->prepare_pre_trigger_snapshot_impl(trigger_mask);
+        (void)static_cast<PcmHandlerVmImplT *>(this)->execute_algorithm_impl();
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->apply_post_trigger_snapshot_impl();
 
         // rearm triggers
         (([&](auto *self) {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
                  if constexpr (T::kIsTrigger) {
-                     auto &val = static_cast<FlowImplT *>(self)
+                     auto &val = static_cast<PcmHandlerVmImplT *>(self)
                                      ->template signal_slot_impl<T::kIndex>();
                      T::rearm_if_needed(start_ts_, get_time_, val);
                  }
@@ -469,25 +477,26 @@ template <typename FlowImplT, typename... Objs> struct Flow : FlowDesc {
 };
 
 // ============================================================================
-// Simple flow implementation
+// Simple vm implementation
 // ============================================================================
 
 // Primary template
 // AlgoName is raw pointer because templates can't accept std::string
-template <const char *AlgoName, typename Tuple> struct SimpleFlow;
+template <const char *AlgoName, typename Tuple> struct SimplePcmHandlerVm;
 
 template <const char *AlgoName, typename... Ds>
-struct SimpleFlow<AlgoName, std::tuple<Ds...>>
-    : Flow<SimpleFlow<AlgoName, std::tuple<Ds...>>,
-           typename Ds::template Rebind<pcm_uint>...> {
+struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
+    : PcmHandlerVm<SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>,
+                   typename Ds::template Rebind<pcm_uint>...> {
 
-    using SelfType = SimpleFlow<AlgoName, std::tuple<Ds...>>;
-    using Base = Flow<SelfType, typename Ds::template Rebind<pcm_uint>...>;
+    using SelfType = SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>;
+    using Base =
+        PcmHandlerVm<SelfType, typename Ds::template Rebind<pcm_uint>...>;
 
     std::shared_ptr<void> algorithm_so_handle_;
-    pcm_cc_algorithm_cb algorithm_cb_{nullptr};
+    pcm_handler_main_cb handler_main_cb_{nullptr};
 
-    flow_datapath_snapshot snapshot_{};
+    pcm_handler_datapath_snapshot snapshot_{};
 
     using ControlsTupleT = typename Base::ControlsTupleT;
     using SignalsTupleT = typename Base::SignalsTupleT;
@@ -501,7 +510,7 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     std::array<pcm_uint, kNumSignals> signals_storage_{};
     std::array<pcm_uint, kNumSignals> thresholds_storage_{};
 
-    explicit SimpleFlow() {
+    explicit SimplePcmHandlerVm() {
         auto result = util::shared_symbol_open(
             "lib" + std::string(AlgoName) + ".so",
             std::string(__algorithm_entry_point_symbol));
@@ -515,7 +524,7 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
                     util::shared_symbol_close(handle);
                 }
             });
-        algorithm_cb_ = reinterpret_cast<pcm_cc_algorithm_cb>(raw_fn_ptr);
+        handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
 
         (([&] {
              using T = typename Ds::template Rebind<pcm_uint>;
@@ -536,9 +545,9 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
     }
 
     [[nodiscard]] pcm_err_t execute_algorithm_impl() {
-        if (!algorithm_cb_)
+        if (!handler_main_cb_)
             throw std::runtime_error("CC Algorithm callback is nullptr");
-        return algorithm_cb_(&snapshot_);
+        return handler_main_cb_(&snapshot_);
     }
 
     void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask) {
@@ -594,84 +603,6 @@ struct SimpleFlow<AlgoName, std::tuple<Ds...>>
         static_assert(I < kNumSignals);
         return thresholds_storage_[I];
     }
-};
-
-struct Device {
-    util::GetTimeFn get_time_source_{nullptr};
-    explicit Device(util::GetTimeFn get_time_source)
-        : get_time_source_{get_time_source} {}
-
-    [[nodiscard]] virtual std::optional<uint32_t> progress() = 0;
-
-    void add_flow_spec_factory(std::function<FlowDesc *()> spec_factory,
-                               uint32_t matching_rule) {
-        if (!get_time_source_)
-            throw std::runtime_error("Time source is nullptr");
-        configs_.emplace_back(
-            matching_rule, [this, spec_factory]() -> std::unique_ptr<FlowDesc> {
-                std::unique_ptr<FlowDesc> new_flow(spec_factory());
-                new_flow->add_get_time_source(get_time_source_);
-                return new_flow;
-            });
-    }
-
-    FlowDesc &create_flow(uint32_t new_address) {
-        // address has to be unique
-        if (flows_.find(new_address) != flows_.end())
-            throw std::runtime_error("Flow with this address already exists");
-
-        if (configs_.size() > 1)
-            throw std::runtime_error("Device supports only a single CC config");
-
-        // find spec and create
-        for (const auto &[mask, factory] : configs_) {
-            // for now we don't really support matching
-            // if (new_address & mask) {
-            if (true) {
-                auto ret = flows_.insert({new_address, factory()});
-                if (!ret.second)
-                    throw std::runtime_error("new flow insertion failed");
-                return *(ret.first->second);
-            }
-        }
-
-        throw std::runtime_error("No matching flow spec for address");
-    }
-
-  protected:
-    using Factory = std::function<std::unique_ptr<FlowDesc>()>;
-    std::vector<std::pair<uint32_t, Factory>> configs_; // mask + flow factory
-    using FlowStorage = std::unordered_map<uint32_t, std::unique_ptr<FlowDesc>>;
-    FlowStorage flows_{}; // flows
-};
-
-struct DeviceCheckOnSched final : Device {
-    explicit DeviceCheckOnSched(util::GetTimeFn get_time_source)
-        : Device::Device{get_time_source} {}
-
-    std::optional<uint32_t> progress() override {
-        if (flows_.empty())
-            return std::nullopt;
-
-        std::optional<uint32_t> address = std::nullopt;
-        auto triggered = cur_rr_it_->second->invoke_cc_algorithm_on_trigger();
-        if (triggered)
-            address = cur_rr_it_->first;
-
-        ++cur_rr_it_;
-        if (cur_rr_it_ == flows_.end())
-            cur_rr_it_ = flows_.begin();
-        return address;
-    }
-
-    FlowDesc &create_flow(uint32_t new_address) {
-        auto &new_flow = Device::create_flow(new_address);
-        cur_rr_it_ = flows_.begin();
-        return new_flow;
-    }
-
-  private:
-    Device::FlowStorage::iterator cur_rr_it_{Device::flows_.end()};
 };
 
 } // namespace pcm

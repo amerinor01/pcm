@@ -3,7 +3,7 @@
 # ===============================================
 
 # Define algorithm names
-set(ALGO_PLUGIN_NAMES newreno dctcp swift dcqcn smartt nscc uec_dctcp)
+set(ALGO_PLUGIN_NAMES newreno dctcp swift dcqcn smartt nscc uec_dctcp strack strack_light ops_lb reps)
 
 # Make it available to other subdirectories (e.g., HAC) via cache
 set(ALGO_PLUGIN_NAMES ${ALGO_PLUGIN_NAMES} CACHE INTERNAL "List of algorithm plugin names")
@@ -42,6 +42,21 @@ function(create_algo_plugin ALGO_NAME)
     
     # Create algorithm library using existing .c file
     add_library(${ALGO_NAME} SHARED ${SOURCE_FILE})
+
+    # If xxhash imported targets were created in the parent CMake, make sure
+    # algorithm targets can include and optionally link against them.
+    if(TARGET xxhash_static)
+        target_include_directories(${ALGO_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../xxHash)
+        target_link_libraries(${ALGO_NAME} PRIVATE xxhash_static)
+    elseif(TARGET xxhash_shared)
+        target_include_directories(${ALGO_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../xxHash)
+        target_link_libraries(${ALGO_NAME} PRIVATE xxhash_shared)
+    else()
+        # Still add the include dir if the xxHash headers exist in the repo
+        if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/../xxHash/xxhash.h)
+            target_include_directories(${ALGO_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../xxHash)
+        endif()
+    endif()
     
     # Add dependency on generated header
     add_custom_target(${ALGO_NAME}_gen DEPENDS ${HEADER_FILE})

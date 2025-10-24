@@ -1,0 +1,68 @@
+algorithm:
+  name: strack_light
+  description: "UEC bitmap-based LB algorithm"
+
+constants:
+  - name: NO_OF_PATHS
+    type: uint
+    value: 64
+    description: "Number of paths"
+  - name: MAX_PENALTY
+    type: uint
+    value: 15
+    description: "Max path penalty"
+
+variables:
+  - name: ARR_EVS_BITMAP
+    arr_len: 2 # NO_OF_PATHS / sizeof(pcm_uint) which is 64 bits
+    initial_value: 0
+    type: uint
+    description: "Entrop value set bitmap"
+  - name: IS_INITIALIZED
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: PATH_RANDOM
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: PATH_XOR
+    initial_value: 0
+    type: uint
+    description: "Is LB initialized"
+  - name: CUR_EV_IDX
+    initial_value: 0
+    type: uint
+    description: "Current EV index"
+
+signals:
+  - name: ECN_EV
+    type: PCM_SIG_ECN_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NACK_EV
+    type: PCM_SIG_NACK_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: ACK_EV
+    type: PCM_SIG_ACK_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: TX_BACKLOG_SIZE
+    type: PCM_SIG_TX_BACKLOG_PKTS
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+
+controls:
+  - name: NEXT_PKT_EV
+    type: PCM_CTRL_EV
+    initial_value: 0
