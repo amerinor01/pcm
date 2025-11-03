@@ -53,20 +53,21 @@ typedef enum err {
  * @brief Identifiers for PCM signals.
  */
 typedef enum signal {
-    PCM_SIG_ACK = 0,              /**< Number of ACK packets received */
-    PCM_SIG_RTO = 1,              /**< Number of RTO packets received */
-    PCM_SIG_NACK = 2,             /**< Number of NACK packets received */
-    PCM_SIG_ECN = 3,              /**< Number of ECN packets received */
-    PCM_SIG_RTT = 4,              /**< RTT timestamp */
-    PCM_SIG_DATA_TX = 5,          /**< Number of sent bytes */
-    PCM_SIG_DATA_NACKED = 6,      /**< Number of sent bytes */
-    PCM_SIG_IN_FLIGHT = 7,        /**< Number of in-flight bytes */
-    PCM_SIG_ELAPSED_TIME = 8,     /**< Monotonic elapsed time */
-    PCM_SIG_ACK_EV = 9,           /**< EV in the last non-ECN-marked ACK */
-    PCM_SIG_ECN_EV = 10,          /**< EV in the last ECN-marked ACK */
-    PCM_SIG_NACK_EV = 11,         /**< EV in the last NACK */
-    PCM_SIG_TX_BACKLOG_PKTS = 12, /**< Number of bytes in send backlog */
-    PCM_SIG_UNKNOWN = 13, /**< Signal unknown - used for error handling */
+    PCM_SIG_ACK = 0,               /**< Number of ACK packets received */
+    PCM_SIG_RTO = 1,               /**< Number of RTO packets received */
+    PCM_SIG_NACK = 2,              /**< Number of NACK packets received */
+    PCM_SIG_ECN = 3,               /**< Number of ECN packets received */
+    PCM_SIG_RTT = 4,               /**< RTT timestamp */
+    PCM_SIG_DATA_TX = 5,           /**< Number of sent bytes */
+    PCM_SIG_DATA_NACKED = 6,       /**< Number of sent bytes */
+    PCM_SIG_IN_FLIGHT = 7,         /**< Number of in-flight bytes */
+    PCM_SIG_ELAPSED_TIME = 8,      /**< Monotonic elapsed time */
+    PCM_SIG_ACK_EV = 9,            /**< EV in the last non-ECN-marked ACK */
+    PCM_SIG_ECN_EV = 10,           /**< EV in the last ECN-marked ACK */
+    PCM_SIG_NACK_EV = 11,          /**< EV in the last NACK */
+    PCM_SIG_TX_READY_PKTS = 12,    /**< Number of packets ready for injection */
+    PCM_SIG_TX_BACKLOG_BYTES = 13, /**< Number of packets ready for injection */
+    PCM_SIG_UNKNOWN = 14, /**< Signal unknown - used for error handling */
 } pcm_signal_t;
 
 #define PCM_SIG_REARM (UINT64_MAX - 1)

@@ -28,7 +28,7 @@ variables:
 
 signals:
   - name: TX_BACKLOG_SIZE
-    type: PCM_SIG_TX_BACKLOG_PKTS
+    type: PCM_SIG_TX_READY_PKTS
     accumulation: PCM_SIG_ACCUM_SUM
     trigger_threshold: 1
 
