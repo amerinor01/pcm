@@ -1,0 +1,95 @@
+algorithm:
+  name: eaild
+  description: "EAILD congestion control algorithm"
+
+constants:
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MTU"
+    description: "Maximum segment size"
+  
+  - name: MAXIMUM_INFLIGHT_BYTES
+    type: uint
+    value: !eval "FABRIC_TRTT * FABRIC_LINK_RATE_GBPS / 1000"
+    description: "Maximum in-flight bytes allowed"
+  
+  - name: MINIMUM_CWND_BYTES
+    type: uint
+    value: "FABRIC_LINK_MTU"
+    description: "Minimum congestion window in bytes"
+  
+  - name: MAXIMUM_CWND_BYTES
+    type: uint
+    value: "FABRIC_MAX_CWND"
+    description: "Maximum congestion window in bytes"
+  
+  - name: ALPHA
+    type: float
+    value: 16.0
+    description: "EAILD alpha parameter"
+  
+  - name: GAMMA_MIN
+    type: float
+    value: !eval "MSS * 10" # bytes
+    description: "EAILD minimum gamma parameter"
+  
+  - name: GAMMA_MAX
+    type: float
+    value: !eval "MSS * 100" # bytes
+    description: "EAILD maximum gamma parameter"
+  
+  - name: LOG_GAMMA_POWER
+    type: float
+    value: -1.5
+    description: "EAILD log gamma power parameter"
+  
+  - name: GAMMA_POWER
+    type: float
+    value: !eval "exp(LOG_GAMMA_POWER)"
+    description: "EAILD gamma power parameter"
+  
+  - name: BETA_MARGIN
+    type: float
+    value: 1.5
+    description: "EAILD beta margin parameter"
+  
+  - name: BETA
+    type: float
+    value: !eval "log(ALPHA) * MAXIMUM_INFLIGHT_BYTES * BETA_MARGIN"
+    description: "EAILD beta parameter"
+  
+signals:
+  - name: NUM_ACKED_BYTES
+    type: PCM_SIG_DATA_TX
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_NACKED_BYTES
+    type: PCM_SIG_DATA_NACKED
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: TIME_STAMP
+    type: PCM_SIG_ELAPSED_TIME
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: BYTES_TO_SEND
+    type: PCM_SIG_TX_BACKLOG_BYTES
+    accumulation: PCM_SIG_ACCUM_LAST
+
+controls:
+  - name: CWND_BYTES
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_MAX_CWND"
+  
+variables:
+  - name: LAST_TRIGGERED_TIME
+    initial_value: 0
+    type: uint
+    description: "The timestamp of the last triggered ACK event"
