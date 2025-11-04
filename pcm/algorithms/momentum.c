@@ -9,16 +9,16 @@ int algorithm_main() {
         pcm_uint cur_cwnd =
             MAX((pcm_uint)MINIMUM_CWND_BYTES, get_control(CTRL_CWND_BYTES) - get_signal(SIG_NUM_NACKED_BYTES));
         set_control(CTRL_CWND_BYTES, cur_cwnd);
-        // printf("EAILD: newly_nacked_bytes=%llu\n", get_signal(SIG_NUM_NACKED_BYTES), get_signal(SIG_NUM_NACK) * MSS);
+        // printf("MOMEMTUM: newly_nacked_bytes=%llu\n", get_signal(SIG_NUM_NACKED_BYTES), get_signal(SIG_NUM_NACK) * MSS);
         update_signal(SIG_NUM_NACK, -get_signal(SIG_NUM_NACK));
         update_signal(SIG_NUM_NACKED_BYTES, -get_signal(SIG_NUM_NACKED_BYTES));
         return PCM_SUCCESS;
     } else {
         pcm_uint cur_cwnd = get_control(CTRL_CWND_BYTES) - MINIMUM_CWND_BYTES; // offset by minimum cwnd
-        // printf("EAILD: curr_cwnd=%llu num_acked_bytes=%llu num_ecn=%llu num_ack=%llu ",
+        // printf("MOMEMTUM: curr_cwnd=%llu num_acked_bytes=%llu num_ecn=%llu num_ack=%llu ",
         //        cur_cwnd, get_signal(SIG_NUM_ACKED_BYTES), get_signal(SIG_NUM_ECN), get_signal(SIG_NUM_ACK));
         pcm_uint time_stamp = get_signal(SIG_TIME_STAMP);
-        pcm_uint dt_picosec  = time_stamp - get_var_uint(VAR_LAST_TRIGGERED_TIME);
+        pcm_uint dt_picosec  = time_stamp - get_var_uint(VAR_LAST_ACK_TRIGGERED_TIME);
         if (dt_picosec  == time_stamp) {
             // the flow has just started, force starting from 0
             cur_cwnd = 0;
@@ -58,7 +58,7 @@ int algorithm_main() {
             // printf(" dw=%llu\n", dw);
         }
         set_control(CTRL_CWND_BYTES, MIN(cur_cwnd + MINIMUM_CWND_BYTES, MAXIMUM_CWND_BYTES));
-        set_var_uint(VAR_LAST_TRIGGERED_TIME, time_stamp);
+        set_var_uint(VAR_LAST_ACK_TRIGGERED_TIME, time_stamp);
         set_signal(SIG_NUM_ACK, 0);
         set_signal(SIG_NUM_ECN, 0);
     }

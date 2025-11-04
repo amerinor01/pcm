@@ -97,7 +97,7 @@ controls:
     initial_value: "FABRIC_MAX_CWND"
   
 variables:
-  - name: LAST_TRIGGERED_TIME
+  - name: LAST_ACK_TRIGGERED_TIME
     initial_value: 0
     type: uint
     description: "The timestamp of the last triggered ACK event"
