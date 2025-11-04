@@ -40,7 +40,7 @@ constants:
   
   - name: LOG_GAMMA_POWER
     type: float
-    value: -1.5
+    value: 1.5
     description: "EAILD log gamma power parameter"
   
   - name: GAMMA_POWER

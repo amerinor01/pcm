@@ -39,7 +39,7 @@ int algorithm_main() {
             pcm_uint bytes_to_send = get_signal(SIG_BYTES_TO_SEND);
             float sent_portion = (float)bytes_sent / (float)(bytes_sent + bytes_to_send);
             // printf(" sent_portion=%f", sent_portion);
-            float effective_gamma = GAMMA_MIN + (pow(sent_portion, GAMMA_POWER) * (GAMMA_MAX - GAMMA_MIN));
+            float effective_gamma = GAMMA_MIN + (1 - pow(1 - sent_portion, GAMMA_POWER)) * (GAMMA_MAX - GAMMA_MIN);
             dw_dt += (1 - ecn_portion) * effective_gamma;
             // printf(" dw_dt(lin recov)=%f", (1 - ecn_portion) * effective_gamma);
 
