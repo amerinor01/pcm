@@ -49,7 +49,6 @@ if(EXISTS ${HTSIM_APP_V2_SOURCE})
     
     # Link all required libraries (no plugin needed - header-only)
     target_link_libraries(htsim_flow_app_v2 PRIVATE 
-        pcm                  # Main PCM library
         ${HTSIM_LIB}        # HTSIM simulation library
         ${HTSIM_DC_LIB}     # HTSIM datacenter library
         ${CMAKE_DL_LIBS}    # Dynamic loading support (dlopen/dlsym)

@@ -74,13 +74,12 @@ class PcmScheduler final : public EventSource {
         auto vm_factory_fn_ptr =
             reinterpret_cast<pcm_vm::PcmHandlerVmDesc *(*)()>(raw_fn_ptr);
 
-        configs_.emplace_back(vm_matching_rule, pcm_algo_name,
-                              [this, vm_factory_fn_ptr]() -> PcmVmPtr {
-                                  PcmVmPtr new_vm(vm_factory_fn_ptr());
-                                  new_vm->add_get_time_source(
-                                      EventList::getTheEventList().now);
-                                  return new_vm;
-                              });
+        configs_.emplace_back(
+            vm_matching_rule, pcm_algo_name, [vm_factory_fn_ptr]() -> PcmVmPtr {
+                PcmVmPtr new_vm(vm_factory_fn_ptr());
+                new_vm->add_get_time_source(EventList::getTheEventList().now);
+                return new_vm;
+            });
     }
 
     std::pair<PcmVmId, pcm_vm::PcmHandlerVmDesc &>
@@ -246,7 +245,8 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         _pcm_vm.second.update_signals_runtime(PCM_SIG_IN_FLIGHT,
                                               UecSrc::_in_flight);
         _pcm_vm.second.update_signals_runtime(PCM_SIG_RTT, UecSrc::_raw_rtt);
-        _pcm_vm.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_BYTES, UecSrc::_backlog);
+        _pcm_vm.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_BYTES,
+                                              UecSrc::_backlog);
 
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             if (_scheduler.pollVm(_pcm_vm.first)) {

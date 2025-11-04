@@ -106,7 +106,7 @@ function(create_algo_plugin ALGO_NAME)
     
     # Create PCMC V2 version (using generated V2 C++ spec file from build directory)
     add_library(${ALGO_NAME}_spec SHARED ${SPEC_FILE_V2})
-    target_link_libraries(${ALGO_NAME}_spec PRIVATE pcm)
+    target_link_libraries(${ALGO_NAME}_spec PRIVATE)
     set_target_properties(${ALGO_NAME}_spec PROPERTIES
         OUTPUT_NAME ${ALGO_NAME}_spec
         PREFIX "lib"
