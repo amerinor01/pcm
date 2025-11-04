@@ -3,7 +3,7 @@
 # ===============================================
 
 # Define algorithm names
-set(ALGO_PLUGIN_NAMES newreno dctcp swift dcqcn smartt nscc uec_dctcp strack strack_light ops_lb reps eaild)
+set(ALGO_PLUGIN_NAMES newreno dctcp swift dcqcn smartt nscc uec_dctcp strack strack_light ops_lb reps momentum)
 
 # Make it available to other subdirectories (e.g., HAC) via cache
 set(ALGO_PLUGIN_NAMES ${ALGO_PLUGIN_NAMES} CACHE INTERNAL "List of algorithm plugin names")

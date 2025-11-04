@@ -1,8 +1,7 @@
 #include "pcmh.h"
 #include "algo_utils.h"
 #include "pcm.h"
-#include "math.h"
-#include "eaild.h"
+#include "momentum.h"
 
 int algorithm_main() {
     pcm_uint trigger_mask = get_signal_trigger_mask();
@@ -14,32 +13,32 @@ int algorithm_main() {
         update_signal(SIG_NUM_NACK, -get_signal(SIG_NUM_NACK));
         update_signal(SIG_NUM_NACKED_BYTES, -get_signal(SIG_NUM_NACKED_BYTES));
         return PCM_SUCCESS;
-    } else if (trigger_mask & SIG_NUM_ACK) {
+    } else {
         pcm_uint cur_cwnd = get_control(CTRL_CWND_BYTES) - MINIMUM_CWND_BYTES; // offset by minimum cwnd
         // printf("EAILD: curr_cwnd=%llu num_acked_bytes=%llu num_ecn=%llu num_ack=%llu ",
         //        cur_cwnd, get_signal(SIG_NUM_ACKED_BYTES), get_signal(SIG_NUM_ECN), get_signal(SIG_NUM_ACK));
         pcm_uint time_stamp = get_signal(SIG_TIME_STAMP);
-        pcm_uint DT = time_stamp - get_var_uint(VAR_LAST_TRIGGERED_TIME);
-        if (DT == time_stamp) {
+        pcm_uint dt_picosec  = time_stamp - get_var_uint(VAR_LAST_TRIGGERED_TIME);
+        if (dt_picosec  == time_stamp) {
             // the flow has just started, force starting from 0
             cur_cwnd = 0;
         } else {
-            float dt = (float)(DT) / 1e9; // in miliseconds
-            float dw_dt = log(ALPHA) * cur_cwnd;
+            pcm_float dt = (pcm_float)(dt_picosec) / 1e9; // in miliseconds
+            pcm_float dw_dt = LOG_ALPHA * cur_cwnd;
             // printf("dw_dt(exp)=%f ", dw_dt);
 
             pcm_uint num_ack = get_signal(SIG_NUM_ACK);
             pcm_uint num_ecn = get_signal(SIG_NUM_ECN);
-            float ecn_portion = (float)num_ecn / (float)num_ack;
+            pcm_float ecn_portion = (pcm_float)num_ecn / num_ack;
             dw_dt -= ecn_portion * BETA;
             // printf("dw_dt(lin decay)=%f", - ecn_portion * BETA);
 
             pcm_uint bytes_sent = get_signal(SIG_NUM_ACKED_BYTES);
             // pcm_uint bytes_sent = get_var_uint(VAR_ACKED_BYTES);
             pcm_uint bytes_to_send = get_signal(SIG_BYTES_TO_SEND);
-            float sent_portion = (float)bytes_sent / (float)(bytes_sent + bytes_to_send);
+            pcm_float to_send_portion = (pcm_float)bytes_to_send / (bytes_sent + bytes_to_send);
             // printf(" sent_portion=%f", sent_portion);
-            float effective_gamma = GAMMA_MIN + (1 - pow(1 - sent_portion, GAMMA_POWER)) * (GAMMA_MAX - GAMMA_MIN);
+            pcm_float effective_gamma = GAMMA_MIN + (1 - POW(to_send_portion, GAMMA_POWER)) * (GAMMA_MAX - GAMMA_MIN);
             dw_dt += (1 - ecn_portion) * effective_gamma;
             // printf(" dw_dt(lin recov)=%f", (1 - ecn_portion) * effective_gamma);
 

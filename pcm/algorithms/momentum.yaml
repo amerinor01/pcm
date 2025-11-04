@@ -1,62 +1,70 @@
 algorithm:
-  name: eaild
-  description: "EAILD congestion control algorithm"
+  name: momentum
+  description: "momentum congestion control algorithm"
+
+# The derivative of the congestion window could be modeled as:
+# dCWND/dt = (LOG_ALPHA * CWND) + (GAMMA_MIN + (GAMMA_MAX - GAMMA_MIN) * (1 - unsent_portion^GAMMA_POWER))) * (1 - ECN_rate) - BETA * ECN_rate
 
 constants:
-  - name: MSS
+  - name: MTU
     type: uint
     value: "FABRIC_LINK_MTU"
     description: "Maximum segment size"
   
+  - name: MINIMUM_CWND_BYTES
+    type: uint
+    value: !eval "MTU"
+    description: "Minimum congestion window in bytes"
+
   - name: MAXIMUM_INFLIGHT_BYTES
     type: uint
     value: !eval "FABRIC_TRTT * FABRIC_LINK_RATE_GBPS / 1000"
     description: "Maximum in-flight bytes allowed"
-  
-  - name: MINIMUM_CWND_BYTES
-    type: uint
-    value: "FABRIC_LINK_MTU"
-    description: "Minimum congestion window in bytes"
-  
+
   - name: MAXIMUM_CWND_BYTES
     type: uint
-    value: "FABRIC_MAX_CWND"
+    value: !eval "min(FABRIC_MAX_CWND, MAXIMUM_INFLIGHT_BYTES)"
     description: "Maximum congestion window in bytes"
   
   - name: ALPHA
     type: float
     value: 16.0
-    description: "EAILD alpha parameter"
+    description: "Base for exponential growth term of congestion window"
+  
+  - name: LOG_ALPHA
+    type: float
+    value: !eval "log(ALPHA)"
+    description: "The logarithm of the ALPHA parameter"
   
   - name: GAMMA_MIN
     type: float
-    value: !eval "MSS * 10" # bytes
-    description: "EAILD minimum gamma parameter"
+    value: !eval "MTU * 10" # bytes
+    description: "Minimum gamma parameter"
   
   - name: GAMMA_MAX
     type: float
-    value: !eval "MSS * 100" # bytes
-    description: "EAILD maximum gamma parameter"
+    value: !eval "MTU * 100" # bytes
+    description: "Maximum gamma parameter"
   
   - name: LOG_GAMMA_POWER
     type: float
     value: 1.5
-    description: "EAILD log gamma power parameter"
+    description: "The logarithm of the gamma power parameter, the higher the value, the more room will be allocated for distinguishing flows at the beginning"
   
   - name: GAMMA_POWER
     type: float
     value: !eval "exp(LOG_GAMMA_POWER)"
-    description: "EAILD gamma power parameter"
+    description: "Gamma power parameter"
   
   - name: BETA_MARGIN
     type: float
-    value: 1.5
-    description: "EAILD beta margin parameter"
+    value: 1.2
+    description: "The margin multiplier for the beta parameter"
   
   - name: BETA
     type: float
-    value: !eval "log(ALPHA) * MAXIMUM_INFLIGHT_BYTES * BETA_MARGIN"
-    description: "EAILD beta parameter"
+    value: !eval "LOG_ALPHA * MAXIMUM_CWND_BYTES * BETA_MARGIN"
+    description: "The beta parameter for congestion window decrease, computed to cancle out the exponential growth factor at full congestion"
   
 signals:
   - name: NUM_ACKED_BYTES
