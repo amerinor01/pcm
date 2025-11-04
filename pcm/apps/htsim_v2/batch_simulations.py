@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "matplotlib",
+# ]
+# ///
 
 """
 HTSIM Batch Simulation Runner
@@ -76,6 +82,7 @@ def generate_plot(log_file, output_dir, test_name):
         
         if result.returncode == 0:
             print(f"  CWND plot saved to: {plot_file}")
+            print(f"  stdout: {result.stdout}")
             return
         else:
             print(f"    Plot generation failed")

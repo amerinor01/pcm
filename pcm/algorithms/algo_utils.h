@@ -3,6 +3,7 @@
 
 #include <stdio.h> // all handlers can call to printf to debug
 #include <xxhash.h>
+#include <math.h>
 
 #define HASH(a)                                                                                                                            \
     ({                                                                                                                                     \
@@ -39,6 +40,7 @@
     })
 
 #define ABS(x) ((x) < 0 ? -(x) : (x))
+#define POW(x, y) (pow((x), (y)))
 
 // Bitmap manipulation helpers
 #define BITS_PER_UINT (sizeof(pcm_uint) * 8)
