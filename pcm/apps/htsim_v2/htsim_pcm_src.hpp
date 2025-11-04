@@ -8,6 +8,8 @@
 #include "network.h"
 #include "pcm_vm.hpp"
 
+#include "../../src/prof.h"
+
 namespace pcm_htsim {
 
 class PcmScheduler;
@@ -220,9 +222,27 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
     virtual ~PcmSrc() = default;
 
     void fetchUpdate() override {
+        PCM_PERF_PROF_REGION_SCOPE_INIT(ctrl_fetch_cycle,
+                                        "CONTROL FETCH CYCLE");
+        PCM_PERF_PROF_REGION_START(ctrl_fetch_cycle);
         UecSrc::_cwnd =
             _pcm_vm.second.get_control_first_match_runtime(PCM_CTRL_CWND);
         UecSrc::set_cwnd_bounds();
+        PCM_PERF_PROF_REGION_END(ctrl_fetch_cycle, true);
+
+        // below is just profiling for reference
+        PCM_PERF_PROF_REGION_SCOPE_INIT(call_test_cycle, "RUNTIME CALL TEST");
+        PCM_PERF_PROF_REGION_START(call_test_cycle);
+        _runtime_call_perftest = _pcm_vm.second.runtime_call_test();
+        PCM_PERF_PROF_REGION_END(call_test_cycle, true);
+        std::cout << _runtime_call_perftest << std::endl; // add side effect
+
+        PCM_PERF_PROF_REGION_SCOPE_INIT(perf_overhead_cycle,
+                                        "PERF OVERHEAD TEST");
+        PCM_PERF_PROF_REGION_START(perf_overhead_cycle);
+        _runtime_call_perftest = UecSrc::_cwnd;
+        PCM_PERF_PROF_REGION_END(perf_overhead_cycle, true);
+        std::cout << _runtime_call_perftest << std::endl; // add side effect
     }
 
     bool isFinished() override { return isTotallyFinished(); }
@@ -237,7 +257,9 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         // << std::endl;
         (void)delay; // if needed, queuing delay is computed on the handler
                      // side, RTT sample is delivered instead
-
+        PCM_PERF_PROF_REGION_SCOPE_INIT(ack_registration_cycle,
+                                        "ACK REGISTRATION CYCLE");
+        PCM_PERF_PROF_REGION_START(ack_registration_cycle);
         _pcm_vm.second.update_signals_runtime(PCM_SIG_ECN, skip ? 1 : 0);
         _pcm_vm.second.update_signals_runtime(PCM_SIG_DATA_TX,
                                               newly_acked_bytes);
@@ -247,7 +269,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         _pcm_vm.second.update_signals_runtime(PCM_SIG_RTT, UecSrc::_raw_rtt);
         _pcm_vm.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_BYTES,
                                               UecSrc::_backlog);
-
+        PCM_PERF_PROF_REGION_END(ack_registration_cycle, true);
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             if (_scheduler.pollVm(_pcm_vm.first)) {
                 fetchUpdate();
@@ -263,13 +285,15 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
 
         // std::cout << "pcm_vm::updateCwndOnNack nacked_bytes=" << nacked_bytes
         // << std::endl;
-
+        PCM_PERF_PROF_REGION_SCOPE_INIT(nack_registration_cycle,
+                                        "NACK REGISTRATION CYCLE");
+        PCM_PERF_PROF_REGION_START(nack_registration_cycle);
         _pcm_vm.second.update_signals_runtime(PCM_SIG_NACK, 1);
         _pcm_vm.second.update_signals_runtime(PCM_SIG_DATA_NACKED,
                                               nacked_bytes);
         _pcm_vm.second.update_signals_runtime(
             PCM_SIG_RTT, UecSrc::_base_rtt + UecSrc::_network_rtt);
-
+        PCM_PERF_PROF_REGION_END(nack_registration_cycle, true);
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             if (_scheduler.pollVm(_pcm_vm.first)) {
                 fetchUpdate();
@@ -280,6 +304,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
   private:
     PcmScheduler &_scheduler;
     std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
+    pcm_uint _runtime_call_perftest;
 };
 
 } // namespace pcm_htsim

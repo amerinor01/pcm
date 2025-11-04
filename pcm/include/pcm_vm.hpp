@@ -247,6 +247,7 @@ struct PcmHandlerVmDesc {
                                          pcm_uint value) = 0;
     virtual pcm_uint get_control_first_match_runtime(pcm_control_t ctrl) = 0;
     virtual void update_signals_runtime(pcm_signal_t sig, pcm_uint value) = 0;
+    virtual pcm_uint runtime_call_test() = 0;
 };
 
 template <typename Tuple>
@@ -361,6 +362,10 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         if (!out.has_value())
             throw std::runtime_error("control not found");
         return out.value();
+    }
+
+    pcm_uint runtime_call_test() override {
+        return 42;
     }
 
     void update_controls_runtime(pcm_control_t ctrl, pcm_uint value) override {

@@ -238,7 +238,12 @@ def main():
     if args.profile:
         print()
         generate_performance_plot("TRIGGER CYCLE", "trigger_cycle_perf.pdf", output_dir)
-  
+        generate_performance_plot("ACK REGISTRATION CYCLE", "ack_registration_cycle_perf.pdf", output_dir)
+        generate_performance_plot("NACK REGISTRATION CYCLE", "nack_registration_cycle_perf.pdf", output_dir)
+        generate_performance_plot("CONTROL FETCH CYCLE", "ctrl_fetch_cycle_perf.pdf", output_dir)
+        generate_performance_plot("RUNTIME CALL TEST", "runtime_call_perf.pdf", output_dir)
+        generate_performance_plot("PERF OVERHEAD TEST", "perf_overhead_perf.pdf", output_dir)
+
     print()  # Final newline for clean terminal output
     return 0 if failed == 0 else 1
 
