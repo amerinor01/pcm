@@ -35,13 +35,16 @@ if ( ENABLE_TESTS )
     enable_testing()
 endif()
 
-# path should not be hardcoded, make it configurable
+# Configurable PCM path
+set(PCM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../PCM
+    CACHE PATH "Path to PCM module (can be overridden via -DPCM_DIR=/path/to/pcm)")
+
 # Set PCM directory
-set(PCM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../PCM/src)
-set(PCM_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../PCM/include)
-set(PCM_ALGO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../PCM/algorithms)
-set(PCM_APPS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../PCM/apps/htsim_atlahs/)
-set(PCM_MISC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../PCM/misc)
+set(PCM_SOURCE_DIR ${PCM_DIR}/src)
+set(PCM_INCLUDE_DIR ${PCM_DIR}/include)
+set(PCM_ALGO_DIR ${PCM_DIR}/algorithms)
+set(PCM_APPS_DIR ${PCM_DIR}/apps/htsim_atlahs/)
+set(PCM_MISC_DIR ${PCM_DIR}/misc)
 
 # Function to add a symlink creation step for an executable. 
 # Used to create a symlink in the source directory to the executable 
@@ -156,28 +159,6 @@ set_target_properties(htsim PROPERTIES
 
 # Enable position independent code for shared libraries
 set_property(TARGET htsim PROPERTY POSITION_INDEPENDENT_CODE ON)
-
-# # Create static library
-# add_library(htsim STATIC ${SOURCE_FILES})
-# target_include_directories(htsim PUBLIC 
-#                             ${CMAKE_CURRENT_SOURCE_DIR}
-#                             ${PCM_SOURCE_DIR}
-#                             ${PCM_INCLUDE_DIR}
-#                             ${PCM_ALGO_DIR}
-#                             ${PCM_APPS_DIR}
-#                             ${PCM_MISC_DIR}) # Needed for header-only libraries (e.g., loggertypes.h).
-
-# # Link required system libraries
-# # target_link_libraries(htsim PUBLIC stdc++ m)
-
-# # Set library version and soname for shared library
-# set_target_properties(htsim PROPERTIES
-#     VERSION 1.0.0
-#     SOVERSION 1
-# )
-
-# # Enable position independent code for shared libraries
-# set_property(TARGET htsim PROPERTY POSITION_INDEPENDENT_CODE ON)
 
 # find_package(Boost REQUIRED COMPONENTS stacktrace_basic)
 # target_link_libraries(htsim PRIVATE Boost::stacktrace_basic)

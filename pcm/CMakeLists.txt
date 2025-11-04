@@ -153,6 +153,12 @@ if(BUILD_HTSIM_PLUGIN)
     add_subdirectory(apps/htsim_atlahs)
 endif()
 
+# Configurable HTSIM path
+set(HTSIM_ROOT_DIR ${CMAKE_SOURCE_DIR}/../uet-htsim/htsim/sim/
+    CACHE PATH "Path to uet-htsim module (can be overridden via -DPHTSIM_ROOT_DIR=/path/to/uet-htsim/htsim/sim)")
+set(SPCL_HTSIM_ROOT_DIR ${CMAKE_SOURCE_DIR}/../HTSIM_spcl/htsim/sim/
+    CACHE PATH "Path to HTSIM_spcl module (can be overridden via -DPHTSIM_ROOT_DIR=/path/to/HTSIM_spcl/htsim/sim)")
+
 # ===============================================
 # Summary
 # ===============================================
