@@ -1,0 +1,20 @@
+{
+  "binary": "./build/bin/htsim_flow_app_v2",
+  "input_files": [
+    "./apps/htsim/incast_8_1MB.cm"
+  ],
+  "htsim_params": "-end 30000",
+  "run_without_pcm": true,
+  "baseline_config": "-sender_cc_algo",
+  "baseline_algorithms": [
+    "nscc",
+    "dctcp"
+  ],
+  "pcm_config": "-sender_cc_algo nscc -pcm_lb_algorithm",
+  "pcm_algorithms": [
+    "reps",
+    "ops_lb",
+    "strack",
+    "strack_light"
+  ]
+}
