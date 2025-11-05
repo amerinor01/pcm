@@ -126,7 +126,7 @@ struct ControlPolicy {
     }
 };
 
-// user-facing control descriptor
+// User-facing control descriptor
 template <pcm_control_t Type, pcm_uint InitialValue, pcm_uint Index>
 struct ControlDesc {
     template <typename StorageT>
@@ -237,17 +237,48 @@ template <typename T>
 inline constexpr bool is_signal_v = is_signal<std::decay_t<T>>::value;
 
 // ============================================================================
+// Handler VM slab
+// ============================================================================
+
+struct PcmHandlerVmIoSlab {
+    struct Input {
+        pcm_uint ack{};
+        pcm_uint rto{};
+        pcm_uint nack{};
+        pcm_uint ecn{};
+        pcm_uint rtt{};
+        pcm_uint data_tx{};
+        pcm_uint data_nacked{};
+        pcm_uint in_flight{};
+        pcm_uint ack_ev{};
+        pcm_uint ecn_ev{};
+        pcm_uint nack_ev{};
+        pcm_uint tx_ready_pkts{};
+        pcm_uint tx_backlog_bytes{};
+    } in;
+    struct Output {
+        pcm_uint cwnd{};
+        pcm_uint rate{};
+        pcm_uint ev{};
+    } out;
+};
+
+// ============================================================================
 // Handler VM descriptor (type-erased base)
 // ============================================================================
 struct PcmHandlerVmDesc {
     virtual ~PcmHandlerVmDesc() = default;
     virtual void add_get_time_source(util::GetTimeFn get_time_source) = 0;
     virtual bool invoke_cc_algorithm_on_trigger() = 0;
-    virtual void update_controls_runtime(pcm_control_t ctrl,
-                                         pcm_uint value) = 0;
-    virtual pcm_uint get_control_first_match_runtime(pcm_control_t ctrl) = 0;
-    virtual void update_signals_runtime(pcm_signal_t sig, pcm_uint value) = 0;
-    virtual pcm_uint runtime_call_test() = 0;
+    PcmHandlerVmIoSlab &get_signal_io_slab() { return io_slab_; };
+    virtual void flush_slab_input() = 0;
+    virtual void fetch_slab_output() = 0;
+#ifdef ENABLE_PROFILING
+    // Used to evaluate virtual call overhead
+    virtual pcm_uint vcall_overhead_test() = 0;
+#endif
+  protected:
+    PcmHandlerVmIoSlab io_slab_;
 };
 
 template <typename Tuple>
@@ -302,31 +333,22 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         start_ts_ = get_time_source();
     }
 
-    /*
+#ifdef ENABLE_PROFILING
+    pcm_uint vcall_overhead_test() override { return 42; }
+#endif
+
+/*
      * set/get_control() can be called by the datapath, therefore has no
      * compile-time checks if match was found or not, the API intention is to
      * communicate is_found bool as return type so that callee can handle
      * (possibly) erroneous not found case
      */
-    template <pcm_control_t Match>
-    [[nodiscard]] bool set_first_match_control(pcm_uint val) {
-        return (([&](auto *self) -> bool {
-            using T = Objs;
-            if constexpr (is_control_v<T>) {
-                if (T::kType == Match) {
-                    auto &slot = static_cast<PcmHandlerVmImplT *>(self)
-                                     ->template control_slot_impl<T::kIndex>();
-                    T::set(slot, val);
-                    return true;
-                }
-            }
-            return false;
-        }(this) || ...));
-    }
 
     template <pcm_control_t Match>
-    [[nodiscard]] std::optional<pcm_uint> get_control_first_match() {
-        std::optional<pcm_uint> result = std::nullopt;
+    [[nodiscard]] pcm_uint get_control_first_match() {
+        constexpr const auto kControlUnused =
+            std::numeric_limits<pcm_uint>::max();
+        pcm_uint result = kControlUnused;
         (([&](auto *self) -> bool {
             using T = Objs;
             if constexpr (is_control_v<T>) {
@@ -341,73 +363,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
             return false;
         }(this) || ...));
         return result;
-    }
-
-    pcm_uint get_control_first_match_runtime(pcm_control_t ctrl) override {
-        // PCM controls are defined as a consecutive enum starting at 0
-        // We iterate [0..PCM_CTRL_UNKNOWN) at compile time and call the
-        // corresponding update_signals<...> when a match is found.
-        std::optional<pcm_uint> out = std::nullopt;
-        static_assert(static_cast<std::size_t>(PCM_CTRL_UNKNOWN) > 0,
-                      "PCM_CTRL_UNKNOWN must be a positive sentinel value");
-        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            ((static_cast<pcm_control_t>(Is) == ctrl
-                  ? (out = get_control_first_match<static_cast<pcm_control_t>(
-                         Is)>())
-                  : false),
-             ...);
-        }(std::make_index_sequence<static_cast<std::size_t>(
-              PCM_CTRL_UNKNOWN)>{});
-
-        if (!out.has_value())
-            throw std::runtime_error("control not found");
-        return out.value();
-    }
-
-    pcm_uint runtime_call_test() override {
-        return 42;
-    }
-
-    void update_controls_runtime(pcm_control_t ctrl, pcm_uint value) override {
-        // PCM controls are defined as a consecutive enum starting at 0
-        // We iterate [0..PCM_CTRL_UNKNOWN) at compile time and call the
-        // corresponding update_signals<...> when a match is found.
-        bool found = false;
-        static_assert(static_cast<std::size_t>(PCM_CTRL_UNKNOWN) > 0,
-                      "PCM_CTRL_UNKNOWN must be a positive sentinel value");
-        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            ((static_cast<pcm_control_t>(Is) == ctrl
-                  ? (found = set_first_match_control<static_cast<pcm_control_t>(
-                         Is)>(value))
-                  : false),
-             ...);
-        }(std::make_index_sequence<static_cast<std::size_t>(
-              PCM_CTRL_UNKNOWN)>{});
-
-        if (!found) {
-            throw std::runtime_error("unsupported control");
-        }
-    }
-
-    void update_signals_runtime(pcm_signal_t sig, pcm_uint value) override {
-        // PCM signals are defined as a consecutive enum starting at 0
-        // We iterate [0..PCM_SIG_UNKNOWN) at compile time and call the
-        // corresponding update_signals<...> when a match is found.
-        bool found = false;
-        static_assert(static_cast<std::size_t>(PCM_SIG_UNKNOWN) > 0,
-                      "PCM_SIG_UNKNOWN must be a positive sentinel value");
-        [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-            ((static_cast<pcm_signal_t>(Is) == sig
-                  ? (update_signals<static_cast<pcm_signal_t>(Is)>(value),
-                     found = true)
-                  : false),
-             ...);
-        }(std::make_index_sequence<static_cast<std::size_t>(
-              PCM_SIG_UNKNOWN)>{});
-
-        if (!found) {
-            throw std::runtime_error("unsupported signal");
-        }
     }
 
     template <pcm_signal_t Match> void update_signals(pcm_uint v) {
@@ -425,6 +380,29 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              }
          }(this)),
          ...);
+    }
+
+    void flush_slab_input() override {
+        update_signals<PCM_SIG_ACK>(io_slab_.in.ack);
+        update_signals<PCM_SIG_RTO>(io_slab_.in.rto);
+        update_signals<PCM_SIG_NACK>(io_slab_.in.nack);
+        update_signals<PCM_SIG_ECN>(io_slab_.in.ecn);
+        update_signals<PCM_SIG_RTT>(io_slab_.in.rtt);
+        update_signals<PCM_SIG_DATA_TX>(io_slab_.in.data_tx);
+        update_signals<PCM_SIG_DATA_NACKED>(io_slab_.in.data_nacked);
+        update_signals<PCM_SIG_IN_FLIGHT>(io_slab_.in.in_flight);
+        update_signals<PCM_SIG_ACK_EV>(io_slab_.in.ack_ev);
+        update_signals<PCM_SIG_ECN_EV>(io_slab_.in.ecn_ev);
+        update_signals<PCM_SIG_NACK_EV>(io_slab_.in.nack_ev);
+        update_signals<PCM_SIG_TX_READY_PKTS>(io_slab_.in.tx_ready_pkts);
+        update_signals<PCM_SIG_TX_BACKLOG_BYTES>(io_slab_.in.tx_backlog_bytes);
+        io_slab_.in = PcmHandlerVmIoSlab::Input(); // cleanup for the next flush
+    }
+
+    void fetch_slab_output() override {
+        io_slab_.out.cwnd = get_control_first_match<PCM_CTRL_CWND>();
+        io_slab_.out.rate = get_control_first_match<PCM_CTRL_RATE>();
+        io_slab_.out.ev = get_control_first_match<PCM_CTRL_EV>();
     }
 
     [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
@@ -610,4 +588,4 @@ struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
     }
 };
 
-} // namespace pcm
+} // namespace pcm_vm
