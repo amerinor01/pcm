@@ -166,8 +166,20 @@ set_property(TARGET htsim PROPERTY POSITION_INDEPENDENT_CODE ON)
 # target_compile_definitions(htsim PRIVATE BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED)
 
 # JsonCpp support
-find_package(JsonCpp CONFIG REQUIRED)
-target_link_libraries(htsim PRIVATE JsonCpp::JsonCpp)
+set(JSONCPP_WITH_CMAKE_PACKAGE ON)
+set(JSONCPP_CXX_STANDARD 23)
+
+FetchContent_Declare(
+  jsoncpp
+  GIT_REPOSITORY https://github.com/open-source-parsers/jsoncpp.git
+  GIT_TAG        1.9.6
+)
+
+FetchContent_MakeAvailable(jsoncpp)
+target_link_libraries(htsim PRIVATE jsoncpp_lib)
+
+# find_package(JsonCpp CONFIG REQUIRED)
+# target_link_libraries(htsim PRIVATE JsonCpp::JsonCpp)
 
 # Add subdirectories
 add_subdirectory(datacenter)
