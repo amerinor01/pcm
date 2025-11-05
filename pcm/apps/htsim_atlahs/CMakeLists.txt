@@ -2,7 +2,7 @@
 # This directory contains both the HTSIM plugin and the HTSIM application
 include(FetchContent)
 # Set HTSIM build directory
-if(NOT SPCL_HTSIM_ROOT_DIR)
+if(NOT DEFINED SPCL_HTSIM_ROOT_DIR)
     set(SPCL_HTSIM_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../HTSIM_spcl/htsim/sim/")
 endif()
 

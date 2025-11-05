@@ -36,8 +36,9 @@ if ( ENABLE_TESTS )
 endif()
 
 # Configurable PCM path
-set(PCM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../pcm
-    CACHE PATH "Path to PCM module (can be overridden via -DPCM_DIR=/path/to/pcm)")
+if(NOT DEFINED PCM_DIR)
+    set(PCM_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../../pcm)
+endif()
 
 # Set PCM directory
 set(PCM_SOURCE_DIR ${PCM_DIR}/src)
