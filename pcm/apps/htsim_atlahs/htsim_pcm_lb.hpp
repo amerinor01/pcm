@@ -64,7 +64,7 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
                          uint64_t cur_cwnd_in_pkts) override {
         (void)seq_sent;
         (void)cur_cwnd_in_pkts;
-        _pcm_vm.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_PKTS, 1);
+        _pcm_vm.second.update_signals_runtime(PCM_SIG_TX_READY_PKTS, 1);
 
         if (_scheduler.schedulerTypeGet() ==
             PcmScheduler::ProgressType::SYNC) {

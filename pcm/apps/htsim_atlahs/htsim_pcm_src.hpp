@@ -67,27 +67,19 @@ class PcmScheduler final : public EventSource {
         _spec_so_handles.emplace_back(std::shared_ptr<void>(so_handle, [](void *handle) {
             if (handle) {
                 pcm_vm::util::shared_symbol_close(handle);
-                printf("[DEBUG] dlclose called for handle=%p\n", handle);
             }
         }));
-        // _spec_so_handle = std::shared_ptr<void>(so_handle, [](void *handle) {
-        //     if (handle) {
-        //         pcm_vm::util::shared_symbol_close(handle);
-        //         printf("world hello 2 world hello 2 world hello 2 world hello 2\n");
-        //     }
-        // });
 
         // Cast the function pointer to the expected factory function type
         auto vm_factory_fn_ptr =
             reinterpret_cast<pcm_vm::PcmHandlerVmDesc *(*)()>(raw_fn_ptr);
 
-        configs_.emplace_back(vm_matching_rule, pcm_algo_name,
-                              [this, vm_factory_fn_ptr]() -> PcmVmPtr {
-                                  PcmVmPtr new_vm(vm_factory_fn_ptr());
-                                  new_vm->add_get_time_source(
-                                      EventList::getTheEventList().now);
-                                  return new_vm;
-                              });
+        configs_.emplace_back(
+            vm_matching_rule, pcm_algo_name, [vm_factory_fn_ptr]() -> PcmVmPtr {
+                PcmVmPtr new_vm(vm_factory_fn_ptr());
+                new_vm->add_get_time_source(EventList::getTheEventList().now);
+                return new_vm;
+            });
     }
 
     std::pair<PcmVmId, pcm_vm::PcmHandlerVmDesc &>
@@ -192,7 +184,6 @@ class PcmScheduler final : public EventSource {
     simtime_picosec _poll_delay;
     ProgressType _sched_type;
     simtime_picosec _next_sched;
-    // std::shared_ptr<void> _spec_so_handle;
     std::vector<std::shared_ptr<void>> _spec_so_handles;
     using PcmVmPtr = std::unique_ptr<pcm_vm::PcmHandlerVmDesc>;
     std::vector<
@@ -215,8 +206,6 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         : UecSrc{trafficLogger, eventList,   std::move(mp),
                  nic,           no_of_ports, rts},
           _scheduler{scheduler}, _pcm_vm{_scheduler.createVm(this, tag)} {
-        
-        printf("entering construction\n");
 
         // Assign PCM function pointers for congestion control callbacks
         // Use proper member function pointer assignment syntax
@@ -256,6 +245,8 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         _pcm_vm.second.update_signals_runtime(PCM_SIG_IN_FLIGHT,
                                               UecSrc::_in_flight);
         _pcm_vm.second.update_signals_runtime(PCM_SIG_RTT, UecSrc::_raw_rtt);
+        _pcm_vm.second.update_signals_runtime(PCM_SIG_TX_BACKLOG_BYTES,
+                                              UecSrc::_backlog);
 
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             if (_scheduler.pollVm(_pcm_vm.first)) {

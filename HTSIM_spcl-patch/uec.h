@@ -325,7 +325,6 @@ public:
     mem_b _flow_size;
     bool _done_sending;  // make sure we only trigger once
     optional<UecMsgTracker*> _msg_tracker;  
-    mem_b _backlog;      // how much we need to send, not including retransmissions
     mem_b _rtx_backlog;
     mem_b _maxwnd;
     static mem_b _configured_maxwnd;
@@ -355,6 +354,7 @@ protected:
     simtime_picosec _rtt, _mdev, _rto, _raw_rtt;
     simtime_picosec _base_rtt;
     mem_b _in_flight;
+    mem_b _backlog;      // how much we need to send, not including retransmissions
 
 public:
     static linkspeed_bps _reference_network_linkspeed; 
