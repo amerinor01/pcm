@@ -64,8 +64,9 @@ void AtlahsHtsimApi::Send(const SendEvent &event, graph_node_properties elem) {
 
         UecSrc* uecSrc;
         if (pcm_enable) {
-            // std::string tag_ctx_str = std::to_string(tag).substr(0, 1);
-            std::string tag_ctx_str = std::to_string(tag/10);
+            std::string tag_ctx_str = std::to_string(tag);
+            assert(tag_ctx_str.size() >= 2);
+            tag_ctx_str = tag_ctx_str.substr(tag_ctx_str.size() - 2);
             
             uecSrc = new pcm_htsim::PcmSrc(traffic_logger, *_eventlist, std::move(per_flow_mp), 
                 *uec_nics.at(from), ports, *pcm_cc_schedulers.at(from).get(), static_cast<pcm_htsim::PcmScheduler::PcmVmTag>(std::stoul(tag_ctx_str)));

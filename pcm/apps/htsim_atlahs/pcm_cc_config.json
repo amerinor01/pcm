@@ -1,6 +1,6 @@
 {
-    "0": "dctcp",
-    "1": "dcqcn",
-    "2": "uec_dctcp"
+    "00": "dctcp",
+    "10": "dcqcn",
+    "20": "uec_dctcp"
 }
   
