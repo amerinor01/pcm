@@ -563,12 +563,10 @@ int main(int argc, char **argv) {
                  << pcm_handler_delay << endl;
             i++;
         } else if (!strcmp(argv[i], "-pcm_async_sched")) {
-            pcm_sched_type =
-                pcm_htsim::PcmScheduler::ProgressType::ASYNC;
+            pcm_sched_type = pcm_htsim::PcmScheduler::ProgressType::ASYNC;
             cout << "PCM algorithm scheduling is set to async" << endl;
         } else if (!strcmp(argv[i], "-pcm_lb_async_sched")) {
-            pcm_lb_sched_type =
-                pcm_htsim::PcmScheduler::ProgressType::ASYNC;
+            pcm_lb_sched_type = pcm_htsim::PcmScheduler::ProgressType::ASYNC;
             cout << "PCM LB algorithm scheduling is set to async" << endl;
         } else if (!strcmp(argv[i], "-pcm_lb_algorithm")) {
             pcm_lb_enable = true;
@@ -921,7 +919,8 @@ int main(int argc, char **argv) {
             unique_ptr<UecMultipath> mp = nullptr;
             if (pcm_lb_enable) {
                 mp = make_unique<pcm_htsim::UecPcmMp>(
-                    UecSrc::_debug, *pcm_lb_schedulers.at(src).get());
+                    UecSrc::_debug, *pcm_lb_schedulers.at(src).get(),
+                    pcm_lb_algo_dummy_tag);
             } else if (load_balancing_algo == BITMAP) {
                 mp =
                     make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
