@@ -13,9 +13,9 @@ namespace pcm_htsim {
 
 class UecPcmMp : public UecMultipath, public PcmScheduledContext {
   public:
-    UecPcmMp(bool debug, PcmScheduler &scheduler)
+    UecPcmMp(bool debug, PcmScheduler &scheduler, PcmScheduler::PcmVmTag tag)
         : UecMultipath(debug), _scheduler{scheduler},
-          _pcm_vm{_scheduler.createVm(this, 0)},
+          _pcm_vm{_scheduler.createVm(this, tag)},
           _pcm_io_slab{_pcm_vm.second.get_signal_io_slab()} {
         std::cout << "pcm_htsim::UecPcmMp: initialization completed"
                   << std::endl;
