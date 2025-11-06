@@ -1,6 +1,7 @@
 // -*- c-basic-offset: 4; indent-tabs-mode: nil -*-
 #include "uec.h"
 #include <math.h>
+#include <format>
 #include <cstdint>
 #include "circular_buffer.h"
 #include "uec_logger.h"
@@ -599,9 +600,7 @@ UecSrc::PcmCCParams UecSrc::get_default_pcm_cc_params() {
 }
 
 UecSrc::PcmCCParams UecSrc::get_pcm_cc_params(uint32_t _tag) {  // TODO: can iterate the key to reduce duplication
-    std::string tag_ctx_str = std::to_string(_tag);
-    assert(tag_ctx_str.size() >= 2);
-    tag_ctx_str = tag_ctx_str.substr(tag_ctx_str.size() - 2);
+    std::string tag_ctx_str = std::format("{:02}", _tag % 100);
     if (ctx_to_pcm_cc_params.find(tag_ctx_str) != ctx_to_pcm_cc_params.end()) return ctx_to_pcm_cc_params[tag_ctx_str];
 
     UecSrc::PcmCCParams p = get_default_pcm_cc_params();
