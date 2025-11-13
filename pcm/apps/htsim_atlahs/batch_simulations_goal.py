@@ -140,18 +140,19 @@ def main():
     output_dir = Path(args.out)
     output_dir.mkdir(parents=True, exist_ok=True)
     
-    binary = config.get('binary', './build/bin/htsim_flow_app')
+    binary = config.get('binary', './build/bin/htsim_flow_app_atlahs')
     input_files = config['input_files']
     htsim_params = config.get('htsim_params', '').split()
     
     # Baseline algorithm configurations
     run_without_pcm = config.get('run_without_pcm', False)
     baseline_config = config.get('baseline_config', '').split()
-    baseline_algorithms = config.get('baseline_algorithms', [])
+
+    native_nscc_config_file = config.get('native_nscc_config_file', [])
+    pcm_cc_config_file = config.get('pcm_cc_config_file', [])
     
     # PCM algorithm configurations  
-    pcm_config = config.get('pcm_config', '').split()
-    pcm_algorithms = config.get('pcm_algorithms', [])
+    pcm_delay_config = config.get('pcm_config', '').split()
     
     results = []
     
@@ -159,35 +160,40 @@ def main():
     print(f"Config: {args.conf}")
     print(f"Output: {args.out}")
     print(f"Input files: {len(input_files)}")
-    print(f"Baseline algorithms: {len(baseline_algorithms)}")
-    print(f"PCM algorithms: {len(pcm_algorithms)}")
+    print(f"Native NSCC configs: {len(native_nscc_config_file)}")
+    print(f"PCM CC algorithms: {len(pcm_cc_config_file)}")
     print(f"Generate plots: {args.plot}")
     print(f"Generate performance plots: {args.profile}")
     print()
-    
+
     for input_file in input_files:
-        file_name = Path(input_file).stem
-        
-        # Run baseline algorithms (HTSIM built-in)
-        for baseline_algo in baseline_algorithms:
-            cmd = [binary, '-tm', input_file] + htsim_params + baseline_config + [baseline_algo]
-            test_name = f"{file_name}_{baseline_algo}"
-            success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
-            results.append((test_name, success))
-            print()
-        
-        # Run without any algorithm if requested (pure HTSIM baseline)
+        file_name = Path(input_file.split()[0]).stem
+        input_file = input_file.split()
+        print(f"input_file: {input_file}")
+
+        # Run native NSCC with native configuration
         if run_without_pcm:
-            cmd = [binary, '-tm', input_file] + htsim_params
-            test_name = f"{file_name}_baseline"
+            cmd = [binary, '-goal'] + input_file + htsim_params + baseline_config
+            test_name = f"{file_name}_native_nscc_native_config"
             success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
             results.append((test_name, success))
             print()
         
-        # Run with each PCM algorithm
-        for pcm_algo in pcm_algorithms:
-            cmd = [binary, '-tm', input_file] + htsim_params + pcm_config + [pcm_algo]
-            test_name = f"{file_name}_pcm_{pcm_algo}"
+        # Run native NSCC with user defined configurations
+        for nscc_config in native_nscc_config_file:
+            test_name = f"{file_name}_native_nscc_{Path(nscc_config).stem}"
+            nscc_config = nscc_config.split()
+            cmd = [binary, '-goal'] + input_file + htsim_params + baseline_config + nscc_config
+            success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
+            results.append((test_name, success))
+            print()
+        
+        # Run PCM CC configurations
+        for pcm_cc_config in pcm_cc_config_file:
+            test_name = f"{file_name}_pcm_cc_{Path(pcm_cc_config).stem}"
+            pcm_cc_config = pcm_cc_config.split()
+            cmd = [binary, '-goal'] + input_file + htsim_params + baseline_config + pcm_delay_config + pcm_cc_config
+            
             success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
             results.append((test_name, success))
             print()
@@ -201,8 +207,8 @@ def main():
     print(f"Total simulations: {total}")
     print(f"Successful: {passed}")
     print(f"Failed: {failed}")
-    print(f"Baseline algorithms tested: {len(baseline_algorithms)}")
-    print(f"PCM algorithms tested: {len(pcm_algorithms)}")
+    print(f"Native NSCC configs: {len(native_nscc_config_file)}")
+    print(f"PCM CC algorithms: {len(pcm_cc_config_file)}")
     
     if failed > 0:
         print("\nFailed simulations:")
@@ -217,8 +223,8 @@ def main():
         'total_simulations': total,
         'successful': passed,
         'failed': failed,
-        'baseline_algorithms_tested': len(baseline_algorithms),
-        'pcm_algorithms_tested': len(pcm_algorithms),
+        'native_nscc_config_tested': len(native_nscc_config_file),
+        'pcm_cc_config_tested': len(pcm_cc_config_file),
         'input_files': len(input_files),
         'results': [{'name': name, 'success': success} for name, success in results]
     }
