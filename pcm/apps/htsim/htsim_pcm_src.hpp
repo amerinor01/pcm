@@ -305,7 +305,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
   private:
     PcmScheduler &_scheduler;
     std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
-    pcm_vm::PcmHandlerVmIoSlab &_pcm_io_slab;
+    pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab &_pcm_io_slab;
     pcm_uint _runtime_call_perftest;
 };
 

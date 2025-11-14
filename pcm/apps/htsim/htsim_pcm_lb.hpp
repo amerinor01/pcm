@@ -85,7 +85,7 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
   private:
     PcmScheduler &_scheduler;
     std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
-    pcm_vm::PcmHandlerVmIoSlab &_pcm_io_slab;
+    pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab &_pcm_io_slab;
     bool _is_finished{false};
 };
 
