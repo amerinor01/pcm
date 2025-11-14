@@ -31,13 +31,13 @@ cmake --build build --parallel
 
 2. Build PCM runtime from the directory this README placed in:
 ```bash
-./build.py --clean --htsim --htsim-dir=$(pwd)/../uet-htsim/htsim/sim/ --relwithdebinfo
+./build.py --clean --htsim-dir=$(pwd)/../uet-htsim/htsim/sim/ --relwithdebinfo
 ```
 
 3. Test build:
 ```bash
 export LD_LIBRARY_PATH=$(pwd)/build/lib/:$LD_LIBRARY_PATH
-python3 ./apps/htsim_v2/batch_simulations.py --conf=./apps/htsim_v2/all_algos_incast.json --out=results --plot
+python3 ./apps/htsim/batch_simulations.py --conf=./apps/htsim/all_algos_incast.json --out=results --plot
 ```
 
 ### Debug Build with Clean
@@ -47,7 +47,7 @@ python3 build.py --debug --clean
 
 ### Full Development Build
 ```bash
-python3 build.py --debug --htsim --hac --profiling --clean
+python3 build.py --debug --hac --profiling --clean
 ```
 
 ### Build Options
@@ -55,7 +55,6 @@ python3 build.py --debug --htsim --hac --profiling --clean
 | Option | Description | Default |
 |--------|-------------|---------|
 | `--debug` | Build in Debug mode | Release |
-| `--htsim` | Enable HTSIM flow plugin | OFF |
 | `--htsim-dir DIR` | Set HTSIM build directory | Auto-detect |
 | `--profiling` | Enable profiling support | OFF |
 | `--hac` | Enable HAC LLVM optimizations | OFF |
