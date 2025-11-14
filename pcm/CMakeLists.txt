@@ -17,7 +17,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Configurable build options
-option(BUILD_HTSIM_PLUGIN "Build HTSIM plugin" OFF)
 option(BUILD_HAC_IR "Build HAC LLVM IR generation" OFF)
 option(ENABLE_PROFILING "Enable Linux perf-based profiling" OFF)
 
@@ -56,15 +55,12 @@ if(ENABLE_PROFILING)
 endif()
 
 # Directory structure
-set(PCM_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src)
 set(PCM_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
 set(PCM_ALGO_DIR ${CMAKE_CURRENT_SOURCE_DIR}/algorithms)
 set(PCM_APPS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/apps)
-set(PCM_MISC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/misc)
 
 # Include directories
 include_directories(${PCM_INCLUDE_DIR})
-include_directories(${PCM_MISC_DIR})
 include_directories(${PCM_ALGO_DIR})
 include_directories(${CMAKE_BINARY_DIR}/algorithms)  # For YAML-generated algorithm headers
 
@@ -94,11 +90,12 @@ if(EXISTS ${XXHASH_DIR}/xxhash.h)
 endif()
 
 # ===============================================
-# Core PCM Library
+# HAC IR Generation
 # ===============================================
 
-# Build core PCM library in src subdirectory
-add_subdirectory(src)
+if(BUILD_HAC_IR)
+    add_subdirectory(hac)
+endif()
 
 # ===============================================
 # Algorithm Plugins
@@ -108,36 +105,9 @@ add_subdirectory(src)
 add_subdirectory(algorithms)
 
 # ===============================================
-# HAC IR Generation
+# HTSIM
 # ===============================================
-
-if(BUILD_HAC_IR)
-    add_subdirectory(hac)
-endif()
-
-# ===============================================
-# Traffic Generator Application
-# ===============================================
-
-# Build traffic generator in its own subdirectory
-add_subdirectory(apps/traffic_gen)
-
-# ===============================================
-# HTSIM Plugin (Optional)
-# ===============================================
-
-if(BUILD_HTSIM_PLUGIN)
-    add_subdirectory(apps/htsim)
-endif()
-
-# ===============================================
-# HTSIM V2 Application
-# ===============================================
-
-# HTSIM V2 is always built if dependencies are available
-if(BUILD_HTSIM_PLUGIN)
-    add_subdirectory(apps/htsim_v2)
-endif()
+add_subdirectory(apps/htsim)
 
 # ===============================================
 # Summary
@@ -145,10 +115,5 @@ endif()
 
 message(STATUS "PCM Build Configuration:")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  HTSIM v1 plugin: ${BUILD_HTSIM_PLUGIN}")
-message(STATUS "  HTSIM v2: ${BUILD_HTSIM_PLUGIN}")
 message(STATUS "  Profiling: ${ENABLE_PROFILING}")
 message(STATUS "  IR generator: ${BUILD_HAC_IR}")
-if(BUILD_HTSIM_PLUGIN)
-    message(STATUS "  HTSIM build dir: ${HTSIM_BUILD_DIR}")
-endif()

@@ -23,8 +23,7 @@
 
 #include "pcm.h"
 #include "pcmh.h"
-
-#include "../src/prof.h"
+#include "prof.h"
 
 /*
  Style guide:

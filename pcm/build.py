@@ -47,8 +47,6 @@ def main():
                        help='Build in Debug mode (default: Release)')
     parser.add_argument('--relwithdebinfo', action='store_true',
                        help='Build in RelWithDebInfo mode (optimized with debug symbols)')
-    parser.add_argument('--htsim', action='store_true',
-                       help='Enable HTSIM flow plugin')
     parser.add_argument('--htsim-dir', metavar='DIR',
                        help='Set HTSIM build directory')
     parser.add_argument('--hac-ir', action='store_true',
@@ -77,8 +75,7 @@ def main():
         build_type = "RelWithDebInfo"
     else:
         build_type = "Release"
-        
-    build_htsim = "ON" if args.htsim else "OFF"
+
     build_hac_ir = "ON" if args.hac_ir else "OFF"
     enable_profiling = "ON" if args.profiling else "OFF"
     jobs = args.jobs if args.jobs else get_cpu_count()
@@ -89,7 +86,6 @@ def main():
     
     print("=== PCM CMake Build ===")
     print(f"Build type: {build_type}")
-    print(f"HTSIM plugin: {build_htsim}")
     print(f"HAC IR generation: {build_hac_ir}")
     print(f"Profiling: {enable_profiling}")
     print(f"Clean build: {args.clean}")
@@ -110,7 +106,6 @@ def main():
     cmake_args = [
         "cmake",
         f"-DCMAKE_BUILD_TYPE={build_type}",
-        f"-DBUILD_HTSIM_PLUGIN={build_htsim}",
         f"-DBUILD_HAC_IR={build_hac_ir}",
         f"-DENABLE_PROFILING={enable_profiling}",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",

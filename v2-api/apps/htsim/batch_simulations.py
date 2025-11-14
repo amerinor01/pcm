@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-# /// script
-# requires-python = ">=3.12"
-# dependencies = [
-#     "matplotlib",
-# ]
-# ///
 
 """
 HTSIM Batch Simulation Runner
@@ -82,7 +76,6 @@ def generate_plot(log_file, output_dir, test_name):
         
         if result.returncode == 0:
             print(f"  CWND plot saved to: {plot_file}")
-            print(f"  stdout: {result.stdout}")
             return
         else:
             print(f"    Plot generation failed")
@@ -193,7 +186,7 @@ def main():
         
         # Run with each PCM algorithm
         for pcm_algo in pcm_algorithms:
-            cmd = [binary, '-tm', input_file] + htsim_params + pcm_config + [pcm_algo]
+            cmd = [binary, '-tm', input_file] + htsim_params + pcm_config + ['-pcm_algorithm', pcm_algo]
             test_name = f"{file_name}_pcm_{pcm_algo}"
             success = run_command(cmd, output_dir, test_name, create_plot=args.plot)
             results.append((test_name, success))
@@ -238,12 +231,7 @@ def main():
     if args.profile:
         print()
         generate_performance_plot("TRIGGER CYCLE", "trigger_cycle_perf.pdf", output_dir)
-        generate_performance_plot("ACK REGISTRATION CYCLE", "ack_registration_cycle_perf.pdf", output_dir)
-        generate_performance_plot("NACK REGISTRATION CYCLE", "nack_registration_cycle_perf.pdf", output_dir)
-        generate_performance_plot("CONTROL FETCH CYCLE", "ctrl_fetch_cycle_perf.pdf", output_dir)
-        generate_performance_plot("RUNTIME CALL TEST", "runtime_call_perf.pdf", output_dir)
-        generate_performance_plot("PERF OVERHEAD TEST", "perf_overhead_perf.pdf", output_dir)
-
+  
     print()  # Final newline for clean terminal output
     return 0 if failed == 0 else 1
 

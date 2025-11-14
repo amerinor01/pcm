@@ -1,9 +1,9 @@
 {
   "binary": "./build/bin/htsim_flow_app_v2",
   "input_files": [
-    "./apps/htsim/incast_8_1MB.cm"
+    "./apps/htsim_v2/permutation_128_1MB.cm"
   ],
-  "htsim_params": "-end 30000",
+  "htsim_params": "-topo ./apps/htsim_v2/fat_tree_128_4os.topo -end 30000",
   "run_without_pcm": true,
   "baseline_config": "-sender_cc_algo",
   "baseline_algorithms": [

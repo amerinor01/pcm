@@ -10,7 +10,7 @@
     "nscc",
     "dctcp"
   ],
-  "pcm_config": "-pcm_sched_poll_delay 1000 -pcm_handler_delay 1000",
+  "pcm_config": "-pcm_sched_poll_delay 1000 -pcm_handler_delay 1000 -pcm_algorithm",
   "pcm_algorithms": [
     "nscc",
     "uec_dctcp",

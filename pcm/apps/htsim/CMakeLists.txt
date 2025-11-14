@@ -35,54 +35,7 @@ set(HTSIM_INCLUDES
 )
 
 # ===============================================
-# HTSIM Plugin Library
-# ===============================================
-
-# Find HTSIM plugin sources (both C and CPP, exclude the main app)
-file(GLOB HTSIM_PLUGIN_CPP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-file(GLOB HTSIM_PLUGIN_C_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
-list(REMOVE_ITEM HTSIM_PLUGIN_CPP_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/htsim_app.cpp") # exclude htsim application
-set(HTSIM_PLUGIN_SOURCES ${HTSIM_PLUGIN_CPP_SOURCES} ${HTSIM_PLUGIN_C_SOURCES})
-
-if(HTSIM_PLUGIN_SOURCES)
-    # Create HTSIM plugin library
-    add_library(pcm_htsim_plugin SHARED ${HTSIM_PLUGIN_SOURCES})
-    
-    # Target-specific compile definitions
-    target_compile_definitions(pcm_htsim_plugin PRIVATE BUILD_HTSIM_PLUGIN)
-    
-    # Target-specific include directories
-    target_include_directories(pcm_htsim_plugin PRIVATE ${HTSIM_INCLUDES})
-    
-    # Link libraries
-    target_link_libraries(pcm_htsim_plugin PRIVATE 
-        pcm                  # Link to main PCM library for symbols
-        ${HTSIM_LIB}
-        ${HTSIM_DC_LIB}
-    )
-    
-    # Set RPATH for HTSIM libraries
-    set_target_properties(pcm_htsim_plugin PROPERTIES
-        INSTALL_RPATH "${HTSIM_ROOT_DIR}/build;${HTSIM_ROOT_DIR}/build/datacenter"
-        BUILD_WITH_INSTALL_RPATH TRUE
-        OUTPUT_NAME pcm_htsim
-    )
-    
-    # Install the plugin
-    install(TARGETS pcm_htsim_plugin 
-        LIBRARY DESTINATION lib
-        ARCHIVE DESTINATION lib
-    )
-    
-    message(STATUS "HTSIM plugin configured:")
-    message(STATUS "  HTSIM dir: ${HTSIM_ROOT_DIR}")
-    message(STATUS "  Plugin sources: ${HTSIM_PLUGIN_SOURCES}")
-else()
-    message(WARNING "No HTSIM plugin sources found in ${CMAKE_CURRENT_SOURCE_DIR}")
-endif()
-
-# ===============================================
-# HTSIM Application
+# HTSIM Application (Header-Only Implementation)
 # ===============================================
 
 # Check if application source exists
@@ -94,12 +47,11 @@ if(EXISTS ${HTSIM_APP_SOURCE})
     # Add HTSIM include directories
     target_include_directories(htsim_flow_app PRIVATE ${HTSIM_INCLUDES})
     
-    # Link all required libraries
+    # Link all required libraries (no plugin needed - header-only)
     target_link_libraries(htsim_flow_app PRIVATE 
-        pcm 
-        pcm_htsim_plugin
-        ${HTSIM_LIB}
-        ${HTSIM_DC_LIB}
+        ${HTSIM_LIB}        # HTSIM simulation library
+        ${HTSIM_DC_LIB}     # HTSIM datacenter library
+        ${CMAKE_DL_LIBS}    # Dynamic loading support (dlopen/dlsym)
     )
     
     # Install the application
@@ -111,12 +63,10 @@ else()
 endif()
 
 # Summary
-message(STATUS "HTSIM integration summary:")
+message(STATUS "HTSIM build config summary:")
 message(STATUS "  HTSIM lib: ${HTSIM_LIB}")
 message(STATUS "  HTSIM DC lib: ${HTSIM_DC_LIB}")
-if(HTSIM_PLUGIN_SOURCES)
-    message(STATUS "  Plugin: libpcm_htsim.so")
-endif()
+message(STATUS "  Implementation: Header-only (no plugin library)")
 if(EXISTS ${HTSIM_APP_SOURCE})
     message(STATUS "  Application: htsim_flow_app")
 endif()
