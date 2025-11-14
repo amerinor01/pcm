@@ -49,7 +49,7 @@ namespace util {
 // dependant.
 template <typename> inline constexpr bool assert_always_false_v = false;
 
-[[nodiscard]] std::optional<std::pair<void *, void *>>
+[[nodiscard]] inline std::optional<std::pair<void *, void *>>
 shared_symbol_open(const std::string &lib_name, const std::string &fn_name) {
     void *so_handle = dlopen(lib_name.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!so_handle) {
@@ -69,14 +69,14 @@ shared_symbol_open(const std::string &lib_name, const std::string &fn_name) {
     return std::make_pair(so_handle, fn_ptr);
 }
 
-void shared_symbol_close(void *so_handle) {
+inline void shared_symbol_close(void *so_handle) {
     if (so_handle && dlclose(so_handle)) {
         std::cerr << "dlclose() failed with " << dlerror() << std::endl;
     }
 }
 
 using GetTimeFn = pcm_uint (*)();
-uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) {
+inline uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) {
     return ts_end - ts_start;
 }
 
