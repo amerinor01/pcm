@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# /// script
+# requires-python = ">=3.12"
+# dependencies = [
+#     "matplotlib",
+# ]
+# ///
 
 """
 HTSIM PCM Congestion Window Parser and Plotter
@@ -49,6 +55,9 @@ def parse_log_file(file_path: Path) -> Tuple[Dict[str, Tuple[List[int], List[int
     flow_params_pattern = re.compile(
         r'Initialize per-instance NSCC parameters: flowid (\d+) _base_rtt=(\d+) _base_bdp=(\d+) _bdp=(\d+) _min_cwnd=(\d+) _maxwnd=(\d+) _cwnd=(\d+)'
     )
+    # sample flow finish line "Flow Uec_514_0 flowId 3 uecSrc 2 finished at 60237.5 total messages 1 total packets 24474 RTS 0 total bytes 100000764 in_flight now 0 fair_inc 0 prop_inc 0 fast_inc 0 eta_inc 0 multi_dec -0 quick_dec -0 nack_dec -0"
+    flow_finish_time_pattern = re.compile(r"Flow \S+ flowId (\d+) .* finished at (\d+\.?\d*)")
+    flow_finish_times = {}
     
     try:
         with open(file_path, 'r') as f:
@@ -80,6 +89,13 @@ def parse_log_file(file_path: Path) -> Tuple[Dict[str, Tuple[List[int], List[int
                         
                         flow_data[flow_addr][0].append(pcm_time)
                         flow_data[flow_addr][1].append(cwnd)
+                    
+                    # Extract flow finish times
+                    flow_finish_match = flow_finish_time_pattern.search(line)
+                    if flow_finish_match:
+                        flowid = flow_finish_match.group(1)
+                        finish_time = float(flow_finish_match.group(2))
+                        flow_finish_times[flowid] = finish_time
                         
                 except ValueError as e:
                     print(f"Warning: Could not parse line {line_num}: {e}")
@@ -91,10 +107,11 @@ def parse_log_file(file_path: Path) -> Tuple[Dict[str, Tuple[List[int], List[int
     if not flow_data:
         print(f"Warning: No PCM flow data found in {file_path}")
     
-    return flow_data, bdp_info
+    return flow_data, bdp_info, flow_finish_times
 
 
-def create_cwnd_plot(flow_data: Dict[str, Tuple[List[int], List[int]]], 
+def create_cwnd_plot(flow_data: Dict[str, Tuple[List[int], List[int]]],
+                     flow_finish_times: Dict[str, float],
                     bdp_info: Dict[str, int],
                     output_path: Path, 
                     title: str = "Congestion Window Evolution") -> bool:
@@ -130,6 +147,9 @@ def create_cwnd_plot(flow_data: Dict[str, Tuple[List[int], List[int]]],
             
             plt.plot(times, abs_cwnds, label=f'Flow {flow_addr}', linewidth=1.5)
             print(f"Plotted {len(times)} points for flow {flow_addr}")
+        
+        for flow_id, finish_time in flow_finish_times.items():
+            plt.axvline(x=finish_time * 1e3, color='gray', linestyle='--', alpha=0.5)
         
         # Add BDP reference lines
         # if bdp_info['flow_bdp'] is not None:
@@ -186,7 +206,8 @@ Examples:
     try:
         # Parse log file
         print(f"Parsing log file: {args.input}")
-        flow_data, bdp_info = parse_log_file(args.input)
+        flow_data, bdp_info, flow_finish_times = parse_log_file(args.input)
+        print(f"Flow finishing times: {flow_finish_times}")
         
         if not flow_data:
             print("No PCM flow data found in log file")
@@ -203,7 +224,7 @@ Examples:
             print(f"Flow Max Window: {bdp_info['flow_maxwnd']} bytes")
         
         # Create plot
-        success = create_cwnd_plot(flow_data, bdp_info, args.output, args.title)
+        success = create_cwnd_plot(flow_data, flow_finish_times, bdp_info, args.output, args.title)
         
         return 0 if success else 1
         

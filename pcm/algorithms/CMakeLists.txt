@@ -15,29 +15,18 @@ function(create_algo_plugin ALGO_NAME)
     set(FABRIC_FILE "${CMAKE_CURRENT_SOURCE_DIR}/fabric.yaml")
     set(SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${ALGO_NAME}.c")  # Existing source file
     set(HEADER_FILE "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}.h")  # Generated header
-    set(PCMC_FILE "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}_pcmc.c")  # Generated PCMC
-    set(HEADER_FILE_V2 "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}.hpp")  # Generated V2 C++ header
-    set(SPEC_FILE_V2 "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}_spec.cpp")  # Generated V2 C++ spec file
+    set(SPEC_FILE "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}_spec.cpp")  # Generated C++ spec file
     
     # Create algorithms output directory
     file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/algorithms")
     
-    # Custom command to generate header and PCMC files
+    # Custom command to generate V2 header and spec files
     add_custom_command(
-        OUTPUT ${HEADER_FILE} ${PCMC_FILE}
+        OUTPUT ${HEADER_FILE} ${SPEC_FILE}
         COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../hac/hac --codegen
                 --output ${CMAKE_BINARY_DIR}/algorithms --algoconf ${YAML_FILE} --fabricconf ${FABRIC_FILE}
         DEPENDS ${YAML_FILE} ${FABRIC_FILE}
-        COMMENT "Generating ${ALGO_NAME} algorithm header and PCMC source"
-    )
-    
-    # Custom command to generate V2 header and spec files
-    add_custom_command(
-        OUTPUT ${HEADER_FILE_V2} ${SPEC_FILE_V2}
-        COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/../hac/hac --codegen --v2
-                --output ${CMAKE_BINARY_DIR}/algorithms --algoconf ${YAML_FILE} --fabricconf ${FABRIC_FILE}
-        DEPENDS ${YAML_FILE} ${FABRIC_FILE}
-        COMMENT "Generating ${ALGO_NAME} V2 algorithm header and spec source"
+        COMMENT "Generating ${ALGO_NAME} algorithm header and spec source"
     )
     
     # Create algorithm library using existing .c file
@@ -58,13 +47,9 @@ function(create_algo_plugin ALGO_NAME)
         endif()
     endif()
     
-    # Add dependency on generated header
+    # Add dependency on generated V2 header
     add_custom_target(${ALGO_NAME}_gen DEPENDS ${HEADER_FILE})
     add_dependencies(${ALGO_NAME} ${ALGO_NAME}_gen)
-    
-    # Add dependency on generated V2 header
-    add_custom_target(${ALGO_NAME}_gen_v2 DEPENDS ${HEADER_FILE_V2})
-    add_dependencies(${ALGO_NAME} ${ALGO_NAME}_gen_v2)
     
     # Special handling for dctcp and newreno
     if(ALGO_NAME STREQUAL "dctcp" OR ALGO_NAME STREQUAL "newreno")
@@ -94,18 +79,8 @@ function(create_algo_plugin ALGO_NAME)
     # Install
     install(TARGETS ${ALGO_NAME} LIBRARY DESTINATION lib)
     
-    # Create PCMC version (using generated file from build directory)
-    add_library(${ALGO_NAME}_pcmc SHARED ${PCMC_FILE})
-    target_link_libraries(${ALGO_NAME}_pcmc PRIVATE pcm)
-    set_target_properties(${ALGO_NAME}_pcmc PROPERTIES
-        OUTPUT_NAME ${ALGO_NAME}_pcmc
-        PREFIX "lib"
-        SUFFIX ".so"
-    )
-    install(TARGETS ${ALGO_NAME}_pcmc LIBRARY DESTINATION lib)
-    
     # Create PCMC V2 version (using generated V2 C++ spec file from build directory)
-    add_library(${ALGO_NAME}_spec SHARED ${SPEC_FILE_V2})
+    add_library(${ALGO_NAME}_spec SHARED ${SPEC_FILE})
     target_link_libraries(${ALGO_NAME}_spec PRIVATE)
     set_target_properties(${ALGO_NAME}_spec PROPERTIES
         OUTPUT_NAME ${ALGO_NAME}_spec

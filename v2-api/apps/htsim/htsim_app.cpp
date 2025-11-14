@@ -27,7 +27,7 @@
 #include "fat_tree_switch.h"
 #include "fat_tree_topology.h"
 
-#include <htsim_pcm_lb.hpp>
+#include <htsim_pcm_nic.hpp>
 #include <htsim_pcm_src.hpp>
 
 #include <list>
@@ -64,27 +64,22 @@ void exit_error(char *progr) {
     exit(1);
 }
 
-simtime_picosec calculate_rtt(FatTreeTopologyCfg *t_cfg,
-                              linkspeed_bps host_linkspeed) {
+simtime_picosec calculate_rtt(FatTreeTopologyCfg *t_cfg, linkspeed_bps host_linkspeed) {
     /*
     Using the host linkspeed here is not very accurate, but hopefully good
     enough for this usecase.
     */
     simtime_picosec rtt =
         2 * t_cfg->get_diameter_latency() +
-        (Packet::data_packet_size() * 8 / speedAsGbps(host_linkspeed) *
-         t_cfg->get_diameter() * 1000) +
-        (UecBasePacket::get_ack_size() * 8 / speedAsGbps(host_linkspeed) *
-         t_cfg->get_diameter() * 1000);
+        (Packet::data_packet_size() * 8 / speedAsGbps(host_linkspeed) * t_cfg->get_diameter() * 1000) +
+        (UecBasePacket::get_ack_size() * 8 / speedAsGbps(host_linkspeed) * t_cfg->get_diameter() * 1000);
 
     return rtt;
 };
 
-uint32_t calculate_bdp_pkt(FatTreeTopologyCfg *t_cfg,
-                           linkspeed_bps host_linkspeed) {
+uint32_t calculate_bdp_pkt(FatTreeTopologyCfg *t_cfg, linkspeed_bps host_linkspeed) {
     simtime_picosec rtt = calculate_rtt(t_cfg, host_linkspeed);
-    uint32_t bdp_pkt = ceil((timeAsSec(rtt) * (host_linkspeed / 8)) /
-                            (double)Packet::data_packet_size());
+    uint32_t bdp_pkt = ceil((timeAsSec(rtt) * (host_linkspeed / 8)) / (double)Packet::data_packet_size());
 
     return bdp_pkt;
 }
@@ -97,11 +92,11 @@ int main(int argc, char **argv) {
     int packet_size = 4150;
     uint32_t path_entropy_size = 64;
     uint32_t cwnd = 0, no_of_nodes = 0;
-    uint32_t tiers = 3;        // we support 2 and 3 tier fattrees
-    uint32_t planes = 1;       // multi-plane topologies
-    uint32_t ports = 1;        // ports per NIC
-    bool disable_trim = false; // Disable trimming, drop instead
-    uint16_t trimsize = 64;    // size of a trimmed packet
+    uint32_t tiers = 3;                         // we support 2 and 3 tier fattrees
+    uint32_t planes = 1;                        // multi-plane topologies
+    uint32_t ports = 1;                         // ports per NIC
+    bool disable_trim = false;                  // Disable trimming, drop instead
+    uint16_t trimsize = 64;                     // size of a trimmed packet
     simtime_picosec logtime = timeFromMs(0.25); // ms;
     stringstream filename(ios_base::out);
     simtime_picosec hop_latency = timeFromUs((uint32_t)1);
@@ -120,8 +115,7 @@ int main(int argc, char **argv) {
     bool log_traffic = false;
     bool log_switches = false;
     bool log_queue_usage = false;
-    const double ecn_thresh =
-        0.5; // default marking threshold for ECN load balancing
+    const double ecn_thresh = 0.5; // default marking threshold for ECN load balancing
     simtime_picosec target_Qdelay = 0;
 
     bool param_ecn_set = false;
@@ -158,27 +152,9 @@ int main(int argc, char **argv) {
 
     bool pcm_enable = false;
     std::string pcm_algo_name;
-    simtime_picosec pcm_handler_delay =
-        pcm_htsim::PcmScheduler::default_handlerDelayPs;
-    simtime_picosec pcm_sched_poll_delay =
-        pcm_htsim::PcmScheduler::default_schedulerPollDelayPs;
-    pcm_htsim::PcmScheduler::ProgressType pcm_sched_type =
-        pcm_htsim::PcmScheduler::ProgressType::SYNC;
-    vector<unique_ptr<pcm_htsim::PcmScheduler>> pcm_cc_schedulers;
-    pcm_htsim::PcmScheduler::PcmVmTag pcm_cc_algo_dummy_tag =
-        std::numeric_limits<pcm_htsim::PcmScheduler::PcmVmTag>::max();
-
-    std::string pcm_lb_algo_name;
-    simtime_picosec pcm_lb_handler_delay =
-        pcm_htsim::PcmScheduler::default_handlerDelayPs;
-    simtime_picosec pcm_lb_sched_poll_delay =
-        pcm_htsim::PcmScheduler::default_schedulerPollDelayPs;
-    bool pcm_lb_enable = false;
-    pcm_htsim::PcmScheduler::ProgressType pcm_lb_sched_type =
-        pcm_htsim::PcmScheduler::ProgressType::SYNC;
-    vector<unique_ptr<pcm_htsim::PcmScheduler>> pcm_lb_schedulers;
-    pcm_htsim::PcmScheduler::PcmVmTag pcm_lb_algo_dummy_tag =
-        std::numeric_limits<pcm_htsim::PcmScheduler::PcmVmTag>::max();
+    simtime_picosec pcm_handler_delay = pcm::Device::default_handlerDelayPs;
+    simtime_picosec pcm_sched_poll_delay = pcm::Device::default_schedulerPollDelayPs;
+    pcm::ProgressType pcm_sched_type = pcm::ProgressType::SCHEDULER_TYPE_SYNC;
 
     while (i < argc) {
         if (!strcmp(argv[i], "-o")) {
@@ -235,8 +211,7 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-queue_size_bdp_factor")) {
             queue_size_bdp_factor = atoi(argv[i + 1]);
-            cout << "Setting queue size to " << queue_size_bdp_factor
-                 << "x BDP." << endl;
+            cout << "Setting queue size to " << queue_size_bdp_factor << "x BDP." << endl;
             i++;
         } else if (!strcmp(argv[i], "-sender_cc_algo")) {
             UecSrc::_sender_based_cc = true;
@@ -275,9 +250,8 @@ int main(int argc, char **argv) {
             } else if (!strcmp(argv[i + 1], "mixed")) {
                 load_balancing_algo = MIXED;
             } else {
-                cout << "Unknown load balancing algorithm of type "
-                     << argv[i + 1] << ", expecting bitmap, reps or reps2"
-                     << endl;
+                cout << "Unknown load balancing algorithm of type " << argv[i + 1]
+                     << ", expecting bitmap, reps or reps2" << endl;
                 exit_error(argv[0]);
             }
             cout << "Load balancing algorithm set to  " << argv[i + 1] << endl;
@@ -308,8 +282,7 @@ int main(int argc, char **argv) {
             } else if (!strcmp(argv[i + 1], "fair_prio")) {
                 snd_type = FAIR_PRIO;
             } else {
-                cout << "Unknown host queue type " << argv[i + 1]
-                     << " expecting one of swift|prio|fair_prio" << endl;
+                cout << "Unknown host queue type " << argv[i + 1] << " expecting one of swift|prio|fair_prio" << endl;
                 exit_error(argv[0]);
             }
             cout << "host queue_type " << snd_type << endl;
@@ -357,13 +330,12 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-q")) {
             param_queuesize_set = true;
             queuesize_pkt = atoi(argv[i + 1]);
-            cout << "Setting queuesize to " << queuesize_pkt << " packets "
-                 << endl;
+            cout << "Setting queuesize to " << queuesize_pkt << " packets " << endl;
             i++;
         } else if (!strcmp(argv[i], "-sack_threshold")) {
             UecSink::_bytes_unacked_threshold = atoi(argv[i + 1]);
-            cout << "Setting receiver SACK bytes threshold to "
-                 << UecSink::_bytes_unacked_threshold << " bytes " << endl;
+            cout << "Setting receiver SACK bytes threshold to " << UecSink::_bytes_unacked_threshold << " bytes "
+                 << endl;
             i++;
         } else if (!strcmp(argv[i], "-oversubscribed_cc")) {
             UecSink::_oversubscribed_cc = true;
@@ -383,8 +355,7 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-force_disable_oversubscribed_cc")) {
             UecSink::_oversubscribed_cc = false;
             force_disable_oversubscribed_cc = true;
-            cout << "Disabling receiver oversubscribed CC even with OS topology"
-                 << endl;
+            cout << "Disabling receiver oversubscribed CC even with OS topology" << endl;
         } else if (!strcmp(argv[i], "-enable_accurate_base_rtt")) {
             enable_accurate_base_rtt = true;
             cout << "Enable accurate base rtt configuration, each flow uses "
@@ -396,9 +367,7 @@ int main(int argc, char **argv) {
             cout << "Disables using NACKs to update the base RTT." << endl;
         } else if (!strcmp(argv[i], "-sleek")) {
             UecSrc::_enable_sleek = true;
-            cout
-                << "Using SLEEK, the sender-based fast loss recovery heuristic "
-                << endl;
+            cout << "Using SLEEK, the sender-based fast loss recovery heuristic " << endl;
         } else if (!strcmp(argv[i], "-ecn")) {
             // fraction of queuesize, between 0 and 1
             param_ecn_set = true;
@@ -453,13 +422,11 @@ int main(int argc, char **argv) {
             i++;
         } else if (!strcmp(argv[i], "-switch_latency")) {
             switch_latency = timeFromUs(atof(argv[i + 1]));
-            cout << "Switch latency set to " << timeAsUs(switch_latency)
-                 << endl;
+            cout << "Switch latency set to " << timeAsUs(switch_latency) << endl;
             i++;
         } else if (!strcmp(argv[i], "-ar_sticky_delta")) {
             ar_sticky_delta = atof(argv[i + 1]);
-            cout << "Adaptive routing sticky delta " << ar_sticky_delta << "us"
-                 << endl;
+            cout << "Adaptive routing sticky delta " << ar_sticky_delta << "us" << endl;
             i++;
         } else if (!strcmp(argv[i], "-ar_granularity")) {
             if (!strcmp(argv[i + 1], "packet"))
@@ -467,8 +434,7 @@ int main(int argc, char **argv) {
             else if (!strcmp(argv[i + 1], "flow"))
                 ar_sticky = FatTreeSwitch::PER_FLOWLET;
             else {
-                cout << "Expecting -ar_granularity packet|flow, found "
-                     << argv[i + 1] << endl;
+                cout << "Expecting -ar_granularity packet|flow, found " << argv[i + 1] << endl;
                 exit(1);
             }
             i++;
@@ -480,8 +446,7 @@ int main(int argc, char **argv) {
                 cout << "Adaptive routing based on queue size " << endl;
                 FatTreeSwitch::fn = &FatTreeSwitch::compare_queuesize;
             } else if (!strcmp(argv[i + 1], "bandwidth")) {
-                cout << "Adaptive routing based on bandwidth utilization "
-                     << endl;
+                cout << "Adaptive routing based on bandwidth utilization " << endl;
                 FatTreeSwitch::fn = &FatTreeSwitch::compare_bandwidth;
             } else if (!strcmp(argv[i + 1], "pqb")) {
                 cout << "Adaptive routing based on pause, queuesize and "
@@ -492,8 +457,7 @@ int main(int argc, char **argv) {
                 cout << "Adaptive routing based on pause, queuesize" << endl;
                 FatTreeSwitch::fn = &FatTreeSwitch::compare_pq;
             } else if (!strcmp(argv[i + 1], "pb")) {
-                cout << "Adaptive routing based on pause, bandwidth utilization"
-                     << endl;
+                cout << "Adaptive routing based on pause, bandwidth utilization" << endl;
                 FatTreeSwitch::fn = &FatTreeSwitch::compare_pb;
             } else if (!strcmp(argv[i + 1], "qb")) {
                 cout << "Adaptive routing based on queuesize, bandwidth "
@@ -549,31 +513,19 @@ int main(int argc, char **argv) {
         } else if (!strcmp(argv[i], "-pcm_algorithm")) {
             pcm_enable = true;
             pcm_algo_name = argv[i + 1];
-            cout << "PCM congestion control enabled with algorithm "
-                 << pcm_algo_name << endl;
+            cout << "PCM congestion control enabled with algorithm " << pcm_algo_name << endl;
             i++;
         } else if (!strcmp(argv[i], "-pcm_sched_poll_delay")) {
             pcm_sched_poll_delay = atoi(argv[i + 1]);
-            cout << "PCM scheduler poll delay is set to "
-                 << pcm_sched_poll_delay << endl;
+            cout << "PCM scheduler poll delay is set to " << pcm_sched_poll_delay << endl;
             i++;
         } else if (!strcmp(argv[i], "-pcm_handler_delay")) {
             pcm_handler_delay = atoi(argv[i + 1]);
-            cout << "PCM algorithm handler delay is set to "
-                 << pcm_handler_delay << endl;
+            cout << "PCM algorithm handler delay is set to " << pcm_handler_delay << endl;
             i++;
         } else if (!strcmp(argv[i], "-pcm_async_sched")) {
-            pcm_sched_type = pcm_htsim::PcmScheduler::ProgressType::ASYNC;
-            cout << "PCM algorithm scheduling is set to async" << endl;
-        } else if (!strcmp(argv[i], "-pcm_lb_async_sched")) {
-            pcm_lb_sched_type = pcm_htsim::PcmScheduler::ProgressType::ASYNC;
-            cout << "PCM LB algorithm scheduling is set to async" << endl;
-        } else if (!strcmp(argv[i], "-pcm_lb_algorithm")) {
-            pcm_lb_enable = true;
-            pcm_lb_algo_name = argv[i + 1];
-            cout << "PCM load balancing enabled with algorithm "
-                 << pcm_lb_algo_name << endl;
-            i++;
+            pcm_sched_type = pcm::ProgressType::SCHEDULER_TYPE_ASYNC;
+            cout << "PCM algorithm handler delay is set to async" << endl;
         } else {
             cout << "Unknown parameter " << argv[i] << endl;
             exit_error(argv[0]);
@@ -620,8 +572,7 @@ int main(int argc, char **argv) {
     case ECMP_FIB_ECN:
     case REACTIVE_ECN:
         if (qt != COMPOSITE_ECN_LB) {
-            fprintf(stderr,
-                    "Route Strategy is ECMP ECN.  Must use an ECN queue\n");
+            fprintf(stderr, "Route Strategy is ECMP ECN.  Must use an ECN queue\n");
             exit(1);
         }
         assert(ecn_thresh > 0 && ecn_thresh < 1);
@@ -681,12 +632,10 @@ int main(int argc, char **argv) {
 
     QueueLoggerFactory *qlf = 0;
     if (log_tor_downqueue || log_tor_upqueue) {
-        qlf = new QueueLoggerFactory(
-            &logfile, QueueLoggerFactory::LOGGER_SAMPLING, eventlist);
+        qlf = new QueueLoggerFactory(&logfile, QueueLoggerFactory::LOGGER_SAMPLING, eventlist);
         qlf->set_sample_period(logtime);
     } else if (log_queue_usage) {
-        qlf = new QueueLoggerFactory(&logfile, QueueLoggerFactory::LOGGER_EMPTY,
-                                     eventlist);
+        qlf = new QueueLoggerFactory(&logfile, QueueLoggerFactory::LOGGER_EMPTY, eventlist);
         qlf->set_sample_period(logtime);
     }
 
@@ -705,8 +654,7 @@ int main(int argc, char **argv) {
     }
 
     if (conns->N != no_of_nodes && no_of_nodes != 0) {
-        cout << "Connection matrix number of nodes is " << conns->N
-             << " while I am using " << no_of_nodes << endl;
+        cout << "Connection matrix number of nodes is " << conns->N << " while I am using " << no_of_nodes << endl;
         exit(-1);
     }
 
@@ -723,29 +671,24 @@ int main(int argc, char **argv) {
                 cout << "trimming";
             }
         }
-        cout << " queue-size-to-bdp-factor is " << queue_size_bdp_factor
-             << "xBDP" << endl;
+        cout << " queue-size-to-bdp-factor is " << queue_size_bdp_factor << "xBDP" << endl;
     }
 
     unique_ptr<FatTreeTopologyCfg> topo_cfg;
     if (topo_file) {
-        topo_cfg = FatTreeTopologyCfg::load(
-            topo_file, memFromPkt(queuesize_pkt), qt, snd_type);
+        topo_cfg = FatTreeTopologyCfg::load(topo_file, memFromPkt(queuesize_pkt), qt, snd_type);
 
         if (topo_cfg->no_of_nodes() != no_of_nodes) {
-            cerr << "Mismatch between connection matrix (" << no_of_nodes
-                 << " nodes) and topology (" << topo_cfg->no_of_nodes()
-                 << " nodes)" << endl;
+            cerr << "Mismatch between connection matrix (" << no_of_nodes << " nodes) and topology ("
+                 << topo_cfg->no_of_nodes() << " nodes)" << endl;
             exit(1);
         }
     } else {
-        topo_cfg = make_unique<FatTreeTopologyCfg>(
-            tiers, no_of_nodes, linkspeed, memFromPkt(queuesize_pkt),
-            hop_latency, switch_latency, qt, snd_type);
+        topo_cfg = make_unique<FatTreeTopologyCfg>(tiers, no_of_nodes, linkspeed, memFromPkt(queuesize_pkt),
+                                                   hop_latency, switch_latency, qt, snd_type);
     }
 
-    simtime_picosec network_max_unloaded_rtt =
-        calculate_rtt(topo_cfg.get(), linkspeed);
+    simtime_picosec network_max_unloaded_rtt = calculate_rtt(topo_cfg.get(), linkspeed);
 
     mem_b queuesize = 0;
     if (!param_queuesize_set) {
@@ -761,19 +704,16 @@ int main(int argc, char **argv) {
         topo_cfg->set_failed_links(topo_num_failed);
     }
 
-    if (topo_cfg->get_oversubscription_ratio() > 1 &&
-        !UecSrc::_sender_based_cc && !force_disable_oversubscribed_cc) {
+    if (topo_cfg->get_oversubscription_ratio() > 1 && !UecSrc::_sender_based_cc && !force_disable_oversubscribed_cc) {
         UecSink::_oversubscribed_cc = true;
-        OversubscribedCC::setOversubscriptionRatio(
-            topo_cfg->get_oversubscription_ratio());
+        OversubscribedCC::setOversubscriptionRatio(topo_cfg->get_oversubscription_ratio());
         cout << "Using simple receiver oversubscribed CC. Oversubscription "
                 "ratio is "
              << topo_cfg->get_oversubscription_ratio() << endl;
     }
 
     // 2 priority queues; 3 hops for incast
-    UecSrc::_min_rto =
-        timeFromUs(15 + queuesize * 6.0 * 8 * 1000000 / linkspeed);
+    UecSrc::_min_rto = timeFromUs(15 + queuesize * 6.0 * 8 * 1000000 / linkspeed);
     cout << "Setting min RTO to " << timeAsUs(UecSrc::_min_rto) << endl;
 
     if (ecn) {
@@ -785,9 +725,8 @@ int main(int argc, char **argv) {
             ecn_low = memFromPkt(ecn_low);
             ecn_high = memFromPkt(ecn_high);
         }
-        cout << "Setting ECN to parameters low " << ecn_low << " high "
-             << ecn_high << " enable on tor downlink " << !receiver_driven
-             << endl;
+        cout << "Setting ECN to parameters low " << ecn_low << " high " << ecn_high << " enable on tor downlink "
+             << !receiver_driven << endl;
         topo_cfg->set_ecn_parameters(true, !receiver_driven, ecn_low, ecn_high);
         assert(ecn_low <= ecn_high);
         assert(ecn_high <= queuesize);
@@ -798,15 +737,13 @@ int main(int argc, char **argv) {
     vector<unique_ptr<FatTreeTopology>> topo;
     topo.resize(planes);
     for (uint32_t p = 0; p < planes; p++) {
-        topo[p] = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist,
-                                               nullptr);
+        topo[p] = make_unique<FatTreeTopology>(topo_cfg.get(), qlf, &eventlist, nullptr);
 
         if (log_switches) {
             topo[p]->add_switch_loggers(logfile, logtime);
         }
     }
-    cout << "network_max_unloaded_rtt " << timeAsUs(network_max_unloaded_rtt)
-         << endl;
+    cout << "network_max_unloaded_rtt " << timeAsUs(network_max_unloaded_rtt) << endl;
 
     if (UecSink::_oversubscribed_cc)
         OversubscribedCC::_base_rtt = network_max_unloaded_rtt;
@@ -815,12 +752,10 @@ int main(int argc, char **argv) {
     for (size_t c = 0; c < conns->failures.size(); c++) {
         failure *crt = conns->failures.at(c);
 
-        cout << "Adding link failure switch type" << crt->switch_type
-             << " Switch ID " << crt->switch_id << " link ID " << crt->link_id
-             << endl;
+        cout << "Adding link failure switch type" << crt->switch_type << " Switch ID " << crt->switch_id << " link ID "
+             << crt->link_id << endl;
         // xxx we only support failures in plane 0 for now.
-        topo[0]->add_failed_link(crt->switch_type, crt->switch_id,
-                                 crt->link_id);
+        topo[0]->add_failed_link(crt->switch_type, crt->switch_id, crt->link_id);
     }
 
     // Initialize congestion control algorithms
@@ -830,8 +765,7 @@ int main(int argc, char **argv) {
     if (sender_driven) {
         // UecSrc::parameterScaleToTargetQ();
         bool trimming_enabled = !disable_trim;
-        UecSrc::initNsccParams(network_max_unloaded_rtt, linkspeed,
-                               target_Qdelay, qa_gate, trimming_enabled);
+        UecSrc::initNsccParams(network_max_unloaded_rtt, linkspeed, target_Qdelay, qa_gate, trimming_enabled);
     }
 
     vector<unique_ptr<UecPullPacer>> pacers;
@@ -840,36 +774,20 @@ int main(int argc, char **argv) {
 
     for (size_t ix = 0; ix < no_of_nodes; ix++) {
         auto &pacer = pacers.emplace_back(make_unique<UecPullPacer>(
-            linkspeed, 0.99,
-            UecBasePacket::unquantize(UecSink::_credit_per_pull), eventlist,
-            ports));
+            linkspeed, 0.99, UecBasePacket::unquantize(UecSink::_credit_per_pull), eventlist, ports));
 
         if (UecSink::_model_pcie)
-            pcie_models.push_back(new PCIeModel(
-                linkspeed * pcie_rate, UecSrc::_mtu, eventlist, pacer.get()));
+            pcie_models.push_back(new PCIeModel(linkspeed * pcie_rate, UecSrc::_mtu, eventlist, pacer.get()));
 
         if (UecSink::_oversubscribed_cc)
-            oversubscribed_ccs.push_back(
-                new OversubscribedCC(eventlist, pacer.get()));
+            oversubscribed_ccs.push_back(new OversubscribedCC(eventlist, pacer.get()));
 
-        auto &nic = nics.emplace_back(
-            make_unique<UecNIC>(ix, eventlist, linkspeed, ports));
+        auto &nic = nics.emplace_back(pcm_enable ? make_unique<pcm::Nic>(ix, eventlist, linkspeed, ports, pcm_algo_name,
+                                                                         pcm_handler_delay, pcm_sched_poll_delay,
+                                                                         pcm_sched_type)
+                                                 : make_unique<UecNIC>(ix, eventlist, linkspeed, ports));
         if (log_nic) {
             nic_logger->monitorNic(nic.get());
-        }
-        if (pcm_enable) {
-            pcm_cc_schedulers.emplace_back(make_unique<pcm_htsim::PcmScheduler>(
-                eventlist, pcm_handler_delay, pcm_sched_poll_delay,
-                pcm_sched_type));
-            pcm_cc_schedulers.back()->attachAlgorithm(pcm_algo_name,
-                                                      pcm_cc_algo_dummy_tag);
-        }
-        if (pcm_lb_enable) {
-            pcm_lb_schedulers.emplace_back(make_unique<pcm_htsim::PcmScheduler>(
-                eventlist, pcm_lb_handler_delay, pcm_lb_sched_poll_delay,
-                pcm_lb_sched_type));
-            pcm_lb_schedulers.back()->attachAlgorithm(pcm_lb_algo_name,
-                                                      pcm_lb_algo_dummy_tag);
         }
     }
 
@@ -895,87 +813,70 @@ int main(int argc, char **argv) {
         int dest = crt->dst;
 
         if (!conn_reuse and crt->msgid.has_value()) {
-            cout
-                << "msg keyword can only be used when conn_reuse is enabled.\n";
+            cout << "msg keyword can only be used when conn_reuse is enabled.\n";
             abort();
         }
 
         assert(planes > 0);
         simtime_picosec transmission_delay =
-            (Packet::data_packet_size() * 8 / speedAsGbps(linkspeed) *
-             topo_cfg->get_diameter() * 1000) +
-            (UecBasePacket::get_ack_size() * 8 / speedAsGbps(linkspeed) *
-             topo_cfg->get_diameter() * 1000);
+            (Packet::data_packet_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000) +
+            (UecBasePacket::get_ack_size() * 8 / speedAsGbps(linkspeed) * topo_cfg->get_diameter() * 1000);
         simtime_picosec base_rtt_bw_two_points =
-            2 * topo_cfg->get_two_point_diameter_latency(src, dest) +
-            transmission_delay;
+            2 * topo_cfg->get_two_point_diameter_latency(src, dest) + transmission_delay;
 
         // cout << "Connection " << crt->src << "->" <<crt->dst << " starting at
         // " << crt->start << " size " << crt->size << endl;
 
-        if (!conn_reuse ||
-            (crt->flowid and flowmap.find(crt->flowid) == flowmap.end())) {
-
+        if (!conn_reuse || (crt->flowid and flowmap.find(crt->flowid) == flowmap.end())) {
             unique_ptr<UecMultipath> mp = nullptr;
-            if (pcm_lb_enable) {
-                mp = make_unique<pcm_htsim::UecPcmMp>(
-                    UecSrc::_debug, *pcm_lb_schedulers.at(src).get(),
-                    pcm_lb_algo_dummy_tag);
-            } else if (load_balancing_algo == BITMAP) {
-                mp =
-                    make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
+            if (load_balancing_algo == BITMAP) {
+                mp = make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == REPS) {
-                mp = make_unique<UecMpReps>(path_entropy_size, UecSrc::_debug,
-                                            !disable_trim);
+                mp = make_unique<UecMpReps>(path_entropy_size, UecSrc::_debug, !disable_trim);
             } else if (load_balancing_algo == REPS_LEGACY) {
-                mp = make_unique<UecMpRepsLegacy>(path_entropy_size,
-                                                  UecSrc::_debug);
+                mp = make_unique<UecMpRepsLegacy>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == OBLIVIOUS) {
-                mp = make_unique<UecMpOblivious>(path_entropy_size,
-                                                 UecSrc::_debug);
+                mp = make_unique<UecMpOblivious>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == MIXED) {
                 mp = make_unique<UecMpMixed>(path_entropy_size, UecSrc::_debug);
             } else {
-                cout << "ERROR: Failed to set multipath algorithm, abort."
-                     << endl;
+                cout << "ERROR: Failed to set multipath algorithm, abort." << endl;
                 abort();
             }
 
             if (pcm_enable) {
-                uec_src = new pcm_htsim::PcmSrc(
-                    traffic_logger, eventlist, std::move(mp), *nics.at(src),
-                    ports, *pcm_cc_schedulers.at(src).get(),
-                    pcm_cc_algo_dummy_tag);
+                // Dynamic cast to pcm::Nic since we know this was created as
+                // pcm::Nic when pcm_enable is true
+                pcm::Nic *pcm_nic = dynamic_cast<pcm::Nic *>(nics.at(src).get());
+                if (!pcm_nic) {
+                    cerr << "Error: dynamic_cast<pcm::Nic> failed" << endl;
+                    abort();
+                }
+                uec_src = new pcm::Src(traffic_logger, eventlist, std::move(mp), *pcm_nic, ports);
             } else {
-                uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp),
-                                     *nics.at(src), ports);
+                uec_src = new UecSrc(traffic_logger, eventlist, std::move(mp), *nics.at(src), ports);
             }
 
             if (crt->flowid) {
                 uec_src->setFlowId(crt->flowid);
-                assert(flowmap.find(crt->flowid) ==
-                       flowmap.end()); // don't have dups
+                assert(flowmap.find(crt->flowid) == flowmap.end()); // don't have dups
             }
 
             if (conn_reuse) {
                 stringstream uec_src_dbg_tag;
                 uec_src_dbg_tag << "flow_id " << uec_src->flowId();
-                UecPdcSes *pdc = new UecPdcSes(
-                    uec_src, EventList::getTheEventList(), UecSrc::_mss,
-                    UecSrc::_hdr_size, uec_src_dbg_tag.str());
+                UecPdcSes *pdc = new UecPdcSes(uec_src, EventList::getTheEventList(), UecSrc::_mss, UecSrc::_hdr_size,
+                                               uec_src_dbg_tag.str());
                 uec_src->makeReusable(pdc);
                 flow_pdc_map[uec_src->flowId()] = pdc;
             }
 
             if (receiver_driven)
-                uec_snk = new UecSink(NULL, pacers[dest].get(), *nics.at(dest),
-                                      ports);
+                uec_snk = new UecSink(NULL, pacers[dest].get(), *nics.at(dest), ports);
             else // each connection has its own pacer, so receiver driven mode
                  // does not kick in!
-                uec_snk = new UecSink(
-                    NULL, linkspeed, 1.1,
-                    UecBasePacket::unquantize(UecSink::_credit_per_pull),
-                    eventlist, *nics.at(dest), ports);
+                uec_snk = new UecSink(NULL, linkspeed, 1.1, UecBasePacket::unquantize(UecSink::_credit_per_pull),
+                                      eventlist, *nics.at(dest), ports);
 
             flowmap[uec_src->flowId()] = {uec_src, uec_snk};
 
@@ -1021,8 +922,7 @@ int main(int argc, char **argv) {
                 uec_snk->setOversubscribedCC(oversubscribed_ccs[dest]);
             }
 
-            ((DataReceiver *)uec_snk)
-                ->setName("Uec_sink_" + ntoa(src) + "_" + ntoa(dest));
+            ((DataReceiver *)uec_snk)->setName("Uec_sink_" + ntoa(src) + "_" + ntoa(dest));
             logfile.writeName(*(DataReceiver *)uec_snk);
 
             if (!conn_reuse) {
@@ -1036,14 +936,12 @@ int main(int argc, char **argv) {
                 }
 
                 if (crt->send_done_trigger) {
-                    Trigger *trig =
-                        conns->getTrigger(crt->send_done_trigger, eventlist);
+                    Trigger *trig = conns->getTrigger(crt->send_done_trigger, eventlist);
                     uec_src->setEndTrigger(*trig);
                 }
 
                 if (crt->recv_done_trigger) {
-                    Trigger *trig =
-                        conns->getTrigger(crt->recv_done_trigger, eventlist);
+                    Trigger *trig = conns->getTrigger(crt->recv_done_trigger, eventlist);
                     uec_snk->setEndTrigger(*trig);
                 }
             } else {
@@ -1063,14 +961,12 @@ int main(int argc, char **argv) {
                 }
 
                 if (crt->send_done_trigger) {
-                    Trigger *trig =
-                        conns->getTrigger(crt->send_done_trigger, eventlist);
+                    Trigger *trig = conns->getTrigger(crt->send_done_trigger, eventlist);
                     msg->setTrigger(UecMsg::MsgStatus::SentLast, trig);
                 }
 
                 if (crt->recv_done_trigger) {
-                    Trigger *trig =
-                        conns->getTrigger(crt->recv_done_trigger, eventlist);
+                    Trigger *trig = conns->getTrigger(crt->recv_done_trigger, eventlist);
                     uec_snk->setEndTrigger(*trig);
                     msg->setTrigger(UecMsg::MsgStatus::RecvdLast, trig);
                 }
@@ -1084,50 +980,29 @@ int main(int argc, char **argv) {
                 case ECMP_FIB_ECN:
                 case REACTIVE_ECN: {
                     Route *srctotor = new Route();
+                    srctotor->push_back(topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
+                    srctotor->push_back(topo[p]->pipes_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]);
                     srctotor->push_back(
-                        topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(
-                            src)][0]);
-                    srctotor->push_back(
-                        topo[p]->pipes_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(
-                            src)][0]);
-                    srctotor->push_back(
-                        topo[p]
-                            ->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)]
-                                           [0]
-                            ->getRemoteEndpoint());
+                        topo[p]->queues_ns_nlp[src][topo_cfg->HOST_POD_SWITCH(src)][0]->getRemoteEndpoint());
 
                     Route *dsttotor = new Route();
+                    dsttotor->push_back(topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
+                    dsttotor->push_back(topo[p]->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]);
                     dsttotor->push_back(
-                        topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(
-                            dest)][0]);
-                    dsttotor->push_back(
-                        topo[p]->pipes_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(
-                            dest)][0]);
-                    dsttotor->push_back(
-                        topo[p]
-                            ->queues_ns_nlp[dest]
-                                           [topo_cfg->HOST_POD_SWITCH(dest)][0]
-                            ->getRemoteEndpoint());
+                        topo[p]->queues_ns_nlp[dest][topo_cfg->HOST_POD_SWITCH(dest)][0]->getRemoteEndpoint());
 
-                    uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk,
-                                         crt->start);
+                    uec_src->connectPort(p, *srctotor, *dsttotor, *uec_snk, crt->start);
                     // uec_src->setPaths(path_entropy_size);
                     // uec_snk->setPaths(path_entropy_size);
 
                     // register src and snk to receive packets from their
                     // respective TORs.
-                    assert(
-                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-                    assert(
-                        topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
-                    topo[p]
-                        ->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]
-                        ->addHostPort(src, uec_snk->flowId(),
-                                      uec_src->getPort(p));
-                    topo[p]
-                        ->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]
-                        ->addHostPort(dest, uec_src->flowId(),
-                                      uec_snk->getPort(p));
+                    assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
+                    assert(topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]);
+                    topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(src)]->addHostPort(src, uec_snk->flowId(),
+                                                                                      uec_src->getPort(p));
+                    topo[p]->switches_lp[topo_cfg->HOST_POD_SWITCH(dest)]->addHostPort(dest, uec_src->flowId(),
+                                                                                       uec_snk->getPort(p));
                     break;
                 }
                 default:
@@ -1162,14 +1037,12 @@ int main(int argc, char **argv) {
             }
 
             if (crt->send_done_trigger) {
-                Trigger *trig =
-                    conns->getTrigger(crt->send_done_trigger, eventlist);
+                Trigger *trig = conns->getTrigger(crt->send_done_trigger, eventlist);
                 msg->setTrigger(UecMsg::MsgStatus::SentLast, trig);
             }
 
             if (crt->recv_done_trigger) {
-                Trigger *trig =
-                    conns->getTrigger(crt->recv_done_trigger, eventlist);
+                Trigger *trig = conns->getTrigger(crt->recv_done_trigger, eventlist);
                 msg->setTrigger(UecMsg::MsgStatus::RecvdLast, trig);
             }
         }
@@ -1190,8 +1063,8 @@ int main(int argc, char **argv) {
     }
 
     cout << "Done" << endl;
-    int new_pkts = 0, rtx_pkts = 0, bounce_pkts = 0, rts_pkts = 0, ack_pkts = 0,
-        nack_pkts = 0, pull_pkts = 0, sleek_pkts = 0;
+    int new_pkts = 0, rtx_pkts = 0, bounce_pkts = 0, rts_pkts = 0, ack_pkts = 0, nack_pkts = 0, pull_pkts = 0,
+        sleek_pkts = 0;
     for (size_t ix = 0; ix < uec_srcs.size(); ix++) {
         const struct UecSrc::Stats &s = uec_srcs[ix]->stats();
         new_pkts += s.new_pkts_sent;
@@ -1204,10 +1077,9 @@ int main(int argc, char **argv) {
         sleek_pkts += s._sleek_counter;
         delete uec_srcs[ix];
     }
-    cout << "New: " << new_pkts << " Rtx: " << rtx_pkts << " RTS: " << rts_pkts
-         << " Bounced: " << bounce_pkts << " ACKs: " << ack_pkts
-         << " NACKs: " << nack_pkts << " Pulls: " << pull_pkts
-         << " sleek_pkts: " << sleek_pkts << endl;
+    cout << "New: " << new_pkts << " Rtx: " << rtx_pkts << " RTS: " << rts_pkts << " Bounced: " << bounce_pkts
+         << " ACKs: " << ack_pkts << " NACKs: " << nack_pkts << " Pulls: " << pull_pkts << " sleek_pkts: " << sleek_pkts
+         << endl;
     /*
     list <const Route*>::iterator rt_i;
     int counts[10]; int hop;
