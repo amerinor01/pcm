@@ -242,6 +242,7 @@ struct SignalPolicy {
         if constexpr (Type == PCM_SIG_ELAPSED_TIME) {
             if constexpr (kIsTrigger) {
                 // this is a timer handled in the TriggerSignal: nothing to do
+                // TODO: reset is not handled properly!
             } else {
                 cur = util::get_time_diff(start_ts, get_time());
             }
@@ -351,8 +352,23 @@ inline constexpr bool is_variable_v = is_variable<std::decay_t<T>>::value;
 // actual storage management for signals and controls.
 // - takes a variadic template (Objs) that contains a tuple of objects
 // ============================================================================
-template <typename PcmHandlerVmImplT, const char *AlgoName, typename... Objs>
+template <typename PcmHandlerVmImplT, const char *AlgoName,
+          typename SnapshotLayout, typename... Objs>
 struct PcmHandlerVm;
+
+// ============================================================================
+// Snapshot layout descriptor - holds compile-time offset constants
+// ============================================================================
+template <size_t TriggerMaskOffset, size_t SignalOffset, size_t ThresholdOffset,
+          size_t ControlOffset, size_t VariableOffset, size_t SnapshotSize>
+struct SnapshotMemoryLayout {
+    static constexpr size_t kTriggerMaskOffset = TriggerMaskOffset;
+    static constexpr size_t kSignalOffset = SignalOffset;
+    static constexpr size_t kThresholdOffset = ThresholdOffset;
+    static constexpr size_t kControlOffset = ControlOffset;
+    static constexpr size_t kVariableOffset = VariableOffset;
+    static constexpr size_t kSnapshotSize = SnapshotSize;
+};
 
 // Helper to validate that objects of a given type in tuple have dense indices
 template <typename Tuple>
@@ -375,7 +391,8 @@ concept FitsSnapshot =
         return n <= MaxSize;
     }(std::type_identity<Tuple>{});
 
-template <typename PcmHandlerVmImplT, const char *AlgoName, typename... Objs>
+template <typename PcmHandlerVmImplT, const char *AlgoName,
+          typename SnapshotLayout, typename... Objs>
 struct PcmHandlerVm : PcmHandlerVmDesc {
     // filter tuples of signals/controls/variables using their type traits
     using VariablesTupleT = decltype(std::tuple_cat(
@@ -389,10 +406,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                            std::tuple<>>{}...));
 
     // validate tuple correctness
-    static_assert(FitsSnapshot<VariablesTupleT, ALGO_CONF_MAX_VARS>,
-                  "Variable tuple size is larger than snapshot");
-    static_assert(FitsSnapshot<ControlsTupleT, ALGO_CONF_MAX_NUM_CONTROLS>,
-                  "Control tuple size is larger than snapshot");
     static_assert(FitsSnapshot<SignalsTupleT, ALGO_CONF_MAX_NUM_SIGNALS>,
                   "Signal tuple size is larger than snapshot");
     static_assert(HasDenseIndices<VariablesTupleT>,
@@ -402,9 +415,14 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     static_assert(HasDenseIndices<SignalsTupleT>,
                   "Duplicate/non-uniform indices among signals");
 
+    // Handler opened from shared object
     std::shared_ptr<void> algorithm_so_handle_;
     pcm_handler_main_cb handler_main_cb_{nullptr};
-    pcm_handler_datapath_snapshot snapshot_{};
+    // Snapshot storage exposed to handler
+    std::array<pcm_uint, SnapshotLayout::kSnapshotSize> raw_snapshot_;
+    // Hooks to datapath time source
+    util::GetTimeFn get_time_{nullptr};
+    pcm_uint start_ts_{};
 
     explicit PcmHandlerVm() {
         auto result = util::shared_symbol_open(
@@ -422,9 +440,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
             });
         handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
     }
-
-    util::GetTimeFn get_time_{nullptr};
-    pcm_uint start_ts_{};
 
     void add_get_time_source(util::GetTimeFn get_time_source) override {
         get_time_ = get_time_source;
@@ -495,13 +510,8 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         io_slab_.out.ev = get_control_first_match<PCM_CTRL_EV>();
     }
 
-    [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
-        PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
-        PCM_PERF_PROF_REGION_START(trigger_cycle);
-
+    [[nodiscard]] constexpr pcm_uint collect_trigger_mask() {
         pcm_uint trigger_mask = 0;
-
-        // collect triggers into the mask
         (([&](auto *self) {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
@@ -519,23 +529,10 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              }
          }(this)),
          ...);
+        return trigger_mask;
+    }
 
-        if (!trigger_mask) {
-            PCM_PERF_PROF_REGION_END(trigger_cycle, trigger_mask);
-            return false;
-        }
-
-        update_signals<PCM_SIG_ELAPSED_TIME>(0);
-        static_cast<PcmHandlerVmImplT *>(this)
-            ->prepare_pre_trigger_snapshot_impl(trigger_mask);
-        if (handler_main_cb_(&snapshot_) != PCM_SUCCESS) [[unlikely]] {
-            std::cerr << "Algorithm exited with error" << std::endl;
-            exit(EXIT_FAILURE);
-        }
-        static_cast<PcmHandlerVmImplT *>(this)
-            ->apply_post_trigger_snapshot_impl();
-
-        // rearm triggers
+    constexpr void rearm_triggers() {
         (([&](auto *self) {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
@@ -547,7 +544,36 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              }
          }(this)),
          ...);
-        PCM_PERF_PROF_REGION_END(trigger_cycle, trigger_mask);
+    }
+
+    [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
+        PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
+        PCM_PERF_PROF_REGION_START(trigger_cycle);
+
+        pcm_uint trigger_mask = collect_trigger_mask();
+        if (!trigger_mask) {
+            PCM_PERF_PROF_REGION_END(trigger_cycle, false);
+            return false;
+        }
+
+        // Pure elapsed time signals.
+        // TODO: check if this breaks timer logic
+        update_signals<PCM_SIG_ELAPSED_TIME>(0);
+
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->prepare_pre_trigger_snapshot_impl(trigger_mask);
+        if (handler_main_cb_(reinterpret_cast<pcm_handler_datapath_snapshot>(
+                raw_snapshot_.data())) != PCM_SUCCESS) [[unlikely]] {
+            // TODO: only this VM should die, not whole stack.
+            std::cerr << "Algorithm exited with error. Abort." << std::endl;
+            exit(EXIT_FAILURE);
+        }
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->apply_post_trigger_snapshot_impl();
+
+        rearm_triggers();
+
+        PCM_PERF_PROF_REGION_END(trigger_cycle, true);
         return true;
     }
 
@@ -571,15 +597,19 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
 // using MySpec = std::tuple<ControlDesc<...>, SignalDesc<...>>;
 // SimplePcmHandlerVm<"dcqcn", MySpec> vm;
 // ============================================================================
-template <const char *AlgoName, typename Tuple> struct SimplePcmHandlerVm;
-template <const char *AlgoName, typename... Ds>
-struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
-    : PcmHandlerVm<SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>, AlgoName,
-                   // rebind all objects to pcm_uint
-                   typename Ds::template Rebind<pcm_uint>...> {
+template <const char *AlgoName, typename SnapshotLayout, typename Tuple>
+struct SimplePcmHandlerVm;
+template <const char *AlgoName, typename SnapshotLayout, typename... Ds>
+struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
+    : PcmHandlerVm<
+          SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>,
+          AlgoName, SnapshotLayout,
+          // rebind all objects to pcm_uint
+          typename Ds::template Rebind<pcm_uint>...> {
 
-    using SelfType = SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>;
-    using Base = PcmHandlerVm<SelfType, AlgoName,
+    using SelfType =
+        SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>;
+    using Base = PcmHandlerVm<SelfType, AlgoName, SnapshotLayout,
                               typename Ds::template Rebind<pcm_uint>...>;
 
     using ControlsTupleT = typename Base::ControlsTupleT;
@@ -590,6 +620,7 @@ struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
     static constexpr std::size_t kNumSignals =
         std::tuple_size<SignalsTupleT>::value;
 
+    // pcm_uint storage
     std::array<pcm_uint, kNumControls> controls_storage_{};
     std::array<pcm_uint, kNumSignals> signals_storage_{};
     std::array<pcm_uint, kNumSignals> thresholds_storage_{};
@@ -606,7 +637,8 @@ struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
                  controls_storage_[T::kIndex] = T::kInitialValue;
              } else if constexpr (is_variable_v<T>) {
                  // Snapshot variables can be initialized directly
-                 Base::snapshot_.vars[T::kIndex] =
+                 Base::raw_snapshot_[SnapshotLayout::kVariableOffset +
+                                     T::kIndex] =
                      std::bit_cast<pcm_uint>(T::kInitialValue);
              }
          }()),
@@ -614,14 +646,14 @@ struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
     }
 
     void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask) {
-        Base::snapshot_.trigger_mask = trigger_mask;
-        std::memcpy(Base::snapshot_.signals, signals_storage_.data(),
-                    kNumSignals * sizeof(pcm_uint));
+        Base::raw_snapshot_[SnapshotLayout::kTriggerMaskOffset] = trigger_mask;
+        std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kSignalOffset],
+                    signals_storage_.data(), kNumSignals * sizeof(pcm_uint));
         std::memset(signals_storage_.data(), 0, kNumSignals * sizeof(pcm_uint));
-        std::memcpy(Base::snapshot_.thresholds, thresholds_storage_.data(),
-                    kNumSignals * sizeof(pcm_uint));
-        std::memcpy(Base::snapshot_.controls, controls_storage_.data(),
-                    kNumControls * sizeof(pcm_uint));
+        std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kThresholdOffset],
+                    thresholds_storage_.data(), kNumSignals * sizeof(pcm_uint));
+        std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kControlOffset],
+                    controls_storage_.data(), kNumControls * sizeof(pcm_uint));
     }
 
     void apply_post_trigger_snapshot_impl() {
@@ -631,14 +663,19 @@ struct SimplePcmHandlerVm<AlgoName, std::tuple<Ds...>>
                  auto &slot = signal_slot_impl<sig_idx>();
                  using SignalType =
                      std::tuple_element_t<sig_idx, SignalsTupleT>;
-                 SignalType::update(Base::start_ts_, Base::get_time_, slot,
-                                    Base::snapshot_.signals[sig_idx]);
+                 // TODO: check timer logic
+                 SignalType::update(
+                     Base::start_ts_, Base::get_time_, slot,
+                     Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
+                                         sig_idx]);
              }.template operator()<Is>()),
              ...);
         }(std::make_index_sequence<kNumSignals>{});
-        std::memcpy(thresholds_storage_.data(), Base::snapshot_.thresholds,
+        std::memcpy(thresholds_storage_.data(),
+                    &Base::raw_snapshot_[SnapshotLayout::kThresholdOffset],
                     kNumSignals * sizeof(pcm_uint));
-        std::memcpy(controls_storage_.data(), Base::snapshot_.controls,
+        std::memcpy(controls_storage_.data(),
+                    &Base::raw_snapshot_[SnapshotLayout::kControlOffset],
                     kNumControls * sizeof(pcm_uint));
     }
 

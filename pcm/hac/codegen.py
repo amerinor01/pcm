@@ -116,6 +116,27 @@ class AlgorithmCodeGenerator:
             if "initial_value" in var:
                 var["initial_value"] = resolve(var["initial_value"])
 
+        # Snapshot layout:
+        # mask | (2 * signals) | controls | variables
+        # 2 * signals because of thresholds (up to 1 per signal)
+        self.mask_offset = 0
+        self.signal_offset = self.mask_offset + 1
+        self.num_signals = len(self.config.get("signals", []))
+        self.num_controls = len(self.config.get("controls", []))
+        # Count total variable slots (including array elements)
+        self.num_variable_slots = sum(
+            var.get("num_entries", 1) for var in self.config.get("variables", [])
+        )
+        self.threshold_offset = self.signal_offset + self.num_signals
+        self.control_offset = self.threshold_offset + self.num_signals
+        self.variable_offset = self.control_offset + self.num_controls
+        self.snapshot_size = (
+            1
+            + (2 * self.num_signals)
+            + self.num_controls
+            + self.num_variable_slots
+        )
+
     def _generate_pcmc(self) -> str:
         # Collect all tuple elements first
         variable_defs = []
@@ -190,8 +211,20 @@ class AlgorithmCodeGenerator:
         lines.append(
             f'inline constexpr const char {self.algorithm_name}_AlgoName[] = "{self.algorithm_name}";'
         )
+        lines.append("")
         lines.append(
-            f"using PcmHandlerVmSpecType = pcm_vm::SimplePcmHandlerVm<{self.algorithm_name}_AlgoName, DatapathSpec>;"
+            f"using {self.algorithm_name}_SnapshotLayout = pcm_vm::SnapshotMemoryLayout<"
+        )
+        lines.append(f"    {self.mask_offset},        // kTriggerMaskOffset")
+        lines.append(f"    {self.signal_offset},      // kSignalOffset")
+        lines.append(f"    {self.threshold_offset},   // kThresholdOffset")
+        lines.append(f"    {self.control_offset},     // kControlOffset")
+        lines.append(f"    {self.variable_offset},    // kVariableOffset")
+        lines.append(f"    {self.snapshot_size}            // kSnapshotSize")
+        lines.append(">;")
+        lines.append("")
+        lines.append(
+            f"using PcmHandlerVmSpecType = pcm_vm::SimplePcmHandlerVm<{self.algorithm_name}_AlgoName, {self.algorithm_name}_SnapshotLayout, DatapathSpec>;"
         )
         lines.append(f"pcm_vm::PcmHandlerVmDesc* __{self.algorithm_name}_spec_get()")
         lines.append("{")
@@ -220,7 +253,8 @@ class AlgorithmCodeGenerator:
             f'extern "C" pcm_vm::PcmHandlerVmDesc* __{self.algorithm_name}_spec_get();',
             "",
             "#endif",
-        ]: lines.append(decl)
+        ]:
+            lines.append(decl)
 
         # Emit constants as #define
         for const in self.config.get("constants", []):
@@ -240,6 +274,16 @@ class AlgorithmCodeGenerator:
                 lines.append(f"    {cathegory}_{item['name']} = {index},")
             lines.append("};")
             lines.append("")
+
+        for offset in [
+            f"#define MASK_OFFSET {self.mask_offset}",
+            f"#define SIGNAL_OFFSET {self.signal_offset}",
+            f"#define THRESHOLD_OFFSET {self.threshold_offset}",
+            f"#define CONTROL_OFFSET {self.control_offset}",
+            f"#define VAR_OFFSET {self.variable_offset}",
+        ]:
+            lines.append(offset)
+        lines.append("")
 
         __generate_enum("signals", self.config.get("signals", []), "SIG", mask=True)
         __generate_enum("controls", self.config.get("controls", []), "CTRL")

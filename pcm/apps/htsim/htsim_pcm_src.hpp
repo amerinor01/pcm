@@ -306,7 +306,9 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
     PcmScheduler &_scheduler;
     std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
     pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab &_pcm_io_slab;
+#ifdef ENABLE_PROFILING
     pcm_uint _runtime_call_perftest;
+#endif
 };
 
 } // namespace pcm_htsim
