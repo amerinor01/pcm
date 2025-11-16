@@ -3,7 +3,39 @@
 
 #ifdef ENABLE_PROFILING
 
-#include "../include/pcm_log.h"
+#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define clean_errno() (errno == 0 ? "None" : strerror(errno))
+
+#define print_crit(M, ...)                                                     \
+    do {                                                                       \
+        fprintf(stderr,                                                        \
+                "[CRIT]    "                                                   \
+                "%s (%s:%d) " M " errno: %s\n",                                \
+                __func__, __FILE__, __LINE__, ##__VA_ARGS__, clean_errno());   \
+    } while (0)
+
+#define print_info(M, ...)                                                     \
+    do {                                                                       \
+        fprintf(stderr,                                                        \
+                "[INFO]    "                                                   \
+                "%s (%s:%d) " M "\n",                                          \
+                __func__, __FILE__, __LINE__, ##__VA_ARGS__);                  \
+    } while (0)
+
+#define PROF_LOG_FATAL(FORMAT, ...)                                            \
+    {                                                                          \
+        print_crit(FORMAT, ##__VA_ARGS__);                                     \
+        exit(EXIT_FAILURE);                                                    \
+    }
+
+#define PROF_LOG_PRINT(FORMAT, ...)                                            \
+    {                                                                          \
+        print_info(FORMAT, ##__VA_ARGS__);                                     \
+    }
 
 #ifdef __linux__
 #include <asm/unistd.h>
@@ -51,33 +83,33 @@ struct pcm_perf_context {
         /* Open group leader (cycles) */                                       \
         perf_obj.fd_cycles = perf_event_open(&pe_cycles, 0, -1, -1, 0);        \
         if (perf_obj.fd_cycles == -1)                                          \
-            PCM_LOG_FATAL("pcm-perf: %s prof perf_event_open (cycles)",        \
-                          perf_obj.scope_prefix);                              \
+            PROF_LOG_FATAL("pcm-perf: %s prof perf_event_open (cycles)",       \
+                           perf_obj.scope_prefix);                             \
                                                                                \
         /* Open instructions in group */                                       \
         perf_obj.fd_instr =                                                    \
             perf_event_open(&pe_instr, 0, -1, perf_obj.fd_cycles, 0);          \
         if (perf_obj.fd_instr == -1)                                           \
-            PCM_LOG_FATAL("pcm-perf: %s prof perf_event_open (instructions)",  \
-                          perf_obj.scope_prefix);                              \
+            PROF_LOG_FATAL("pcm-perf: %s prof perf_event_open (instructions)", \
+                           perf_obj.scope_prefix);                             \
                                                                                \
         /* Get IDs to map values later */                                      \
         if (ioctl(perf_obj.fd_cycles, PERF_EVENT_IOC_ID, &perf_obj.id_cycles)) \
-            PCM_LOG_FATAL("pcm-perf: %s prof ioctl PERF_EVENT_IOC_ID failed",  \
-                          perf_obj.scope_prefix);                              \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl PERF_EVENT_IOC_ID failed", \
+                           perf_obj.scope_prefix);                             \
         if (ioctl(perf_obj.fd_instr, PERF_EVENT_IOC_ID, &perf_obj.id_instr))   \
-            PCM_LOG_FATAL("pcm-perf: %s prof ioctl PERF_EVENT_IOC_ID failed",  \
-                          perf_obj.scope_prefix);                              \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl PERF_EVENT_IOC_ID failed", \
+                           perf_obj.scope_prefix);                             \
                                                                                \
         if (ioctl(perf_obj.fd_cycles, PERF_EVENT_IOC_RESET,                    \
                   PERF_IOC_FLAG_GROUP))                                        \
-            PCM_LOG_FATAL(                                                     \
+            PROF_LOG_FATAL(                                                    \
                 "pcm-perf: %s prof ioctl PERF_EVENT_IOC_RESET failed",         \
                 perf_obj.scope_prefix);                                        \
                                                                                \
         if (ioctl(perf_obj.fd_cycles, PERF_EVENT_IOC_ENABLE,                   \
                   PERF_IOC_FLAG_GROUP))                                        \
-            PCM_LOG_FATAL(                                                     \
+            PROF_LOG_FATAL(                                                    \
                 "pcm-perf: %s prof ioctl PERF_EVENT_IOC_ENABLE failed",        \
                 perf_obj.scope_prefix);                                        \
     }
@@ -86,7 +118,7 @@ struct pcm_perf_context {
     {                                                                          \
         if (ioctl(perf_obj.fd_cycles, PERF_EVENT_IOC_DISABLE,                  \
                   PERF_IOC_FLAG_GROUP))                                        \
-            PCM_LOG_FATAL(                                                     \
+            PROF_LOG_FATAL(                                                    \
                 "pcm-perf: %s prof ioctl PERF_EVENT_IOC_DISABLE failed",       \
                 perf_obj.scope_prefix);                                        \
                                                                                \
@@ -99,8 +131,8 @@ struct pcm_perf_context {
         } data;                                                                \
                                                                                \
         if (read(perf_obj.fd_cycles, &data, sizeof(data)) != sizeof(data))     \
-            PCM_LOG_FATAL("pcm-perf: %s prof read failed",                     \
-                          perf_obj.scope_prefix);                              \
+            PROF_LOG_FATAL("pcm-perf: %s prof read failed",                    \
+                           perf_obj.scope_prefix);                             \
                                                                                \
         uint64_t cycles, instructions;                                         \
         for (uint64_t j = 0; j < data.nr; ++j) {                               \
@@ -112,15 +144,15 @@ struct pcm_perf_context {
         }                                                                      \
                                                                                \
         if (close(perf_obj.fd_cycles))                                         \
-            PCM_LOG_FATAL("pcm-perf: %s prof close(fd_cycles) failed",         \
-                          perf_obj.scope_prefix);                              \
+            PROF_LOG_FATAL("pcm-perf: %s prof close(fd_cycles) failed",        \
+                           perf_obj.scope_prefix);                             \
         if (close(perf_obj.fd_instr))                                          \
-            PCM_LOG_FATAL("pcm-perf: %s prof close(fd_instr) failed",          \
-                          perf_obj.scope_prefix);                              \
+            PROF_LOG_FATAL("pcm-perf: %s prof close(fd_instr) failed",         \
+                           perf_obj.scope_prefix);                             \
                                                                                \
         if (report)                                                            \
-            PCM_LOG_PRINT("pcm-perf: %s %lu cycles %lu instructions\n",        \
-                          perf_obj.scope_prefix, cycles, instructions);        \
+            PROF_LOG_PRINT("pcm-perf: %s %lu cycles %lu instructions\n",       \
+                           perf_obj.scope_prefix, cycles, instructions);       \
     }
 #endif
 
