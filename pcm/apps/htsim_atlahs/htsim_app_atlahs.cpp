@@ -984,7 +984,8 @@ int main(int argc, char **argv) {
             unique_ptr<UecMultipath> mp = nullptr;
             if (pcm_lb_enable) {
                 mp = make_unique<pcm_htsim::UecPcmMp>(
-                    UecSrc::_debug, *pcm_lb_schedulers.at(src).get());
+                    UecSrc::_debug, *pcm_lb_schedulers.at(src).get(),
+                    pcm_lb_algo_dummy_tag);
             } else if (load_balancing_algo == BITMAP){
                 mp = make_unique<UecMpBitmap>(path_entropy_size, UecSrc::_debug);
             } else if (load_balancing_algo == REPS){

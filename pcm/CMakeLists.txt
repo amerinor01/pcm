@@ -137,15 +137,6 @@ if(BUILD_HTSIM_PLUGIN)
 endif()
 
 # ===============================================
-# HTSIM V2 Application
-# ===============================================
-
-# HTSIM V2 is always built if dependencies are available
-if(BUILD_HTSIM_PLUGIN)
-    add_subdirectory(apps/htsim_v2)
-endif()
-
-# ===============================================
 # HTSIM ATLAHS Application
 # ===============================================
 
@@ -159,9 +150,8 @@ endif()
 
 message(STATUS "PCM Build Configuration:")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  HTSIM v1 plugin: ${BUILD_HTSIM_PLUGIN}")
-message(STATUS "  HTSIM v2: ${BUILD_HTSIM_PLUGIN}")
-message(STATUS "  HTSIM ATLAHS: ${BUILD_HTSIM_PLUGIN}")
+message(STATUS "  HTSIM plugin: ${BUILD_HTSIM_PLUGIN}")
+message(STATUS "  HTSIM ATLAHS plugin: ${BUILD_HTSIM_PLUGIN}")
 message(STATUS "  Profiling: ${ENABLE_VM_PROFILING}")
 if(ENABLE_VM_PROFILING)
     message(STATUS "  Profiling Backend: ${VM_PROF_BACKEND}")

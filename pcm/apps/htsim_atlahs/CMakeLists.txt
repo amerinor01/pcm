@@ -63,7 +63,6 @@ if(EXISTS ${HTSIM_APP_ATLAHS_SOURCE})
     
     # Link all required libraries (no plugin needed - header-only)
     target_link_libraries(htsim_flow_app_atlahs PRIVATE 
-        pcm                  # Main PCM library
         ${SPCL_HTSIM_LIB}        # HTSIM simulation library
         ${SPCL_HTSIM_DC_LIB}     # HTSIM datacenter library
         ${CMAKE_DL_LIBS}    # Dynamic loading support (dlopen/dlsym)
