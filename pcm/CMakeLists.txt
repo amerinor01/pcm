@@ -17,6 +17,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Configurable build options
+option(BUILD_HTSIM_PLUGIN "Build HTSIM plugin" OFF)
 option(BUILD_HAC_IR "Build HAC LLVM IR generation" OFF)
 option(ENABLE_VM_PROFILING "Enable Linux perf-based profiling" OFF)
 option(ATOMIC_PCM_VM_ALIGNED_STORAGE "Enable aligned atomic storage" OFF)
