@@ -53,6 +53,8 @@ python ./apps/htsim_atlahs/batch_simulations_tm.py   --conf ./apps/htsim_atlahs/
 ``` bash
 cd pcm
 
-python ./apps/htsim_atlahs/batch_simulations_goal.py   --conf ./apps/htsim_atlahs/pcm_goal_allreduce.json   --out ./apps/htsim_atlahs/log_goal/all_reduce   --plot
+python ./apps/htsim_atlahs/batch_simulations_goal.py   --conf ./apps/htsim_atlahs/pcm_goal_incast_4_nodes.json   --out ./apps/htsim_atlahs/log_goal/4_nodes   --plot
+
+python ./apps/htsim_atlahs/batch_simulations_goal.py   --conf ./apps/htsim_atlahs/pcm_goal_incast_16_nodes.json   --out ./apps/htsim_atlahs/log_goal/16_nodes   --plot
 ```
 
