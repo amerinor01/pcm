@@ -28,7 +28,7 @@ void AtlahsHtsimApi::Send(const SendEvent &event, graph_node_properties elem) {
     int to = event.getTo();
     int from = event.getFrom();
     int tag = event.getTag();
-    int size = event.getSizeBytes();
+    uint64_t size = event.getSizeBytes();
     size = size * 1;    
 
     simtime_picosec transmission_delay =
