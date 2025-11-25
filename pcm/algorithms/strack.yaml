@@ -7,6 +7,10 @@ constants:
     type: uint
     value: 64
     description: "Number of paths"
+  - name: MAX_PENALTY
+    type: uint
+    value: 15
+    description: "Maximum path penalty"
 
 variables:
   - name: ARR_EVS_BITMAP

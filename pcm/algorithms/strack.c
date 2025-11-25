@@ -3,7 +3,7 @@
 #include "stdbool.h"
 #include "stdio.h"
 #include "stdlib.h"
-#include "strack_light.h"
+#include "strack.h"
 
 #define PATH_MASK (NO_OF_PATHS - 1)
 
