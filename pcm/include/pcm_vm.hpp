@@ -658,19 +658,17 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
 
     void apply_post_trigger_snapshot_impl() {
         // update signals from snapshot
-        [this]<std::size_t... Is>(std::index_sequence<Is...>) {
-            (([this]<std::size_t sig_idx>() {
-                 auto &slot = signal_slot_impl<sig_idx>();
-                 using SignalType =
-                     std::tuple_element_t<sig_idx, SignalsTupleT>;
-                 // TODO: check timer logic
-                 SignalType::update(
-                     Base::start_ts_, Base::get_time_, slot,
-                     Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
-                                         sig_idx]);
-             }.template operator()<Is>()),
-             ...);
-        }(std::make_index_sequence<kNumSignals>{});
+        (([&](auto *self) {
+             using T = typename Ds::template Rebind<pcm_uint>;
+             if constexpr (is_signal_v<T>) {
+                 auto &slot = static_cast<SelfType *>(self)
+                                  ->template signal_slot_impl<T::kIndex>();
+                 T::update(Base::start_ts_, Base::get_time_, slot,
+                          Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
+                                              T::kIndex]);
+             }
+         }(this)),
+         ...);
         std::memcpy(thresholds_storage_.data(),
                     &Base::raw_snapshot_[SnapshotLayout::kThresholdOffset],
                     kNumSignals * sizeof(pcm_uint));
