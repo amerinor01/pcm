@@ -1,5 +1,5 @@
 {
-  "binary": "./build/bin/htsim_flow_app_v2",
+  "binary": "./build/bin/htsim_flow_app_atlahs",
   "input_files": [
     "./apps/htsim/permutation_128_1MB.cm"
   ],
