@@ -4,6 +4,7 @@
 #include "stdlib.h"
 
 #define PATH_MASK (EVS_SIZE - 1) // EVS_SIZE shall be power of two!!
+#define EVC_MASK (EVC_SIZE - 1)  // EVC_SIZE shall be power of two
 BITMAP_HELPERS_DEFINE(VAR_EVC_BITMAP)
 
 // for now we assume that handler keeps up with the arrival rate of TX/ACK packets
@@ -26,7 +27,7 @@ int algorithm_main() {
                 ++num_valid_evs;
                 BITMAP_HELPER_SET_ENTRY(VAR_EVC_BITMAP, head_idx, 1);
             }
-            head_idx = (head_idx + 1) & PATH_MASK;
+            head_idx = (head_idx + 1) & EVC_MASK;
         } else {
             set_signal(SIG_NUM_ECN, 0);
         }
@@ -40,7 +41,7 @@ int algorithm_main() {
             set_var_uint(VAR_EV_SEED, packet_ev);
             set_var_uint(VAR_EV_EXPLORE_COUNTER, get_var_uint(VAR_EV_EXPLORE_COUNTER) - 1);
         } else {
-            pcm_uint ev_cache_idx = (head_idx - num_valid_evs) % EVC_SIZE;
+            pcm_uint ev_cache_idx = (head_idx - num_valid_evs) & EVC_MASK;
             packet_ev = get_arr_uint(VAR_EVC, ev_cache_idx);
             BITMAP_HELPER_SET_ENTRY(VAR_EVC_BITMAP, ev_cache_idx, 0);
             --num_valid_evs;
