@@ -1,0 +1,78 @@
+algorithm:
+  name: cubic
+  description: "TCP CUBIC congestion control algorithm"
+
+constants:
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MTU"
+    description: "Maximum segment size"
+  
+signals:
+  - name: NUM_ACKED_BYTES
+    type: PCM_SIG_DATA_TX
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_NACKED_BYTES
+    type: PCM_SIG_DATA_NACKED
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_threshold: 1
+  - name: ELAPSED_TIME
+    type: PCM_SIG_ELAPSED_TIME
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: RTT_SAMPLE
+    type: PCM_SIG_RTT
+    accumulation: PCM_SIG_ACCUM_LAST
+
+controls:
+  - name: CWND_BYTES
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_LINK_MSS"
+
+variables:
+  - name: SSTHRESH
+    initial_value: 100000.0
+    type: float
+    description: "Slow start threshold"
+
+  - name: CTRL_WINDOW_MSS
+    initial_value: 1.0
+    type: float
+    description: "Size of CTRL window as size of MSS that is then used for CWND bytes"
+
+  - name: W_MAX_MSS
+    initial_value: 1.0
+    type: float
+    description: "W_MAX"
+
+  - name: W_EST_MSS
+    initial_value: 1.0
+    type: float
+    description: "W_EST_MSS"
+
+  - name: LAST_ADJ
+    initial_value: 0
+    type: uint
+    description: "Timestamps of when last time the last loss event happened"
+
+  - name: C
+    initial_value: 0.4
+    type: float
+    description: "C"
+  - name: BETA
+    initial_value: 0.7
+    type: float
+    description: "BETA"
+  - name: K
+    initial_value: 0
+    type: float
+    description: "BETA"
