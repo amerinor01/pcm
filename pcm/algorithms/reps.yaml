@@ -10,31 +10,31 @@ constants:
   - name: EVC_SIZE
     type: uint
     value: 4
-    description: "Entropy value set size"
+    description: "Entropy value cache size"
 
 variables:
   - name: EVC_BITMAP
     arr_len: 1
     initial_value: 0
     type: uint
-    description: "Entrop value set bitmap"
+    description: "Entropy value cache bitmap"
   - name: EVC
     arr_len: 4
     initial_value: 0
     type: uint
-    description: "Entrop value set bitmap"
+    description: "Entropy value cache"
   - name: EVC_HEAD_IDX
     initial_value: 0
     type: uint
-    description: "Entrop value set bitmap" 
+    description: "Entropy value cache head index" 
   - name: EVC_NUM_VALID_EVS
     initial_value: 0
     type: uint
-    description: "Entrop value set bitmap" 
+    description: "Entropy value cache number of valid EVs" 
   - name: EV_EXPLORE_COUNTER
     initial_value: 0
     type: uint
-    description: "Entrop value set bitmap"
+    description: "Entropy value explore counter"
   - name: EV_SEED
     initial_value: 0
     type: uint
