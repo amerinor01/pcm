@@ -18,6 +18,7 @@
     "swift", 
     "smartt",
     "dcqcn",
-    "dctcp"
+    "dctcp",
+    "cubic"
   ]
 }
