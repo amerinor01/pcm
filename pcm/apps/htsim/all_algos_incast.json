@@ -19,6 +19,7 @@
     "smartt",
     "dcqcn",
     "dctcp",
-    "cubic"
+    "cubic",
+    "uec_dctcp_v2"
   ]
 }

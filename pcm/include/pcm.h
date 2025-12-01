@@ -85,6 +85,15 @@ typedef enum signal_accum {
     PCM_SIG_ACCUM_UNSPEC = 4, /**< Accumulator is not specified  */
 } pcm_signal_accum_t;
 
+typedef enum signal_trigger {
+    PCM_SIG_TRIGGER_RAW = 0,   /**< Signal uses raw signal value */
+    PCM_SIG_TRIGGER_DELTA = 1, /**< Signal uses (prev_trigger_val - curr_val)
+                                  for trigger evaluation */
+    PCM_SIG_TRIGGER_MAGNITUDE = 2, /**< Signal uses abs(prev_trigger_val -
+                                      curr_val) for trigger evaluation */
+    PCM_SIG_TRIGGER_UNSPEC = 3,    /**< Signal has no trigger */
+} pcm_signal_trigger_t;
+
 /**
  * @enum pcm_control_t
  * @brief Identifiers for PCM control knobs.
