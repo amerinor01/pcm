@@ -139,7 +139,7 @@ struct PcmHandlerVmDesc {
         } out;
     } io_slab_;
 
-    PcmHandlerVmIoSlab &get_signal_io_slab() { return io_slab_; };
+    PcmHandlerVmIoSlab *get_signal_io_slab() { return &io_slab_; };
     virtual void flush_slab_input() = 0;
     virtual void fetch_slab_output() = 0;
 

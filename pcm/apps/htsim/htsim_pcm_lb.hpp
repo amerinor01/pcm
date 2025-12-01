@@ -29,16 +29,16 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
 
         switch (feedback) {
         case PATH_GOOD:
-            _pcm_io_slab.in.ack = 1;
-            _pcm_io_slab.in.ack_ev = static_cast<pcm_uint>(path_id);
+            _pcm_io_slab->in.ack = 1;
+            _pcm_io_slab->in.ack_ev = static_cast<pcm_uint>(path_id);
             break;
         case PATH_ECN:
-            _pcm_io_slab.in.ecn = 1;
-            _pcm_io_slab.in.ecn_ev = static_cast<pcm_uint>(path_id);
+            _pcm_io_slab->in.ecn = 1;
+            _pcm_io_slab->in.ecn_ev = static_cast<pcm_uint>(path_id);
             break;
         case PATH_NACK:
-            _pcm_io_slab.in.nack = 1;
-            _pcm_io_slab.in.nack_ev = static_cast<pcm_uint>(path_id);
+            _pcm_io_slab->in.nack = 1;
+            _pcm_io_slab->in.nack_ev = static_cast<pcm_uint>(path_id);
             break;
         case PATH_TIMEOUT:
             /* RTO is not supported yet */
@@ -64,7 +64,7 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
                          uint64_t cur_cwnd_in_pkts) override {
         (void)seq_sent;         // Suppress unused parameter warning
         (void)cur_cwnd_in_pkts; // Suppress unused parameter warning
-        _pcm_io_slab.in.tx_ready_pkts = 1;
+        _pcm_io_slab->in.tx_ready_pkts = 1;
         _pcm_vm.second.flush_slab_input();
 
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
@@ -77,15 +77,15 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
         _pcm_vm.second.fetch_slab_output();
 
         std::cout << "pcm_htsim::UecPcmMp:" << this << " Generate EV: "
-                  << static_cast<uint16_t>(_pcm_io_slab.out.ev) << std::endl;
+                  << static_cast<uint16_t>(_pcm_io_slab->out.ev) << std::endl;
         return static_cast<uint16_t>(
-            static_cast<uint16_t>(_pcm_io_slab.out.ev));
+            static_cast<uint16_t>(_pcm_io_slab->out.ev));
     }
 
   private:
     PcmScheduler &_scheduler;
     std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
-    pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab &_pcm_io_slab;
+    pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab *_pcm_io_slab;
     bool _is_finished{false};
 };
 
