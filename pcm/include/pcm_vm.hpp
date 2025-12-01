@@ -359,10 +359,12 @@ struct PcmHandlerVm;
 // ============================================================================
 // Snapshot layout descriptor - holds compile-time offset constants
 // ============================================================================
-template <size_t TriggerMaskOffset, size_t SignalOffset, size_t ThresholdOffset,
-          size_t ControlOffset, size_t VariableOffset, size_t SnapshotSize>
+template <size_t TriggerMaskOffset, size_t SignalSetMaskOffset,
+          size_t SignalOffset, size_t ThresholdOffset, size_t ControlOffset,
+          size_t VariableOffset, size_t SnapshotSize>
 struct SnapshotMemoryLayout {
     static constexpr size_t kTriggerMaskOffset = TriggerMaskOffset;
+    static constexpr size_t kSignalSetMaskOffset = SignalSetMaskOffset;
     static constexpr size_t kSignalOffset = SignalOffset;
     static constexpr size_t kThresholdOffset = ThresholdOffset;
     static constexpr size_t kControlOffset = ControlOffset;
@@ -647,6 +649,7 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
 
     void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask) {
         Base::raw_snapshot_[SnapshotLayout::kTriggerMaskOffset] = trigger_mask;
+        Base::raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset] = 0;
         std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kSignalOffset],
                     signals_storage_.data(), kNumSignals * sizeof(pcm_uint));
         std::memset(signals_storage_.data(), 0, kNumSignals * sizeof(pcm_uint));
@@ -658,14 +661,19 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
 
     void apply_post_trigger_snapshot_impl() {
         // update signals from snapshot
+        auto set_signal_mask =
+            Base::raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset];
         (([&](auto *self) {
              using T = typename Ds::template Rebind<pcm_uint>;
              if constexpr (is_signal_v<T>) {
-                 auto &slot = static_cast<SelfType *>(self)
-                                  ->template signal_slot_impl<T::kIndex>();
-                 T::update(Base::start_ts_, Base::get_time_, slot,
-                          Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
-                                              T::kIndex]);
+                 if (set_signal_mask & T::kMask) {
+                     auto &slot = static_cast<SelfType *>(self)
+                                      ->template signal_slot_impl<T::kIndex>();
+                     T::update(
+                         Base::start_ts_, Base::get_time_, slot,
+                         Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
+                                             T::kIndex]);
+                 }
              }
          }(this)),
          ...);

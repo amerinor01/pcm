@@ -120,7 +120,8 @@ class AlgorithmCodeGenerator:
         # mask | (2 * signals) | controls | variables
         # 2 * signals because of thresholds (up to 1 per signal)
         self.mask_offset = 0
-        self.signal_offset = self.mask_offset + 1
+        self.set_signal_mask_offset = self.mask_offset + 1
+        self.signal_offset = self.set_signal_mask_offset + 1
         self.num_signals = len(self.config.get("signals", []))
         self.num_controls = len(self.config.get("controls", []))
         # Count total variable slots (including array elements)
@@ -131,7 +132,7 @@ class AlgorithmCodeGenerator:
         self.control_offset = self.threshold_offset + self.num_signals
         self.variable_offset = self.control_offset + self.num_controls
         self.snapshot_size = (
-            1
+            2
             + (2 * self.num_signals)
             + self.num_controls
             + self.num_variable_slots
@@ -216,6 +217,7 @@ class AlgorithmCodeGenerator:
             f"using {self.algorithm_name}_SnapshotLayout = pcm_vm::SnapshotMemoryLayout<"
         )
         lines.append(f"    {self.mask_offset},        // kTriggerMaskOffset")
+        lines.append(f"    {self.set_signal_mask_offset}, // kSignalSetMaskOffset")
         lines.append(f"    {self.signal_offset},      // kSignalOffset")
         lines.append(f"    {self.threshold_offset},   // kThresholdOffset")
         lines.append(f"    {self.control_offset},     // kControlOffset")
@@ -277,6 +279,7 @@ class AlgorithmCodeGenerator:
 
         for offset in [
             f"#define MASK_OFFSET {self.mask_offset}",
+            f"#define SET_SIGNAL_MASK_OFFSET {self.set_signal_mask_offset}",
             f"#define SIGNAL_OFFSET {self.signal_offset}",
             f"#define THRESHOLD_OFFSET {self.threshold_offset}",
             f"#define CONTROL_OFFSET {self.control_offset}",

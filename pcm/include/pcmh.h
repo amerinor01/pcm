@@ -67,15 +67,19 @@ __vm_signal_get(const pcm_handler_datapath_snapshot snapshot,
 }
 
 static PCM_FORCE_INLINE void
-__vm_signal_set(pcm_handler_datapath_snapshot snapshot, size_t signal_offset,
-                size_t idx, pcm_uint val) {
+__vm_signal_set(pcm_handler_datapath_snapshot snapshot,
+                size_t set_signal_mask_offset, size_t signal_offset, size_t idx,
+                pcm_uint val) {
     snapshot[signal_offset + UTIL_MASK_TO_ARR_IDX(idx)] = val;
+    snapshot[set_signal_mask_offset] |= idx;
 }
 
 static PCM_FORCE_INLINE void
-__vm_signal_update(pcm_handler_datapath_snapshot snapshot, size_t signal_offset,
+__vm_signal_update(pcm_handler_datapath_snapshot snapshot,
+                   size_t set_signal_mask_offset, size_t signal_offset,
                    size_t idx, pcm_uint val) {
     snapshot[signal_offset + UTIL_MASK_TO_ARR_IDX(idx)] += val;
+    snapshot[set_signal_mask_offset] |= idx;
 }
 
 static PCM_FORCE_INLINE pcm_uint
@@ -244,7 +248,8 @@ __vm_var_float_set(pcm_handler_datapath_snapshot snapshot, size_t var_offset,
  * @param[in] idx   User-defined signal index.
  * @param[in] val          New signal value.
  */
-#define set_signal(idx, val) __vm_signal_set(snapshot, SIGNAL_OFFSET, idx, val)
+#define set_signal(idx, val)                                                   \
+    __vm_signal_set(snapshot, SET_SIGNAL_MASK_OFFSET, SIGNAL_OFFSET, idx, val)
 
 /**
  * @brief Update the signal value within a handler.
@@ -253,7 +258,8 @@ __vm_var_float_set(pcm_handler_datapath_snapshot snapshot, size_t var_offset,
  * @param[in] val          Update value.
  */
 #define update_signal(idx, val)                                                \
-    __vm_signal_update(snapshot, SIGNAL_OFFSET, idx, val)
+    __vm_signal_update(snapshot, SET_SIGNAL_MASK_OFFSET, SIGNAL_OFFSET, idx,   \
+                       val)
 
 /**
  * @brief Get mask of signals that triggered handler.
@@ -277,7 +283,8 @@ __vm_var_float_set(pcm_handler_datapath_snapshot snapshot, size_t var_offset,
  * @param[in] idx   User-defined control index.
  * @param[in] val          New control value.
  */
-#define set_control(idx, val) __vm_control_set(snapshot, CONTROL_OFFSET, idx, val)
+#define set_control(idx, val)                                                  \
+    __vm_control_set(snapshot, CONTROL_OFFSET, idx, val)
 
 #endif
 
