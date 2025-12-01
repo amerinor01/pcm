@@ -15,8 +15,8 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
   public:
     UecPcmMp(bool debug, PcmScheduler &scheduler, PcmScheduler::PcmVmTag tag)
         : UecMultipath(debug), _scheduler{scheduler},
-          _pcm_vm{_scheduler.createVm(this, tag)},
-          _pcm_io_slab{_pcm_vm.second.get_signal_io_slab()} {
+          _pcm_vm_id{_scheduler.createVm(this, tag)},
+          _pcm_io_slab{_scheduler.getVm(_pcm_vm_id).get_signal_io_slab()} {
         std::cout << "pcm_htsim::UecPcmMp: initialization completed"
                   << std::endl;
     }
@@ -46,11 +46,11 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
             std::cerr << "pcm_htsim::UecPcmMp: unsupported signal" << std::endl;
             assert(false);
         }
-        _pcm_vm.second.flush_slab_input();
+        _scheduler.getVm(_pcm_vm_id).flush_slab_input();
 
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             bool ret;
-            ret = _scheduler.pollVm(_pcm_vm.first);
+            ret = _scheduler.pollVm(_pcm_vm_id);
             assert(ret);
             (void)ret;
         }
@@ -65,16 +65,16 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
         (void)seq_sent;         // Suppress unused parameter warning
         (void)cur_cwnd_in_pkts; // Suppress unused parameter warning
         _pcm_io_slab->in.tx_ready_pkts = 1;
-        _pcm_vm.second.flush_slab_input();
+        _scheduler.getVm(_pcm_vm_id).flush_slab_input();
 
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             bool ret;
-            ret = _scheduler.pollVm(_pcm_vm.first);
+            ret = _scheduler.pollVm(_pcm_vm_id);
             assert(ret);
             (void)ret;
         }
 
-        _pcm_vm.second.fetch_slab_output();
+        _scheduler.getVm(_pcm_vm_id).fetch_slab_output();
 
         std::cout << "pcm_htsim::UecPcmMp:" << this << " Generate EV: "
                   << static_cast<uint16_t>(_pcm_io_slab->out.ev) << std::endl;
@@ -84,7 +84,7 @@ class UecPcmMp : public UecMultipath, public PcmScheduledContext {
 
   private:
     PcmScheduler &_scheduler;
-    std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
+    PcmScheduler::PcmVmId _pcm_vm_id;
     pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab *_pcm_io_slab;
     bool _is_finished{false};
 };

@@ -83,8 +83,7 @@ class PcmScheduler final : public EventSource {
             });
     }
 
-    std::pair<PcmVmId, pcm_vm::PcmHandlerVmDesc &>
-    createVm(PcmScheduledContext *sched_ctx, PcmVmTag tag) {
+    PcmVmId createVm(PcmScheduledContext *sched_ctx, PcmVmTag tag) {
         auto new_vm_id = _vm_id_count++;
 
         if (configs_.size() < 1)
@@ -102,11 +101,18 @@ class PcmScheduler final : public EventSource {
                     throw std::runtime_error("New VM insertion failed");
                 // Reset scheduling
                 cur_rr_it_ = _vms_storage.begin();
-                return {new_vm_id, *(ret.first->second.first)};
+                return new_vm_id;
             }
         }
 
         throw std::runtime_error("No matching vm spec for id");
+    }
+
+    [[nodiscard]] pcm_vm::PcmHandlerVmDesc& getVm(PcmVmId id) {
+        auto it = _vms_storage.find(id);
+        if (it == _vms_storage.end())
+            throw std::runtime_error("VM id doesn't exist in storage");
+        return *(it->second.first);
     }
 
     [[nodiscard]] bool pollVm(PcmVmId id) {
@@ -206,8 +212,8 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
            bool rts = false)
         : UecSrc{trafficLogger, eventList,   std::move(mp),
                  nic,           no_of_ports, rts},
-          _scheduler{scheduler}, _pcm_vm{_scheduler.createVm(this, tag)},
-          _pcm_io_slab{_pcm_vm.second.get_signal_io_slab()} {
+          _scheduler{scheduler}, _pcm_vm_id{_scheduler.createVm(this, tag)},
+          _pcm_io_slab{_scheduler.getVm(_pcm_vm_id).get_signal_io_slab()} {
 
         // Assign PCM function pointers for congestion control callbacks
         // Use proper member function pointer assignment syntax
@@ -225,7 +231,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         PCM_PERF_PROF_REGION_SCOPE_INIT(ctrl_fetch_cycle,
                                         "CONTROL FETCH CYCLE");
         PCM_PERF_PROF_REGION_START(ctrl_fetch_cycle);
-        _pcm_vm.second.fetch_slab_output();
+        _scheduler.getVm(_pcm_vm_id).fetch_slab_output();
         UecSrc::_cwnd = _pcm_io_slab->out.cwnd;
         UecSrc::set_cwnd_bounds();
         PCM_PERF_PROF_REGION_END(ctrl_fetch_cycle, true);
@@ -235,7 +241,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         // many samples
         PCM_PERF_PROF_REGION_SCOPE_INIT(call_test_cycle, "RUNTIME CALL TEST");
         PCM_PERF_PROF_REGION_START(call_test_cycle);
-        _runtime_call_perftest = _pcm_vm.second.vcall_overhead_test();
+        _runtime_call_perftest = _scheduler.getVm(_pcm_vm_id).vcall_overhead_test();
         PCM_PERF_PROF_REGION_END(call_test_cycle, true);
         std::cerr << "Side effect for vcall overhead profiling: "
                   << _runtime_call_perftest << std::endl; // add side effect
@@ -270,10 +276,10 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         _pcm_io_slab->in.rtt = UecSrc::_raw_rtt;
         _pcm_io_slab->in.in_flight = UecSrc::_in_flight;
         _pcm_io_slab->in.tx_backlog_bytes = UecSrc::_backlog;
-        _pcm_vm.second.flush_slab_input();
+        _scheduler.getVm(_pcm_vm_id).flush_slab_input();
         PCM_PERF_PROF_REGION_END(ack_registration_cycle, true);
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
-            if (_scheduler.pollVm(_pcm_vm.first)) {
+            if (_scheduler.pollVm(_pcm_vm_id)) {
                 fetchUpdate();
             }
         }
@@ -293,10 +299,10 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         _pcm_io_slab->in.nack = 1;
         _pcm_io_slab->in.data_nacked = nacked_bytes;
         _pcm_io_slab->in.rtt = UecSrc::_base_rtt + UecSrc::_network_rtt;
-        _pcm_vm.second.flush_slab_input();
+        _scheduler.getVm(_pcm_vm_id).flush_slab_input();
         PCM_PERF_PROF_REGION_END(nack_registration_cycle, true);
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
-            if (_scheduler.pollVm(_pcm_vm.first)) {
+            if (_scheduler.pollVm(_pcm_vm_id)) {
                 fetchUpdate();
             }
         }
@@ -304,7 +310,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
 
   private:
     PcmScheduler &_scheduler;
-    std::pair<PcmScheduler::PcmVmId, pcm_vm::PcmHandlerVmDesc &> _pcm_vm;
+    PcmScheduler::PcmVmId _pcm_vm_id;
     pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab *_pcm_io_slab;
 #ifdef ENABLE_PROFILING
     pcm_uint _runtime_call_perftest;
