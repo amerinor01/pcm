@@ -117,8 +117,7 @@ class AlgorithmCodeGenerator:
                 var["initial_value"] = resolve(var["initial_value"])
 
         # Snapshot layout:
-        # mask | (2 * signals) | controls | variables
-        # 2 * signals because of thresholds (up to 1 per signal)
+        # mask | signals | controls | variables
         self.mask_offset = 0
         self.set_signal_mask_offset = self.mask_offset + 1
         self.signal_offset = self.set_signal_mask_offset + 1
@@ -128,12 +127,11 @@ class AlgorithmCodeGenerator:
         self.num_variable_slots = sum(
             var.get("num_entries", 1) for var in self.config.get("variables", [])
         )
-        self.threshold_offset = self.signal_offset + self.num_signals
-        self.control_offset = self.threshold_offset + self.num_signals
+        self.control_offset = self.signal_offset + self.num_signals
         self.variable_offset = self.control_offset + self.num_controls
         self.snapshot_size = (
             2
-            + (2 * self.num_signals)
+            + self.num_signals
             + self.num_controls
             + self.num_variable_slots
         )
@@ -219,7 +217,6 @@ class AlgorithmCodeGenerator:
         lines.append(f"    {self.mask_offset},        // kTriggerMaskOffset")
         lines.append(f"    {self.set_signal_mask_offset}, // kSignalSetMaskOffset")
         lines.append(f"    {self.signal_offset},      // kSignalOffset")
-        lines.append(f"    {self.threshold_offset},   // kThresholdOffset")
         lines.append(f"    {self.control_offset},     // kControlOffset")
         lines.append(f"    {self.variable_offset},    // kVariableOffset")
         lines.append(f"    {self.snapshot_size}            // kSnapshotSize")
@@ -281,7 +278,6 @@ class AlgorithmCodeGenerator:
             f"#define MASK_OFFSET {self.mask_offset}",
             f"#define SET_SIGNAL_MASK_OFFSET {self.set_signal_mask_offset}",
             f"#define SIGNAL_OFFSET {self.signal_offset}",
-            f"#define THRESHOLD_OFFSET {self.threshold_offset}",
             f"#define CONTROL_OFFSET {self.control_offset}",
             f"#define VAR_OFFSET {self.variable_offset}",
         ]:

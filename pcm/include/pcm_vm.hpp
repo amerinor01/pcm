@@ -163,156 +163,109 @@ struct PcmHandlerVmDesc {
 //
 // Further, ControlDesc and SignalDesc describe objects that are shared between
 // datapath and handler - therefore they need a custom storage datatype that
-// supports load/store/arithmetic operations for a given concurrency model. To
-// achieve that, these ControlDesc and SignalDesc use a Rebind pattern. These
-// descriptors rebind to the stateless template ControlPolicy and SignalPolicy
-// structures that are aware of a StorageType and implement actual logic of
-// signals and controls. Notice that policies for controls and signals are
-// statelesss: VM implementation manages space for these objects, so policy
-// works with these objects through references.
+// supports load/store/arithmetic operations for a given concurrency model.
 //
 // For example, a non-thread safe SimplePcmHandlerVm::PcmHandlerVm stores
 // Signals and Controls as pcm_uint's. It implements datapath
-// snapshotting with a simple plain memcpy. So, it rebinds ControlDesc and
-// SignalDesc to ControlPolicy and SignalPolicy instantiated with pcm_uint
-// storage which emits regular instructions.
+// snapshotting with a simple plain memcpy.
 //
 // Instantiation of ControlPolicy and SignalPolicy with atomic storage type
 // would yield a thread-safe code.
 // ============================================================================
 
 // ============================================================================
-// Control definitions: stateless policy + generic type-erased descriptor +
-// trait
+// Control definitions: generic descriptor + trait
 // ============================================================================
 
-// stateless policy
-template <typename StorageType, pcm_control_t ControlType,
-          pcm_uint InitialValue, pcm_uint Index>
-struct ControlPolicy {
+// generic descriptor
+template <pcm_control_t ControlType, pcm_uint InitialValue, pcm_uint Index>
+struct ControlDesc {
     static constexpr pcm_control_t kType = ControlType;
     static constexpr pcm_uint kInitialValue = InitialValue;
     static constexpr pcm_uint kIndex = Index;
-
-    static void set(StorageType &slot, pcm_uint v) {
-        slot = static_cast<StorageType>(v);
-    }
-    static pcm_uint get(const StorageType &slot) {
-        return static_cast<pcm_uint>(slot);
-    }
-};
-
-// generic type-erased descriptor
-template <pcm_control_t Type, pcm_uint InitialValue, pcm_uint Index>
-struct ControlDesc {
-    template <typename StorageType>
-    using Rebind = ControlPolicy<StorageType, Type, InitialValue, Index>;
 };
 
 // trait
 template <typename> struct is_control : std::false_type {};
-template <typename S, pcm_control_t C, pcm_uint V, pcm_uint I>
-struct is_control<ControlPolicy<S, C, V, I>> : std::true_type {};
+template <pcm_control_t C, pcm_uint V, pcm_uint I>
+struct is_control<ControlDesc<C, V, I>> : std::true_type {};
 template <typename T>
 inline constexpr bool is_control_v = is_control<std::decay_t<T>>::value;
 
 // ============================================================================
-// Signal definitions: stateless policy + generic type-erased descriptor + trait
+// Signal definitions: generic descriptor + trait
 // ============================================================================
 
-// stateless policy
-template <typename StorateType, pcm_signal_t Type, pcm_signal_accum_t Accum,
+// generic descriptor
+template <pcm_signal_t SigType, pcm_signal_accum_t Accum,
           pcm_uint TriggerThreshold, pcm_uint Mask>
-struct SignalPolicy {
+struct SignalDesc {
     static_assert(std::has_single_bit(Mask),
                   "Signal mask must be exactly one bit.");
-    static constexpr pcm_signal_t kType = Type;
+    static constexpr pcm_signal_t kSigType = SigType;
     static constexpr pcm_uint kMask = Mask;
     static constexpr pcm_uint kIndex = std::countr_zero(Mask);
-    static constexpr pcm_uint kInitialTriggerThreshold = TriggerThreshold;
+    static constexpr pcm_uint kTriggerThreshold = TriggerThreshold;
     static constexpr bool kIsTrigger =
         ((TriggerThreshold > 0) && (TriggerThreshold != PCM_SIG_NO_TRIGGER));
     static constexpr bool kIsAccum = (Accum != PCM_SIG_ACCUM_UNSPEC);
 
-    static void update(pcm_uint start_ts, util::GetTimeFn get_time,
-                       StorateType &cur, pcm_uint update_value)
+    static pcm_uint update(pcm_uint start_ts, util::GetTimeFn get_time,
+                           pcm_uint curr, pcm_uint update_value)
         requires(Accum != PCM_SIG_ACCUM_UNSPEC)
     {
-        const StorateType v = static_cast<StorateType>(update_value);
-        if constexpr (Type == PCM_SIG_ELAPSED_TIME) {
-            if constexpr (kIsTrigger) {
-                // this is a timer handled in the TriggerSignal: nothing to do
-                // TODO: reset is not handled properly!
-            } else {
-                cur = util::get_time_diff(start_ts, get_time());
-            }
-        } else if constexpr (Accum == PCM_SIG_ACCUM_SUM) {
-            cur += v;
+        // Time signal needs special treatment - it supports only monothonic
+        // increase
+        if constexpr (SigType == PCM_SIG_ELAPSED_TIME) {
+            static_assert(Accum == PCM_SIG_ACCUM_SUM,
+                          "PCM_SIG_ELAPSED_TIME supports only "
+                          "PCM_SIG_ACCUM_SUM accumulator");
+            return util::get_time_diff(start_ts, get_time());
+        }
+
+        if constexpr (Accum == PCM_SIG_ACCUM_SUM) {
+            return curr + update_value;
         } else if constexpr (Accum == PCM_SIG_ACCUM_LAST) {
-            cur = v;
+            return update_value;
         } else if constexpr (Accum == PCM_SIG_ACCUM_MIN) {
-            cur = std::min(cur, v);
+            return std::min(curr, update_value);
         } else if constexpr (Accum == PCM_SIG_ACCUM_MAX) {
-            cur = std::max(cur, v);
+            return std::max(curr, update_value);
         } else {
             static_assert(util::assert_always_false_v<void>,
                           "Unsupported accumulator");
+            return 0;
         }
     }
 
     static bool is_fired(pcm_uint start_ts, util::GetTimeFn get_time,
-                         const StorateType &cur, const StorateType &thresh)
+                         pcm_uint cur)
         requires(TriggerThreshold != PCM_SIG_NO_TRIGGER)
     {
-        if constexpr (Type == PCM_SIG_ELAPSED_TIME) {
+        if constexpr (SigType == PCM_SIG_ELAPSED_TIME) {
             auto timer = cur;
             if (timer) {
                 pcm_uint now = util::get_time_diff(start_ts, get_time());
                 // we assume that now value is always larger than timer value
-                if (now - timer >= thresh) {
+                if (now - timer >= kTriggerThreshold) {
                     return true;
                 }
             }
             return false;
-        } else if constexpr (Type == PCM_SIG_DATA_TX) {
+        } else if constexpr (SigType == PCM_SIG_DATA_TX) {
             auto burst_len = cur;
-            return burst_len ? (burst_len - 1) >= thresh : false;
+            return burst_len ? (burst_len - 1) >= kTriggerThreshold : false;
         } else {
-            return cur >= thresh;
+            return cur >= kTriggerThreshold;
         }
     }
-
-    static void rearm_if_needed(pcm_uint start_ts, util::GetTimeFn get_time,
-                                StorateType &cur)
-        requires(TriggerThreshold != PCM_SIG_NO_TRIGGER)
-    {
-        if constexpr (kType == PCM_SIG_ELAPSED_TIME) {
-            if (cur == PCM_SIG_REARM) {
-                cur = util::get_time_diff(start_ts, get_time());
-            }
-        } else if constexpr (kType == PCM_SIG_DATA_TX) {
-            if (cur == PCM_SIG_REARM) {
-                cur = static_cast<StorateType>(1);
-            }
-        }
-    }
-};
-
-// type-erased descriptor
-template <pcm_signal_t Type, pcm_signal_accum_t Accum,
-          pcm_uint TriggerThreshold, pcm_uint Mask>
-struct SignalDesc {
-    template <typename StorateType>
-    using Rebind =
-        SignalPolicy<StorateType, Type, Accum, TriggerThreshold, Mask>;
 };
 
 // trait
 template <typename> struct is_signal : std::false_type {};
-template <typename StorateType, pcm_signal_t Type, pcm_signal_accum_t Accum,
-          pcm_uint Thresh, pcm_uint Mask>
-struct is_signal<SignalPolicy<StorateType, Type, Accum, Thresh, Mask>>
-    : std::true_type {};
+template <pcm_signal_t SigType, pcm_signal_accum_t Accum, pcm_uint Thresh,
+          pcm_uint Mask>
+struct is_signal<SignalDesc<SigType, Accum, Thresh, Mask>> : std::true_type {};
 template <typename T>
 inline constexpr bool is_signal_v = is_signal<std::decay_t<T>>::value;
 
@@ -327,14 +280,6 @@ struct VariableDesc {
                   "Duplicate/non-uniform indices among variables");
     static constexpr pcm_uint kIndex = Index;
     static constexpr DType kInitialValue = InitialValue;
-    // Notice that we we still need to have Rebind for VariableDesc,
-    // because variable descriptors are managed similarly to control and signal
-    // descriptors during instantiation of PcmHandlerVm through object tuple.
-    // However, VariableDesc::Rebind does nothing (rebinds VariableDesc to
-    // itself). We don't need to specify storage datatype for Variables as they
-    // are exposed only to the handler (external datapath doesn't see them).
-    // Therefore, variables can be stored in the the handler snapshot.
-    template <typename> using Rebind = VariableDesc<DType, InitialValue, Index>;
 };
 
 // trait
@@ -360,13 +305,12 @@ struct PcmHandlerVm;
 // Snapshot layout descriptor - holds compile-time offset constants
 // ============================================================================
 template <size_t TriggerMaskOffset, size_t SignalSetMaskOffset,
-          size_t SignalOffset, size_t ThresholdOffset, size_t ControlOffset,
+          size_t SignalOffset, size_t ControlOffset,
           size_t VariableOffset, size_t SnapshotSize>
 struct SnapshotMemoryLayout {
     static constexpr size_t kTriggerMaskOffset = TriggerMaskOffset;
     static constexpr size_t kSignalSetMaskOffset = SignalSetMaskOffset;
     static constexpr size_t kSignalOffset = SignalOffset;
-    static constexpr size_t kThresholdOffset = ThresholdOffset;
     static constexpr size_t kControlOffset = ControlOffset;
     static constexpr size_t kVariableOffset = VariableOffset;
     static constexpr size_t kSnapshotSize = SnapshotSize;
@@ -460,7 +404,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                     auto const &slot =
                         static_cast<PcmHandlerVmImplT const *>(self)
                             ->template control_slot_impl<T::kIndex>();
-                    result = T::get(slot);
+                    result = slot;
                     return true;
                 }
             }
@@ -474,11 +418,11 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
                  if constexpr (T::kIsAccum) {
-                     if (T::kType == Match) {
+                     if (T::kSigType == Match) {
                          auto &slot =
                              static_cast<PcmHandlerVmImplT *>(self)
                                  ->template signal_slot_impl<T::kIndex>();
-                         T::update(start_ts_, get_time_, slot, v);
+                         slot = T::update(start_ts_, get_time_, slot, v);
                      }
                  }
              }
@@ -521,10 +465,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                      auto const &val =
                          static_cast<PcmHandlerVmImplT const *>(self)
                              ->template signal_slot_impl<T::kIndex>();
-                     auto const &thresh =
-                         static_cast<PcmHandlerVmImplT const *>(self)
-                             ->template thresh_slot_impl<T::kIndex>();
-                     if (T::is_fired(start_ts_, get_time_, val, thresh)) {
+                     if (T::is_fired(start_ts_, get_time_, val)) {
                          trigger_mask |= T::kMask;
                      }
                  }
@@ -532,20 +473,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
          }(this)),
          ...);
         return trigger_mask;
-    }
-
-    constexpr void rearm_triggers() {
-        (([&](auto *self) {
-             using T = Objs;
-             if constexpr (is_signal_v<T>) {
-                 if constexpr (T::kIsTrigger) {
-                     auto &val = static_cast<PcmHandlerVmImplT *>(self)
-                                     ->template signal_slot_impl<T::kIndex>();
-                     T::rearm_if_needed(start_ts_, get_time_, val);
-                 }
-             }
-         }(this)),
-         ...);
     }
 
     [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
@@ -572,8 +499,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         }
         static_cast<PcmHandlerVmImplT *>(this)
             ->apply_post_trigger_snapshot_impl();
-
-        rearm_triggers();
 
         PCM_PERF_PROF_REGION_END(trigger_cycle, true);
         return true;
@@ -605,14 +530,11 @@ template <const char *AlgoName, typename SnapshotLayout, typename... Ds>
 struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     : PcmHandlerVm<
           SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>,
-          AlgoName, SnapshotLayout,
-          // rebind all objects to pcm_uint
-          typename Ds::template Rebind<pcm_uint>...> {
+          AlgoName, SnapshotLayout, Ds...> {
 
     using SelfType =
         SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>;
-    using Base = PcmHandlerVm<SelfType, AlgoName, SnapshotLayout,
-                              typename Ds::template Rebind<pcm_uint>...>;
+    using Base = PcmHandlerVm<SelfType, AlgoName, SnapshotLayout, Ds...>;
 
     using ControlsTupleT = typename Base::ControlsTupleT;
     using SignalsTupleT = typename Base::SignalsTupleT;
@@ -625,17 +547,11 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     // pcm_uint storage
     std::array<pcm_uint, kNumControls> controls_storage_{};
     std::array<pcm_uint, kNumSignals> signals_storage_{};
-    std::array<pcm_uint, kNumSignals> thresholds_storage_{};
 
     explicit SimplePcmHandlerVm() : Base() {
         (([&] {
-             using T = typename Ds::template Rebind<pcm_uint>;
-             if constexpr (is_signal_v<T>) {
-                 if constexpr (T::kIsTrigger) {
-                     thresholds_storage_[T::kIndex] =
-                         T::kInitialTriggerThreshold;
-                 }
-             } else if constexpr (is_control_v<T>) {
+             using T = Ds;
+             if constexpr (is_control_v<T>) {
                  controls_storage_[T::kIndex] = T::kInitialValue;
              } else if constexpr (is_variable_v<T>) {
                  // Snapshot variables can be initialized directly
@@ -653,8 +569,6 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kSignalOffset],
                     signals_storage_.data(), kNumSignals * sizeof(pcm_uint));
         std::memset(signals_storage_.data(), 0, kNumSignals * sizeof(pcm_uint));
-        std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kThresholdOffset],
-                    thresholds_storage_.data(), kNumSignals * sizeof(pcm_uint));
         std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kControlOffset],
                     controls_storage_.data(), kNumControls * sizeof(pcm_uint));
     }
@@ -664,12 +578,12 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         auto set_signal_mask =
             Base::raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset];
         (([&](auto *self) {
-             using T = typename Ds::template Rebind<pcm_uint>;
+             using T = Ds;
              if constexpr (is_signal_v<T>) {
                  if (set_signal_mask & T::kMask) {
                      auto &slot = static_cast<SelfType *>(self)
                                       ->template signal_slot_impl<T::kIndex>();
-                     T::update(
+                     slot = T::update(
                          Base::start_ts_, Base::get_time_, slot,
                          Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
                                              T::kIndex]);
@@ -677,9 +591,6 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
              }
          }(this)),
          ...);
-        std::memcpy(thresholds_storage_.data(),
-                    &Base::raw_snapshot_[SnapshotLayout::kThresholdOffset],
-                    kNumSignals * sizeof(pcm_uint));
         std::memcpy(controls_storage_.data(),
                     &Base::raw_snapshot_[SnapshotLayout::kControlOffset],
                     kNumControls * sizeof(pcm_uint));
@@ -700,14 +611,6 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     template <std::size_t I> const pcm_uint &signal_slot_impl() const {
         static_assert(I < kNumSignals);
         return signals_storage_[I];
-    }
-    template <std::size_t I> pcm_uint &thresh_slot_impl() {
-        static_assert(I < kNumSignals);
-        return thresholds_storage_[I];
-    }
-    template <std::size_t I> const pcm_uint &thresh_slot_impl() const {
-        static_assert(I < kNumSignals);
-        return thresholds_storage_[I];
     }
 };
 
