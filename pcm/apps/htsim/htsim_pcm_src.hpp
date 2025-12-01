@@ -65,7 +65,7 @@ class PcmScheduler final : public EventSource {
         auto [so_handle, raw_fn_ptr] = symbol_result.value();
 
         // Store the shared object handle for cleanup
-        _spec_so_handle = std::shared_ptr<void>(so_handle, [](void *handle) {
+        _spec_so_handles.emplace_back(so_handle, [](void *handle) {
             if (handle) {
                 pcm_vm::util::shared_symbol_close(handle);
             }
@@ -185,7 +185,7 @@ class PcmScheduler final : public EventSource {
     simtime_picosec _poll_delay;
     ProgressType _sched_type;
     simtime_picosec _next_sched;
-    std::shared_ptr<void> _spec_so_handle;
+    std::vector<std::shared_ptr<void>> _spec_so_handles;
     using PcmVmPtr = std::unique_ptr<pcm_vm::PcmHandlerVmDesc>;
     std::vector<
         std::tuple<PcmVmTag, std::string_view, std::function<PcmVmPtr()>>>
