@@ -108,7 +108,7 @@ class PcmScheduler final : public EventSource {
         throw std::runtime_error("No matching vm spec for id");
     }
 
-    [[nodiscard]] pcm_vm::PcmHandlerVmDesc& getVm(PcmVmId id) {
+    [[nodiscard]] pcm_vm::PcmHandlerVmDesc &getVm(PcmVmId id) {
         auto it = _vms_storage.find(id);
         if (it == _vms_storage.end())
             throw std::runtime_error("VM id doesn't exist in storage");
@@ -224,6 +224,16 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
                 &PcmSrc::updateCwndOnNack);
     }
 
+    // This is a hack of UecSrc logic to ensure that PCM overwrites initial NSCC
+    // congestion window. However, we still call base::initNscc because
+    // apparently initNscc tunes some other parameters which break simulation if
+    // we don't set it.
+    void initNscc(mem_b cwnd,
+                  simtime_picosec peer_rtt = UecSrc::_network_rtt) override {
+        UecSrc::initNscc(cwnd, peer_rtt);
+        fetchUpdate();
+    }
+
     virtual ~PcmSrc() = default;
 
     void fetchUpdate() override {
@@ -231,7 +241,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
                                         "CONTROL FETCH CYCLE");
         PCM_PERF_PROF_REGION_START(ctrl_fetch_cycle);
         _scheduler.getVm(_pcm_vm_id).fetch_slab_output();
-        auto* io_slab = _scheduler.getVm(_pcm_vm_id).get_signal_io_slab();
+        auto *io_slab = _scheduler.getVm(_pcm_vm_id).get_signal_io_slab();
         UecSrc::_cwnd = io_slab->out.cwnd;
         UecSrc::set_cwnd_bounds();
         PCM_PERF_PROF_REGION_END(ctrl_fetch_cycle, true);
@@ -241,7 +251,8 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         // many samples
         PCM_PERF_PROF_REGION_SCOPE_INIT(call_test_cycle, "RUNTIME CALL TEST");
         PCM_PERF_PROF_REGION_START(call_test_cycle);
-        _runtime_call_perftest = _scheduler.getVm(_pcm_vm_id).vcall_overhead_test();
+        _runtime_call_perftest =
+            _scheduler.getVm(_pcm_vm_id).vcall_overhead_test();
         PCM_PERF_PROF_REGION_END(call_test_cycle, true);
         std::cerr << "Side effect for vcall overhead profiling: "
                   << _runtime_call_perftest << std::endl; // add side effect
@@ -270,7 +281,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         PCM_PERF_PROF_REGION_SCOPE_INIT(ack_registration_cycle,
                                         "ACK REGISTRATION CYCLE");
         PCM_PERF_PROF_REGION_START(ack_registration_cycle);
-        auto* io_slab = _scheduler.getVm(_pcm_vm_id).get_signal_io_slab();
+        auto *io_slab = _scheduler.getVm(_pcm_vm_id).get_signal_io_slab();
         io_slab->in.ack = 1;
         io_slab->in.ecn = skip ? 1 : 0;
         io_slab->in.data_tx = newly_acked_bytes;
@@ -297,7 +308,7 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         PCM_PERF_PROF_REGION_SCOPE_INIT(nack_registration_cycle,
                                         "NACK REGISTRATION CYCLE");
         PCM_PERF_PROF_REGION_START(nack_registration_cycle);
-        auto* io_slab = _scheduler.getVm(_pcm_vm_id).get_signal_io_slab();
+        auto *io_slab = _scheduler.getVm(_pcm_vm_id).get_signal_io_slab();
         io_slab->in.nack = 1;
         io_slab->in.data_nacked = nacked_bytes;
         io_slab->in.rtt = UecSrc::_base_rtt + UecSrc::_network_rtt;
