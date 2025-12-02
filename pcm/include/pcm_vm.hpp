@@ -210,6 +210,7 @@ struct SignalDesc {
     static constexpr pcm_signal_t kSigType = SigType;
     static constexpr pcm_uint kInitialValue = InitialValue;
     static constexpr bool kIsAccum = (AccumType != PCM_SIG_ACCUM_UNSPEC);
+    static constexpr pcm_signal_accum_t kAccumType = AccumType;
     static constexpr pcm_signal_trigger_t kTriggerType = TriggerType;
     static constexpr bool kResetUponTrigger = ResetUponTrigger;
     static constexpr pcm_uint kMask = Mask;
@@ -220,7 +221,7 @@ struct SignalDesc {
     {
         // Time signal depends on a system clock and handled at the upper layer
         if constexpr (SigType == PCM_SIG_ELAPSED_TIME) {
-            static_assert(util::assert_always_false_v<void>,
+            static_assert(util::assert_always_false_v<SignalDesc>,
                           "PCM_SIG_ELAPSED_TIME is handled separately");
         }
 
@@ -233,7 +234,7 @@ struct SignalDesc {
         } else if constexpr (AccumType == PCM_SIG_ACCUM_MAX) {
             return std::max(curr, update_value);
         } else {
-            static_assert(util::assert_always_false_v<void>,
+            static_assert(util::assert_always_false_v<SignalDesc>,
                           "Unsupported accumulator");
             return 0;
         }
@@ -393,6 +394,8 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              if constexpr (is_control_v<T>) {
                  static_cast<PcmHandlerVmImplT *>(this)
                      ->template set_control_slot<T::kIndex>(T::kInitialValue);
+                 raw_snapshot_[SnapshotLayout::kControlOffset + T::kIndex] =
+                     T::kInitialValue;
              } else if constexpr (is_signal_v<T>) {
                  static_cast<PcmHandlerVmImplT *>(this)
                      ->template set_signal_slot<T::kIndex>(T::kInitialValue);
@@ -443,10 +446,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                              impl->template set_signal_slot<T::kIndex>(
                                  util::get_time_diff(start_ts_, get_time_()));
                          } else {
-                             auto curr =
-                                 impl->template get_signal_slot<T::kIndex>();
-                             impl->template set_signal_slot<T::kIndex>(
-                                 T::accumulate(curr, v));
+                             impl->template accumulate_signal_slot<T>(v);
                          }
                      }
                  }
@@ -523,9 +523,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              }
          }()),
          ...);
-
-        static_cast<PcmHandlerVmImplT *>(this)
-            ->prepare_pre_invoke_snapshot_impl();
     }
 
     void apply_post_invoke_snapshot() {
@@ -540,13 +537,15 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                          impl->template set_signal_slot<T::kIndex>(
                              util::get_time_diff(start_ts_, get_time_()));
                      } else {
-                         auto curr =
-                             impl->template get_signal_slot<T::kIndex>();
-                         impl->template set_signal_slot<T::kIndex>(
-                             T::accumulate(
-                                 curr,
-                                 raw_snapshot_[SnapshotLayout::kSignalOffset +
-                                               T::kIndex]));
+                         // Snapshot application is a forced write, usually done
+                         // by single thread (the algorithm runner), but let's
+                         // reuse accumulation logic just in case, though
+                         // snapshot applies usually define the new baseline
+                         // value. However, the original code used accumulation
+                         // here.
+                         impl->template accumulate_signal_slot<T>(
+                             raw_snapshot_[SnapshotLayout::kSignalOffset +
+                                           T::kIndex]);
                      }
                  }
              }
@@ -627,12 +626,6 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
 
     explicit SimplePcmHandlerVm() : Base() { Base::init_state(); }
 
-    void prepare_pre_invoke_snapshot_impl() {
-        std::copy_n(controls_storage_.begin(), kNumControls,
-                    Base::raw_snapshot_.begin() +
-                        SnapshotLayout::kControlOffset);
-    }
-
     void apply_post_invoke_snapshot_impl() {
         std::copy_n(Base::raw_snapshot_.begin() +
                         SnapshotLayout::kControlOffset,
@@ -654,6 +647,13 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     template <std::size_t I> void set_signal_slot(pcm_uint val) {
         static_assert(I < kNumSignals);
         signals_storage_[I] = val;
+    }
+
+    // Simple implementation: Load, Math, Store
+    template <typename SignalT> void accumulate_signal_slot(pcm_uint val) {
+        static_assert(SignalT::kIndex < kNumSignals);
+        signals_storage_[SignalT::kIndex] =
+            SignalT::accumulate(signals_storage_[SignalT::kIndex], val);
     }
 };
 
@@ -684,19 +684,16 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
 
     explicit AtomicPcmHandlerVm() : Base() { Base::init_state(); }
 
-    void prepare_pre_invoke_snapshot_impl() {
-        for (size_t i = 0; i < kNumControls; ++i) {
-            Base::raw_snapshot_[SnapshotLayout::kControlOffset + i] =
-                controls_storage_[i].load(std::memory_order_relaxed);
-        }
-    }
-
     void apply_post_invoke_snapshot_impl() {
-        for (size_t i = 0; i < kNumControls; ++i) {
-            controls_storage_[i].store(
-                Base::raw_snapshot_[SnapshotLayout::kControlOffset + i],
-                std::memory_order_relaxed);
-        }
+        (([&]() {
+             using T = Ds;
+             if constexpr (is_control_v<T>) {
+                 set_control_slot<T::kIndex>(
+                     Base::raw_snapshot_[SnapshotLayout::kControlOffset +
+                                         T::kIndex]);
+             }
+         }()),
+         ...);
     }
 
     template <std::size_t I> [[nodiscard]] pcm_uint get_control_slot() const {
@@ -714,6 +711,37 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     template <std::size_t I> void set_signal_slot(pcm_uint val) {
         static_assert(I < kNumSignals);
         signals_storage_[I].store(val, std::memory_order_relaxed);
+    }
+
+    // Atomic implementation: Uses atomic RMW operations
+    template <typename SignalT> void accumulate_signal_slot(pcm_uint val) {
+        static_assert(SignalT::kIndex < kNumSignals);
+
+        if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_SUM) {
+            signals_storage_[SignalT::kIndex].fetch_add(
+                val, std::memory_order_relaxed);
+        } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_LAST) {
+            signals_storage_[SignalT::kIndex].store(val,
+                                                    std::memory_order_relaxed);
+        } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_MIN) {
+            pcm_uint old_val = signals_storage_[SignalT::kIndex].load(
+                std::memory_order_relaxed);
+            while (val < old_val &&
+                   !signals_storage_[SignalT::kIndex].compare_exchange_weak(
+                       old_val, val, std::memory_order_relaxed,
+                       std::memory_order_relaxed)) {
+                // old_val updated by weak exchange failure
+            }
+        } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_MAX) {
+            pcm_uint old_val = signals_storage_[SignalT::kIndex].load(
+                std::memory_order_relaxed);
+            while (val > old_val &&
+                   !signals_storage_[SignalT::kIndex].compare_exchange_weak(
+                       old_val, val, std::memory_order_relaxed,
+                       std::memory_order_relaxed)) {
+                // old_val updated by weak exchange failure
+            }
+        }
     }
 };
 
