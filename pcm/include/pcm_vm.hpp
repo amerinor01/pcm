@@ -408,10 +408,8 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
             using T = Objs;
             if constexpr (is_control_v<T>) {
                 if constexpr (T::kType == Match) {
-                    auto const &slot =
-                        static_cast<PcmHandlerVmImplT const *>(self)
-                            ->template control_slot_impl<T::kIndex>();
-                    result = slot;
+                    result = static_cast<PcmHandlerVmImplT const *>(self)
+                                 ->template get_control_slot<T::kIndex>();
                     return true;
                 }
             }
@@ -426,13 +424,15 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              if constexpr (is_signal_v<T>) {
                  if constexpr (T::kIsAccum) {
                      if constexpr (T::kSigType == Match) {
-                         auto &slot =
-                             static_cast<PcmHandlerVmImplT *>(self)
-                                 ->template signal_slot_impl<T::kIndex>();
+                         auto *impl = static_cast<PcmHandlerVmImplT *>(self);
                          if constexpr (T::kSigType == PCM_SIG_ELAPSED_TIME) {
-                             slot = util::get_time_diff(start_ts_, get_time_());
+                             impl->template set_signal_slot<T::kIndex>(
+                                 util::get_time_diff(start_ts_, get_time_()));
                          } else {
-                             slot = T::update(slot, v);
+                             auto curr =
+                                 impl->template get_signal_slot<T::kIndex>();
+                             impl->template set_signal_slot<T::kIndex>(
+                                 T::update(curr, v));
                          }
                      }
                  }
@@ -478,7 +478,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                          val = util::get_time_diff(start_ts_, get_time_());
                      } else {
                          val = static_cast<PcmHandlerVmImplT const *>(self)
-                                   ->template signal_slot_impl<T::kIndex>();
+                                   ->template get_signal_slot<T::kIndex>();
                      }
                      if (T::is_fired(last_trigger_vals_[T::kIndex], val)) {
                          trigger_mask |= T::kMask;
@@ -588,8 +588,10 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
                     signals_storage_.data(), kNumSignals * sizeof(pcm_uint));
         (([&] {
              using T = Ds;
-             if constexpr (is_signal_v<T> and T::kResetUponTrigger) {
-                 signals_storage_[T::kIndex] = T::kInitialValue;
+             if constexpr (is_signal_v<T>) {
+                 if constexpr (T::kResetUponTrigger) {
+                     signals_storage_[T::kIndex] = T::kInitialValue;
+                 }
              }
          }()),
          ...);
@@ -605,16 +607,18 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
              using T = Ds;
              if constexpr (is_signal_v<T>) {
                  if (set_signal_mask & T::kMask) {
-                     auto &slot = static_cast<SelfType *>(self)
-                                      ->template signal_slot_impl<T::kIndex>();
+                     auto *impl = static_cast<SelfType *>(self);
                      if constexpr (T::kSigType == PCM_SIG_ELAPSED_TIME) {
-                         slot = util::get_time_diff(Base::start_ts_,
-                                                    Base::get_time_());
+                         impl->template set_signal_slot<T::kIndex>(
+                             util::get_time_diff(Base::start_ts_,
+                                                 Base::get_time_()));
                      } else {
-                         slot = T::update(
-                             slot,
+                         auto curr =
+                             impl->template get_signal_slot<T::kIndex>();
+                         impl->template set_signal_slot<T::kIndex>(T::update(
+                             curr,
                              Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
-                                                 T::kIndex]);
+                                                 T::kIndex]));
                      }
                  }
              }
@@ -625,21 +629,21 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
                     kNumControls * sizeof(pcm_uint));
     }
 
-    template <std::size_t I> pcm_uint &control_slot_impl() {
+    template <std::size_t I> [[nodiscard]] pcm_uint get_control_slot() const {
         static_assert(I < kNumControls);
         return controls_storage_[I];
     }
-    template <std::size_t I> const pcm_uint &control_slot_impl() const {
+    template <std::size_t I> void set_control_slot(pcm_uint val) {
         static_assert(I < kNumControls);
-        return controls_storage_[I];
+        controls_storage_[I] = val;
     }
-    template <std::size_t I> pcm_uint &signal_slot_impl() {
+    template <std::size_t I> [[nodiscard]] pcm_uint get_signal_slot() const {
         static_assert(I < kNumSignals);
         return signals_storage_[I];
     }
-    template <std::size_t I> const pcm_uint &signal_slot_impl() const {
+    template <std::size_t I> void set_signal_slot(pcm_uint val) {
         static_assert(I < kNumSignals);
-        return signals_storage_[I];
+        signals_storage_[I] = val;
     }
 };
 
