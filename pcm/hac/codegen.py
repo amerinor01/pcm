@@ -274,9 +274,18 @@ class AlgorithmCodeGenerator:
         lines.append(
             f"using PcmHandlerVmSpecType = pcm_vm::SimplePcmHandlerVm<{self.algorithm_name}_AlgoName, {self.algorithm_name}_SnapshotLayout, DatapathSpec>;"
         )
+        lines.append(
+            f"using PcmHandlerVmAtomicSpecType = pcm_vm::AtomicPcmHandlerVm<{self.algorithm_name}_AlgoName, {self.algorithm_name}_SnapshotLayout, DatapathSpec>;"
+        )
+        lines.append('extern "C" {')
         lines.append(f"pcm_vm::PcmHandlerVmDesc* __{self.algorithm_name}_spec_get()")
         lines.append("{")
         lines.append("    return new PcmHandlerVmSpecType{};")
+        lines.append("}")
+        lines.append(f"pcm_vm::PcmHandlerVmDesc* __{self.algorithm_name}_atomic_spec_get()")
+        lines.append("{")
+        lines.append("    return new PcmHandlerVmAtomicSpecType{};")
+        lines.append("}")
         lines.append("}")
         return "\n".join(lines)
 

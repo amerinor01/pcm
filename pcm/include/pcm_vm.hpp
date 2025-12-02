@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
 #include <cassert>
 #include <chrono>
@@ -615,13 +616,10 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>;
     using Base = PcmHandlerVm<SelfType, AlgoName, SnapshotLayout, Ds...>;
 
-    using ControlsTupleT = typename Base::ControlsTupleT;
-    using SignalsTupleT = typename Base::SignalsTupleT;
-
     static constexpr std::size_t kNumControls =
-        std::tuple_size<ControlsTupleT>::value;
+        std::tuple_size<typename Base::ControlsTupleT>::value;
     static constexpr std::size_t kNumSignals =
-        std::tuple_size<SignalsTupleT>::value;
+        std::tuple_size<typename Base::SignalsTupleT>::value;
 
     // pcm_uint storage
     std::array<pcm_uint, kNumControls> controls_storage_;
@@ -656,6 +654,66 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     template <std::size_t I> void set_signal_slot(pcm_uint val) {
         static_assert(I < kNumSignals);
         signals_storage_[I] = val;
+    }
+};
+
+// ============================================================================
+// "Atomic" handler virtual machine implementation
+// Thread-safe storage using std::atomic.
+// ============================================================================
+template <const char *AlgoName, typename SnapshotLayout, typename Tuple>
+struct AtomicPcmHandlerVm;
+template <const char *AlgoName, typename SnapshotLayout, typename... Ds>
+struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
+    : PcmHandlerVm<
+          AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>,
+          AlgoName, SnapshotLayout, Ds...> {
+
+    using SelfType =
+        AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>;
+    using Base = PcmHandlerVm<SelfType, AlgoName, SnapshotLayout, Ds...>;
+
+    static constexpr std::size_t kNumControls =
+        std::tuple_size<typename Base::ControlsTupleT>::value;
+    static constexpr std::size_t kNumSignals =
+        std::tuple_size<typename Base::SignalsTupleT>::value;
+
+    // Atomic storage
+    std::array<std::atomic<pcm_uint>, kNumControls> controls_storage_;
+    std::array<std::atomic<pcm_uint>, kNumSignals> signals_storage_;
+
+    explicit AtomicPcmHandlerVm() : Base() { Base::init_state(); }
+
+    void prepare_pre_invoke_snapshot_impl() {
+        for (size_t i = 0; i < kNumControls; ++i) {
+            Base::raw_snapshot_[SnapshotLayout::kControlOffset + i] =
+                controls_storage_[i].load(std::memory_order_relaxed);
+        }
+    }
+
+    void apply_post_invoke_snapshot_impl() {
+        for (size_t i = 0; i < kNumControls; ++i) {
+            controls_storage_[i].store(
+                Base::raw_snapshot_[SnapshotLayout::kControlOffset + i],
+                std::memory_order_relaxed);
+        }
+    }
+
+    template <std::size_t I> [[nodiscard]] pcm_uint get_control_slot() const {
+        static_assert(I < kNumControls);
+        return controls_storage_[I].load(std::memory_order_relaxed);
+    }
+    template <std::size_t I> void set_control_slot(pcm_uint val) {
+        static_assert(I < kNumControls);
+        controls_storage_[I].store(val, std::memory_order_relaxed);
+    }
+    template <std::size_t I> [[nodiscard]] pcm_uint get_signal_slot() const {
+        static_assert(I < kNumSignals);
+        return signals_storage_[I].load(std::memory_order_relaxed);
+    }
+    template <std::size_t I> void set_signal_slot(pcm_uint val) {
+        static_assert(I < kNumSignals);
+        signals_storage_[I].store(val, std::memory_order_relaxed);
     }
 };
 
