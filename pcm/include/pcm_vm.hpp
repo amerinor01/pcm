@@ -214,7 +214,7 @@ struct SignalDesc {
     static constexpr pcm_uint kMask = Mask;
     static constexpr pcm_uint kIndex = std::countr_zero(Mask);
 
-    static pcm_uint update(pcm_uint curr, pcm_uint update_value)
+    static pcm_uint accumulate(pcm_uint curr, pcm_uint update_value)
         requires(AccumType != PCM_SIG_ACCUM_UNSPEC)
     {
         // Time signal depends on a system clock and handled at the upper layer
@@ -381,14 +381,27 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                 }
             });
         handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
+    }
 
+    // init_state has to be called by the derived class after the constructor
+    // got executed, because it uses methods of the derived class, using these
+    // methods in the based constructor is UB.
+    void init_state() {
         (([&]() {
              using T = Objs;
-             if constexpr (is_signal_v<T>) {
+             if constexpr (is_control_v<T>) {
+                 static_cast<PcmHandlerVmImplT *>(this)
+                     ->template set_control_slot<T::kIndex>(T::kInitialValue);
+             } else if constexpr (is_signal_v<T>) {
+                 static_cast<PcmHandlerVmImplT *>(this)
+                     ->template set_signal_slot<T::kIndex>(T::kInitialValue);
                  if constexpr (T::kTriggerType == PCM_SIG_TRIGGER_DELTA ||
                                T::kTriggerType == PCM_SIG_TRIGGER_MAGNITUDE) {
                      last_trigger_vals_[T::kIndex] = T::kInitialValue;
                  }
+             } else if constexpr (is_variable_v<T>) {
+                 raw_snapshot_[SnapshotLayout::kVariableOffset + T::kIndex] =
+                     std::bit_cast<pcm_uint>(T::kInitialValue);
              }
          }()),
          ...);
@@ -432,7 +445,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                              auto curr =
                                  impl->template get_signal_slot<T::kIndex>();
                              impl->template set_signal_slot<T::kIndex>(
-                                 T::update(curr, v));
+                                 T::accumulate(curr, v));
                          }
                      }
                  }
@@ -491,6 +504,57 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         return trigger_mask;
     }
 
+    void prepare_pre_invoke_snapshot(pcm_uint trigger_mask) {
+        raw_snapshot_[SnapshotLayout::kTriggerMaskOffset] = trigger_mask;
+        raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset] = 0;
+
+        (([&]() {
+             using T = Objs;
+             if constexpr (is_signal_v<T>) {
+                 raw_snapshot_[SnapshotLayout::kSignalOffset + T::kIndex] =
+                     static_cast<PcmHandlerVmImplT *>(this)
+                         ->template get_signal_slot<T::kIndex>();
+                 if constexpr (T::kResetUponTrigger) {
+                     static_cast<PcmHandlerVmImplT *>(this)
+                         ->template set_signal_slot<T::kIndex>(
+                             T::kInitialValue);
+                 }
+             }
+         }()),
+         ...);
+
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->prepare_pre_invoke_snapshot_impl();
+    }
+
+    void apply_post_invoke_snapshot() {
+        auto set_signal_mask =
+            raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset];
+        (([&](auto *self) {
+             using T = Objs;
+             if constexpr (is_signal_v<T>) {
+                 if (set_signal_mask & T::kMask) {
+                     auto *impl = static_cast<PcmHandlerVmImplT *>(self);
+                     if constexpr (T::kSigType == PCM_SIG_ELAPSED_TIME) {
+                         impl->template set_signal_slot<T::kIndex>(
+                             util::get_time_diff(start_ts_, get_time_()));
+                     } else {
+                         auto curr =
+                             impl->template get_signal_slot<T::kIndex>();
+                         impl->template set_signal_slot<T::kIndex>(
+                             T::accumulate(
+                                 curr,
+                                 raw_snapshot_[SnapshotLayout::kSignalOffset +
+                                               T::kIndex]));
+                     }
+                 }
+             }
+         }(this)),
+         ...);
+        static_cast<PcmHandlerVmImplT *>(this)
+            ->apply_post_invoke_snapshot_impl();
+    }
+
     [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
         PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
         PCM_PERF_PROF_REGION_START(trigger_cycle);
@@ -505,16 +569,15 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         // TODO: check if this breaks timer logic
         update_signals<PCM_SIG_ELAPSED_TIME>(0);
 
-        static_cast<PcmHandlerVmImplT *>(this)
-            ->prepare_pre_trigger_snapshot_impl(trigger_mask);
+        prepare_pre_invoke_snapshot(trigger_mask);
         if (handler_main_cb_(reinterpret_cast<pcm_handler_datapath_snapshot>(
                 raw_snapshot_.data())) != PCM_SUCCESS) [[unlikely]] {
-            // TODO: only this VM should die, not whole stack.
+            // TODO: only this VM should die, not the whole stack.
             std::cerr << "Algorithm exited with error. Abort." << std::endl;
             exit(EXIT_FAILURE);
         }
-        static_cast<PcmHandlerVmImplT *>(this)
-            ->apply_post_trigger_snapshot_impl();
+
+        apply_post_invoke_snapshot();
 
         PCM_PERF_PROF_REGION_END(trigger_cycle, true);
         return true;
@@ -561,72 +624,21 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         std::tuple_size<SignalsTupleT>::value;
 
     // pcm_uint storage
-    std::array<pcm_uint, kNumControls> controls_storage_{};
-    std::array<pcm_uint, kNumSignals> signals_storage_{};
+    std::array<pcm_uint, kNumControls> controls_storage_;
+    std::array<pcm_uint, kNumSignals> signals_storage_;
 
-    explicit SimplePcmHandlerVm() : Base() {
-        (([&] {
-             using T = Ds;
-             if constexpr (is_control_v<T>) {
-                 controls_storage_[T::kIndex] = T::kInitialValue;
-             } else if constexpr (is_signal_v<T>) {
-                 signals_storage_[T::kIndex] = T::kInitialValue;
-             } else if constexpr (is_variable_v<T>) {
-                 // Snapshot variables can be initialized directly
-                 Base::raw_snapshot_[SnapshotLayout::kVariableOffset +
-                                     T::kIndex] =
-                     std::bit_cast<pcm_uint>(T::kInitialValue);
-             }
-         }()),
-         ...);
+    explicit SimplePcmHandlerVm() : Base() { Base::init_state(); }
+
+    void prepare_pre_invoke_snapshot_impl() {
+        std::copy_n(controls_storage_.begin(), kNumControls,
+                    Base::raw_snapshot_.begin() +
+                        SnapshotLayout::kControlOffset);
     }
 
-    void prepare_pre_trigger_snapshot_impl(pcm_uint trigger_mask) {
-        Base::raw_snapshot_[SnapshotLayout::kTriggerMaskOffset] = trigger_mask;
-        Base::raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset] = 0;
-        std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kSignalOffset],
-                    signals_storage_.data(), kNumSignals * sizeof(pcm_uint));
-        (([&] {
-             using T = Ds;
-             if constexpr (is_signal_v<T>) {
-                 if constexpr (T::kResetUponTrigger) {
-                     signals_storage_[T::kIndex] = T::kInitialValue;
-                 }
-             }
-         }()),
-         ...);
-        std::memcpy(&Base::raw_snapshot_[SnapshotLayout::kControlOffset],
-                    controls_storage_.data(), kNumControls * sizeof(pcm_uint));
-    }
-
-    void apply_post_trigger_snapshot_impl() {
-        // update signals from snapshot
-        auto set_signal_mask =
-            Base::raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset];
-        (([&](auto *self) {
-             using T = Ds;
-             if constexpr (is_signal_v<T>) {
-                 if (set_signal_mask & T::kMask) {
-                     auto *impl = static_cast<SelfType *>(self);
-                     if constexpr (T::kSigType == PCM_SIG_ELAPSED_TIME) {
-                         impl->template set_signal_slot<T::kIndex>(
-                             util::get_time_diff(Base::start_ts_,
-                                                 Base::get_time_()));
-                     } else {
-                         auto curr =
-                             impl->template get_signal_slot<T::kIndex>();
-                         impl->template set_signal_slot<T::kIndex>(T::update(
-                             curr,
-                             Base::raw_snapshot_[SnapshotLayout::kSignalOffset +
-                                                 T::kIndex]));
-                     }
-                 }
-             }
-         }(this)),
-         ...);
-        std::memcpy(controls_storage_.data(),
-                    &Base::raw_snapshot_[SnapshotLayout::kControlOffset],
-                    kNumControls * sizeof(pcm_uint));
+    void apply_post_invoke_snapshot_impl() {
+        std::copy_n(Base::raw_snapshot_.begin() +
+                        SnapshotLayout::kControlOffset,
+                    kNumControls, controls_storage_.begin());
     }
 
     template <std::size_t I> [[nodiscard]] pcm_uint get_control_slot() const {
