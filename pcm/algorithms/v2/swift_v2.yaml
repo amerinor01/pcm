@@ -1,0 +1,107 @@
+algorithm:
+  name: swift_v2
+  description: "Swift congestion control algorithm (Optimized)"
+
+constants:
+  - name: BRTT
+    type: uint
+    value: "FABRIC_BRTT"
+    description: "Base RTT"
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MSS"
+    description: "Maximum segment size"
+  - name: FS_RANGE
+    type: float
+    value: !eval "BRTT * 5"
+    description: "Fair share range"
+  - name: FS_ALPHA
+    type: float
+    value: !eval "FS_RANGE / (1.0 / sqrt(0.1) - (1.0 / sqrt(FABRIC_BDP / MSS)))"
+    description: "Fair share alpha parameter"
+  - name: FS_BETA
+    type: float
+    value: !eval "-(FS_ALPHA / sqrt(FABRIC_BDP / MSS))"
+    description: "Fair share beta parameter"
+  - name: H
+    type: float
+    value: !eval "FABRIC_BRTT / 6.55"
+    description: "Hop delay parameter"
+  - name: BETA
+    type: float
+    value: 0.8
+    description: "Decrease constant"
+  - name: HOP_COUNT
+    type: uint
+    value: "FABRIC_HOP_COUNT"
+    description: "Number of hops"
+  - name: RETX_RESET_THRESH
+    type: uint
+    value: 4
+    description: "Retransmission reset threshold"
+  - name: AI
+    type: float
+    value: 1.0
+    description: "Additive increase constant"
+  - name: MAX_MDF
+    type: float
+    value: 0.5
+    description: "Maximum multiplicative decrease factor"
+
+signals:
+  - name: NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: RTO
+    type: PCM_SIG_RTO
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: RTT
+    type: PCM_SIG_RTT
+    accumulation: PCM_SIG_ACCUM_LAST
+    reset_upon_trigger: "false"
+  - name: ELAPSED_TIME
+    type: PCM_SIG_ELAPSED_TIME
+    accumulation: PCM_SIG_ACCUM_SUM
+
+controls:
+  - name: CWND
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_MIN_CWND"
+
+variables:
+  - name: ACKED
+    initial_value: 0
+    type: uint
+  - name: T_LAST_DECREASE
+    initial_value: 0
+    type: uint
+  - name: RETX_CNT
+    initial_value: 0
+    type: uint
+  - name: RTT_ESTIM
+    initial_value: "FABRIC_BRTT"
+    type: uint
+  - name: PREV_NACK
+    initial_value: 0
+    type: uint
+  - name: PREV_RTO
+    initial_value: 0
+    type: uint
+  - name: PREV_ACK
+    initial_value: 0
+    type: uint

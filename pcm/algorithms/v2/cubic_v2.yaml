@@ -1,0 +1,84 @@
+algorithm:
+  name: cubic_v2
+  description: "TCP CUBIC congestion control algorithm (Optimized)"
+
+constants:
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MTU"
+    description: "Maximum segment size"
+  - name: BETA
+    value: 0.7
+    type: float
+    description: "BETA"
+  - name: C
+    value: 0.4
+    type: float
+    description: "C"
+
+signals:
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+    reset_upon_trigger: "false"
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: ELAPSED_TIME
+    type: PCM_SIG_ELAPSED_TIME
+    accumulation: PCM_SIG_ACCUM_SUM
+  - name: RTT_SAMPLE
+    type: PCM_SIG_RTT
+    accumulation: PCM_SIG_ACCUM_LAST
+    reset_upon_trigger: "false"
+
+controls:
+  - name: CWND_BYTES
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_LINK_MSS"
+
+variables:
+  - name: SSTHRESH
+    initial_value: 100000.0
+    type: float
+  - name: CTRL_WINDOW_MSS
+    initial_value: 1.0
+    type: float
+  - name: W_MAX_MSS
+    initial_value: 1.0
+    type: float
+  - name: W_EST_MSS
+    initial_value: 1.0
+    type: float
+  - name: LAST_ADJ
+    initial_value: 0
+    type: uint
+  - name: K
+    initial_value: 0
+    type: float
+  - name: PREV_ACK
+    initial_value: 0
+    type: uint
+  - name: PREV_NACK
+    initial_value: 0
+    type: uint
+  - name: PREV_ECN
+    initial_value: 0
+    type: uint
+  - name: PREV_ACKED_BYTES
+    initial_value: 0
+    type: uint
+  - name: PREV_NACKED_BYTES
+    initial_value: 0
+    type: uint

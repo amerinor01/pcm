@@ -1,0 +1,112 @@
+algorithm:
+  name: smartt_v2
+  description: "SMARTT congestion control algorithm (Optimized)"
+
+constants:
+  - name: FI_BRTT_TOL
+    type: float
+    value: 0.75
+  - name: BDP
+    type: uint
+    value: "FABRIC_BDP"
+  - name: BRTT
+    type: uint
+    value: "FABRIC_BRTT"
+  - name: TRTT
+    type: uint
+    value: "FABRIC_TRTT"
+  - name: MSS
+    type: uint
+    value: "FABRIC_LINK_MSS"
+  - name: REACTION_DELAY
+    type: float
+    value: 1.0
+  - name: X_GAIN
+    type: float
+    value: 2.0
+  - name: Y_GAIN
+    type: float
+    value: 2.5
+  - name: Z_GAIN
+    type: uint
+    value: 2
+  - name: W_GAIN
+    type: float
+    value: 0.8
+  - name: QA_SCALING
+    type: uint
+    value: 1
+
+signals:
+  - name: RTT_SAMPLE
+    type: PCM_SIG_RTT
+    accumulation: PCM_SIG_ACCUM_LAST
+    reset_upon_trigger: "false"
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+    reset_upon_trigger: "false"
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: NUM_RTO
+    type: PCM_SIG_RTO
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: ELAPSED_TIME
+    type: PCM_SIG_ELAPSED_TIME
+    accumulation: PCM_SIG_ACCUM_SUM
+
+controls:
+  - name: CWND_BYTES
+    type: PCM_CTRL_CWND
+    initial_value: "FABRIC_MAX_CWND"
+
+variables:
+  - name: ACKED_BYTES
+    initial_value: 0
+    type: uint
+  - name: BYTES_IGNORED
+    initial_value: 0
+    type: uint
+  - name: BYTES_TO_IGNORE
+    initial_value: 0
+    type: uint
+  - name: TRIGGER_QA
+    initial_value: 0
+    type: uint
+  - name: QA_DEADLINE
+    initial_value: 0
+    type: uint
+  - name: FAST_COUNT
+    initial_value: 0
+    type: uint
+  - name: FAST_ACTIVE
+    initial_value: 0
+    type: uint
+  - name: PREV_ECN
+    initial_value: 0
+    type: uint
+  - name: PREV_ACK
+    initial_value: 0
+    type: uint
+  - name: PREV_RTO
+    initial_value: 0
+    type: uint
+  - name: PREV_NACK
+    initial_value: 0
+    type: uint

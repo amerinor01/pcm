@@ -2,18 +2,26 @@
 # Algorithm Plugins
 # ===============================================
 
-# Define algorithm names
-set(ALGO_PLUGIN_NAMES newreno dctcp swift dcqcn smartt nscc uec_dctcp strack strack_light ops_lb reps momentum cubic uec_dctcp_v2)
+set(ALGO_PLUGIN_NAMES 
+    newreno dctcp swift dcqcn smartt nscc uec_dctcp strack strack_light ops_lb reps momentum cubic uec_dctcp_v2
+    newreno_v2 dctcp_v2 cubic_v2 swift_v2 nscc_v2 smartt_v2
+)
 
 # Make it available to other subdirectories (e.g., HAC) via cache
 set(ALGO_PLUGIN_NAMES ${ALGO_PLUGIN_NAMES} CACHE INTERNAL "List of algorithm plugin names")
 
 # Function to create algorithm plugins
 function(create_algo_plugin ALGO_NAME)
-    # Set build-time generated file locations
-    set(YAML_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${ALGO_NAME}.yaml")
+    # Check if this is a V2 algorithm (files located in v2/ subdirectory)
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/v2/${ALGO_NAME}.c")
+        set(YAML_FILE "${CMAKE_CURRENT_SOURCE_DIR}/v2/${ALGO_NAME}.yaml")
+        set(SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/v2/${ALGO_NAME}.c")
+    else()
+        set(YAML_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${ALGO_NAME}.yaml")
+        set(SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${ALGO_NAME}.c")
+    endif()
+
     set(FABRIC_FILE "${CMAKE_CURRENT_SOURCE_DIR}/fabric.yaml")
-    set(SOURCE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/${ALGO_NAME}.c")  # Existing source file
     set(HEADER_FILE "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}.h")  # Generated header
     set(SPEC_FILE "${CMAKE_BINARY_DIR}/algorithms/${ALGO_NAME}_spec.cpp")  # Generated C++ spec file
     
@@ -52,7 +60,7 @@ function(create_algo_plugin ALGO_NAME)
     add_dependencies(${ALGO_NAME} ${ALGO_NAME}_gen)
     
     # Special handling for dctcp and newreno
-    if(ALGO_NAME STREQUAL "dctcp" OR ALGO_NAME STREQUAL "newreno")
+    if(ALGO_NAME STREQUAL "dctcp" OR ALGO_NAME STREQUAL "newreno" OR ALGO_NAME STREQUAL "newreno_v2" OR ALGO_NAME STREQUAL "dctcp_v2")
         target_sources(${ALGO_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/tcp_utils.c")
     endif()
     
