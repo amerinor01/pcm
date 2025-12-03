@@ -138,15 +138,11 @@ static PCM_FORCE_INLINE void nscc_fulfill_adjustment(ALGO_CTX_ARGS, pcm_uint *cu
 int algorithm_main() {
     pcm_uint q_delay;
     // Calculate Deltas
-    pcm_uint delta_nack = get_signal(SIG_NUM_NACK) - get_var_uint(VAR_PREV_NACK);
-    pcm_uint delta_ack = get_signal(SIG_NUM_ACK) - get_var_uint(VAR_PREV_ACK);
     pcm_uint delta_ecn = get_signal(SIG_NUM_ECN) - get_var_uint(VAR_PREV_ECN);
     pcm_uint delta_nacked_bytes = get_signal(SIG_NUM_NACKED_BYTES) - get_var_uint(VAR_PREV_NACKED_BYTES);
     pcm_uint delta_acked_bytes = get_signal(SIG_NUM_ACKED_BYTES) - get_var_uint(VAR_PREV_ACKED_BYTES);
 
     // Update Cache
-    set_var_uint(VAR_PREV_NACK, get_signal(SIG_NUM_NACK));
-    set_var_uint(VAR_PREV_ACK, get_signal(SIG_NUM_ACK));
     set_var_uint(VAR_PREV_ECN, get_signal(SIG_NUM_ECN));
     set_var_uint(VAR_PREV_NACKED_BYTES, get_signal(SIG_NUM_NACKED_BYTES));
     set_var_uint(VAR_PREV_ACKED_BYTES, get_signal(SIG_NUM_ACKED_BYTES));
@@ -160,10 +156,10 @@ int algorithm_main() {
 
     pcm_uint cur_cwnd = get_control(CTRL_CWND_BYTES);
 
-    if (delta_nack > 0) {
+    if (delta_nacked_bytes > 0) {
         nscc_handle_loss_signal(ALGO_CTX_PASS, &cur_cwnd, delta_nacked_bytes);
         goto save_state;
-    } else if (delta_ack > 0) {
+    } else if (delta_acked_bytes > 0) {
         nscc_handle_ack(ALGO_CTX_PASS, q_delay, &cur_cwnd, delta_acked_bytes, delta_ecn);
         nscc_fulfill_adjustment(ALGO_CTX_PASS, &cur_cwnd);
     } else {

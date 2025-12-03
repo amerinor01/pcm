@@ -68,7 +68,7 @@ static PCM_FORCE_INLINE void tcp_cubic_perform_increase(ALGO_CTX_ARGS, pcm_uint 
     }
 }
 
-PCM_FORCE_INLINE void tcp_cubic_slow_start(ALGO_CTX_ARGS, pcm_float *cur_cwnd, pcm_uint *acks_to_consume) {
+static PCM_FORCE_INLINE void tcp_cubic_slow_start(ALGO_CTX_ARGS, pcm_float *cur_cwnd, pcm_uint *acks_to_consume) {
     pcm_float to_ssthresh = MIN(*acks_to_consume, get_var_float(VAR_SSTHRESH) - *cur_cwnd);
     // printf("to_ssthresh %f\n", to_ssthresh);
     // printf("VAR_SSTHRESH %f\n", get_var_float(VAR_SSTHRESH));

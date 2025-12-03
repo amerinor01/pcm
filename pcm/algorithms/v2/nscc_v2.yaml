@@ -82,28 +82,20 @@ signals:
   - name: NUM_ACKED_BYTES
     type: PCM_SIG_DATA_TX
     accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
     reset_upon_trigger: "false"
   - name: NUM_ECN
     type: PCM_SIG_ECN
     accumulation: PCM_SIG_ACCUM_SUM
     reset_upon_trigger: "false"
-  - name: NUM_ACK
-    type: PCM_SIG_ACK
-    accumulation: PCM_SIG_ACCUM_SUM
-    trigger_type: PCM_SIG_TRIGGER_DELTA
-    trigger_op: ">="
-    trigger_threshold: 1
-    reset_upon_trigger: "false"
-  - name: NUM_NACK
-    type: PCM_SIG_NACK
-    accumulation: PCM_SIG_ACCUM_SUM
-    trigger_type: PCM_SIG_TRIGGER_DELTA
-    trigger_op: ">="
-    trigger_threshold: 1
-    reset_upon_trigger: "false"
   - name: NUM_NACKED_BYTES
     type: PCM_SIG_DATA_NACKED
     accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
     reset_upon_trigger: "false"
   - name: ELAPSED_TIME
     type: PCM_SIG_ELAPSED_TIME
