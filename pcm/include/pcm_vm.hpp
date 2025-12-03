@@ -512,13 +512,15 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         (([&]() {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
-                 raw_snapshot_[SnapshotLayout::kSignalOffset + T::kIndex] =
-                     static_cast<PcmHandlerVmImplT *>(this)
-                         ->template get_signal_slot<T::kIndex>();
                  if constexpr (T::kResetUponTrigger) {
-                     static_cast<PcmHandlerVmImplT *>(this)
-                         ->template set_signal_slot<T::kIndex>(
-                             T::kInitialValue);
+                     raw_snapshot_[SnapshotLayout::kSignalOffset + T::kIndex] =
+                         static_cast<PcmHandlerVmImplT *>(this)
+                             ->template exchange_signal_slot<T::kIndex>(
+                                 T::kInitialValue);
+                 } else {
+                     raw_snapshot_[SnapshotLayout::kSignalOffset + T::kIndex] =
+                         static_cast<PcmHandlerVmImplT *>(this)
+                             ->template get_signal_slot<T::kIndex>();
                  }
              }
          }()),
@@ -648,6 +650,12 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         static_assert(I < kNumSignals);
         signals_storage_[I] = val;
     }
+    template <std::size_t I> pcm_uint exchange_signal_slot(pcm_uint val) {
+        static_assert(I < kNumSignals);
+        pcm_uint old = signals_storage_[I];
+        signals_storage_[I] = val;
+        return old;
+    }
 
     // Simple implementation: Load, Math, Store
     template <typename SignalT> void accumulate_signal_slot(pcm_uint val) {
@@ -714,6 +722,10 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     template <std::size_t I> void set_signal_slot(pcm_uint val) {
         static_assert(I < kNumSignals);
         signals_storage_[I].v.store(val, std::memory_order_relaxed);
+    }
+    template <std::size_t I> pcm_uint exchange_signal_slot(pcm_uint val) {
+        static_assert(I < kNumSignals);
+        return signals_storage_[I].v.exchange(val, std::memory_order_relaxed);
     }
 
     // Atomic implementation: Uses atomic RMW operations
