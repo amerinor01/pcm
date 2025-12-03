@@ -5,6 +5,7 @@
 set(ALGO_PLUGIN_NAMES 
     newreno dctcp swift dcqcn smartt nscc uec_dctcp strack strack_light ops_lb reps momentum cubic uec_dctcp_v2
     newreno_v2 dctcp_v2 cubic_v2 swift_v2 nscc_v2 smartt_v2
+    ops_lb_v2 reps_v2 strack_v2 strack_light_v2
 )
 
 # Make it available to other subdirectories (e.g., HAC) via cache
