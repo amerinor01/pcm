@@ -709,23 +709,23 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
 
     template <std::size_t I> [[nodiscard]] pcm_uint get_control_slot() const {
         static_assert(I < kNumControls);
-        return controls_storage_[I].v.load(std::memory_order_relaxed);
+        return controls_storage_[I].v.load(std::memory_order_acquire);
     }
     template <std::size_t I> void set_control_slot(pcm_uint val) {
         static_assert(I < kNumControls);
-        controls_storage_[I].v.store(val, std::memory_order_relaxed);
+        controls_storage_[I].v.store(val, std::memory_order_release);
     }
     template <std::size_t I> [[nodiscard]] pcm_uint get_signal_slot() const {
         static_assert(I < kNumSignals);
-        return signals_storage_[I].v.load(std::memory_order_relaxed);
+        return signals_storage_[I].v.load(std::memory_order_acquire);
     }
     template <std::size_t I> void set_signal_slot(pcm_uint val) {
         static_assert(I < kNumSignals);
-        signals_storage_[I].v.store(val, std::memory_order_relaxed);
+        signals_storage_[I].v.store(val, std::memory_order_release);
     }
     template <std::size_t I> pcm_uint exchange_signal_slot(pcm_uint val) {
         static_assert(I < kNumSignals);
-        return signals_storage_[I].v.exchange(val, std::memory_order_relaxed);
+        return signals_storage_[I].v.exchange(val, std::memory_order_acq_rel);
     }
 
     // Atomic implementation: Uses atomic RMW operations
@@ -734,13 +734,13 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
 
         if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_SUM) {
             signals_storage_[SignalT::kIndex].v.fetch_add(
-                val, std::memory_order_relaxed);
+                val, std::memory_order_acq_rel);
         } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_LAST) {
             signals_storage_[SignalT::kIndex].v.store(
-                val, std::memory_order_relaxed);
+                val, std::memory_order_release);
         } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_MIN) {
             pcm_uint old_val = signals_storage_[SignalT::kIndex].v.load(
-                std::memory_order_relaxed);
+                std::memory_order_acquire);
             while (val < old_val &&
                    !signals_storage_[SignalT::kIndex].v.compare_exchange_weak(
                        old_val, val, std::memory_order_relaxed,
@@ -749,7 +749,7 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
             }
         } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_MAX) {
             pcm_uint old_val = signals_storage_[SignalT::kIndex].v.load(
-                std::memory_order_relaxed);
+                std::memory_order_acquire);
             while (val > old_val &&
                    !signals_storage_[SignalT::kIndex].v.compare_exchange_weak(
                        old_val, val, std::memory_order_relaxed,
