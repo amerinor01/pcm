@@ -80,8 +80,8 @@ std::vector<NetworkEvent> generate_event_trace(int num_events, uint64_t seed)
     std::mt19937_64 rng(seed);
     std::uniform_int_distribution<int> rtt_jitter_us(60000, 200000); // 60-200ms
     // std::bernoulli_distribution loss_ber(0.1);
-    std::bernoulli_distribution loss_ber(0.1);
-    std::bernoulli_distribution ecn_ber(0.01);
+    std::bernoulli_distribution loss_ber(0.0);
+    std::bernoulli_distribution ecn_ber(0.1);
     std::uniform_int_distribution<int> inflight_pkts(50, 1500);
 
     const u32 mss = 1460; // Maximum segment size
@@ -447,19 +447,20 @@ static LibccpContext g_libccp_ctx;
 static void libccp_submit_event(void *ctx, const NetworkEvent &evt)
 {
     auto *lctx = static_cast<LibccpContext *>(ctx);
-    if (!lctx->testbed || !lctx->testbed->active_conn)
-        return;
     libccp_apply_event(lctx->testbed->active_conn, evt);
 }
 
 static void libccp_invoke(void *ctx)
 {
     auto *lctx = static_cast<LibccpContext *>(ctx);
-    if (!lctx->testbed || !lctx->testbed->active_conn)
-        return;
 
     // Let CCP process (may send measurements to Portus)
     ccp_invoke(lctx->testbed->active_conn);
+}
+
+static CcAlgorithmAdapter::ControlOutput libccp_fetch_output(void *ctx)
+{
+    auto *lctx = static_cast<LibccpContext *>(ctx);
 
     // Poll for responses from Portus until we get message or timeout
     // We expect that Portus will send an update back every ACK.
@@ -485,11 +486,6 @@ static void libccp_invoke(void *ctx)
         std::cerr << "[WARNING] Portus didn't respond within timeout (waited "
                   << polls << " polls)\n";
     }
-}
-
-static CcAlgorithmAdapter::ControlOutput libccp_fetch_output(void *ctx)
-{
-    auto *lctx = static_cast<LibccpContext *>(ctx);
     CcAlgorithmAdapter::ControlOutput out;
     if (lctx->testbed && lctx->testbed->active_conn)
     {
@@ -545,14 +541,20 @@ static void pcm_vm_handler_thread_fn(pcm_vm::PcmHandlerVmDesc *vm, std::atomic<b
 
     while (running->load(std::memory_order_acquire))
     {
+#ifdef PROFILE_PCM_ASYNC_INVOKE
         auto t1 = std::chrono::high_resolution_clock::now();
-        // Poll VM to check if trigger fired and process
+#endif
+        //  Poll VM to check if trigger fired and process
         if (vm->invoke_cc_algorithm_on_trigger())
         {
-            updates_processed->fetch_add(1, std::memory_order_release);
+#ifdef PROFILE_PCM_ASYNC_INVOKE
             auto t2 = std::chrono::high_resolution_clock::now();
             u64 duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
             std::cout << "[worker invocation] : " << duration_ns << " ns\n";
+#endif
+            //vm->fetch_slab_output();
+            //std::cout << "ev=" << vm->get_signal_io_slab()->out.ev << std::endl; 
+            updates_processed->fetch_add(1, std::memory_order_release);
         }
     }
     std::cout << "[PCM Handler Thread] Exiting\n";
@@ -589,7 +591,8 @@ static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
     // Common fields
     slab_in.in_flight = evt.packets_in_flight * (u64)evt.packet_size;
     slab_in.tx_backlog_bytes = 8 * 1024 * 1024; // Same as libccp example
-
+    slab_in.tx_ready_pkts = 1; // for LB
+    
     // Flush the input to the VM
     pctx->vm->flush_slab_input();
 }
@@ -601,12 +604,12 @@ static void pcm_vm_invoke(void *ctx)
     // SYNC mode: Main thread directly invokes the trigger check
     if (pctx->mode == PcmVmMode::SYNC)
     {
-        auto t1 = std::chrono::high_resolution_clock::now();
+        // auto t1 = std::chrono::high_resolution_clock::now();
         auto ret = pctx->vm->invoke_cc_algorithm_on_trigger();
         assert(ret);
-        auto t2 = std::chrono::high_resolution_clock::now();
-        u64 duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
-        std::cout << "[worker invocation] : " << duration_ns << " ns\n";
+        // auto t2 = std::chrono::high_resolution_clock::now();
+        // u64 duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
+        // std::cout << "[worker invocation] : " << duration_ns << " ns\n";
     }
     // ASYNC mode: Handler thread runs invoke_cc_algorithm_on_trigger()
     // Datapath thread does nothing here - just submit events and fetch results
@@ -624,7 +627,8 @@ static CcAlgorithmAdapter::ControlOutput pcm_vm_fetch_output(void *ctx)
 
         while ((current_updates = pctx->updates_processed.load(std::memory_order_acquire)) == pctx->updates_fetched)
         {
-            // Create background flushes to invalidate signal storage cache
+            // Create empty background flushes to invalidate signal storage cache
+            // This emulates worst case for PCM when ACKs keep arriving
             pctx->vm->flush_slab_input();
             // Spin until new update from worker thread is available
         }
@@ -839,12 +843,14 @@ int main(int argc, char **argv)
 
         // 2) Invoke CC algorithm
         cc_adapter.invoke(cc_adapter.context);
-
+#ifdef PROFILE_EVENT_SUBMISSION
+        auto t2 = std::chrono::high_resolution_clock::now();
+#endif
         // 3) Fetch control output
         auto post_output = cc_adapter.fetch_output(cc_adapter.context);
-
+#ifdef PROFILE_FULL_CYCLE
         auto t2 = std::chrono::high_resolution_clock::now();
-
+#endif
         // Clear one-shot flags (libccp-specific cleanup)
         if (mode == "libccp")
         {
@@ -857,8 +863,8 @@ int main(int argc, char **argv)
         u64 duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
 
         // Log post-invoke state
-        // std::cout << "[iter " << i << ", post-invoke] cwnd=" << post_output.cwnd
-        //             << " rate=" << post_output.rate_bytes_per_s << " B/s\n";
+        // std::cout << "[iter " << i << ", outer_loop] cwnd=" << post_output.cwnd
+        //           << " rate=" << post_output.rate_bytes_per_s << " B/s\n";
         // std::cout << "[iter " << i << ", timing] : " << duration_ns << " ns\n";
     }
 
