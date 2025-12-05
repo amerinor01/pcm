@@ -10,7 +10,7 @@
 // Build (libccp mode):
 //   clang++ -std=c++11 -o testbench_with_portus testbench_with_portus.cpp -L. -lccp -I. -lpthread
 // Build (PCM mode):
-//   clang++ -std=c++17 -o testbench_with_portus testbench_with_portus.cpp \
+//   clang++ -std=c++17 -o testbench_with_portus testbench_with_portus.cpp
 //     -I../pcm-sdk/pcm/include -L../pcm-sdk/pcm/build/lib -Wl,-rpath,../pcm-sdk/pcm/build/lib
 //
 // Run (libccp):
@@ -28,6 +28,7 @@
 #include <iostream>
 #include <random>
 #include <thread> // for sleep_for and std::thread
+#include <sys/syscall.h>
 
 // Unix socket includes
 #include <sys/socket.h>
@@ -35,22 +36,37 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-// Thread affinity includes (platform-specific)
-#ifdef __APPLE__
-#include <pthread.h>
-#include <mach/mach.h>
-#include <mach/thread_policy.h>
-#elif __linux__
+// Thread mapping
 #include <pthread.h>
 #include <sched.h>
-#endif
 
 extern "C"
 {
 #include "ccp.h"
 }
 
-// PCM VM includes
+// Profiling modes
+// #define PROFILE_SUBMIT_INVOKE 1
+// #define PROFILE_ASYNC_INVOKE 1
+#if !defined(PROFILE_SUBMIT_INVOKE) && !defined(PROFILE_ASYNC_INVOKE) && !defined(PROFILE_FULL_CYCLE)
+#define PROFILE_FULL_CYCLE 1
+#endif
+
+#define ENABLE_TIMING_LIB 1
+#include "../pcm/include/timing.hpp"
+// main thread timing
+#ifdef PERF_INSTR_TIMER
+using timing_backend = timing_lib::PerfInstrTimer;
+#elif defined(CHRONO_TIMER)
+using timing_backend = timing_lib::ChronoTimer;
+#else
+using timing_backend = timing_lib::RdtscTimer;
+#endif
+timing_backend stats{
+    timing_lib::benchmark_timer<timing_backend>("main thread timer")};
+timing_backend timing{stats};
+
+// PCM includes
 #include "../pcm/include/pcm_vm.hpp"
 
 using u64 = uint64_t;
@@ -72,16 +88,15 @@ struct NetworkEvent
 };
 
 // ---------- Event trace generation ----------
-std::vector<NetworkEvent> generate_event_trace(int num_events, uint64_t seed)
+std::vector<NetworkEvent> generate_event_trace(int num_events, uint64_t seed, bool no_loss)
 {
     std::vector<NetworkEvent> events;
     events.reserve(num_events);
 
     std::mt19937_64 rng(seed);
-    std::uniform_int_distribution<int> rtt_jitter_us(60000, 200000); // 60-200ms
-    // std::bernoulli_distribution loss_ber(0.1);
-    std::bernoulli_distribution loss_ber(0.0);
-    std::bernoulli_distribution ecn_ber(0.1);
+    std::uniform_int_distribution<int> rtt_jitter_us(1, 20);
+    std::bernoulli_distribution loss_ber(no_loss ? 0.0 : 0.2);
+    std::bernoulli_distribution ecn_ber(0.5);
     std::uniform_int_distribution<int> inflight_pkts(50, 1500);
 
     const u32 mss = 1460; // Maximum segment size
@@ -135,8 +150,10 @@ struct CcAlgorithmAdapter
     // Returns updated cwnd and rate
     struct ControlOutput
     {
-        u32 cwnd;
-        u32 rate_bytes_per_s;
+        u32 cwnd{};
+        u32 rate_bytes_per_s{};
+        u32 ev{};
+        bool skip{};
     };
     ControlOutput (*fetch_output)(void *ctx);
 };
@@ -537,25 +554,31 @@ struct PcmVmContext
 static void pcm_vm_handler_thread_fn(pcm_vm::PcmHandlerVmDesc *vm, std::atomic<bool> *running,
                                      std::atomic<uint64_t> *updates_processed)
 {
-    std::cout << "[PCM Handler Thread] Started\n";
+    std::cout << "[PCM Handler Thread] Started. TID=" << syscall(SYS_gettid) << "\n";
+    // usleep(10000000); // sleep to see TID and attach perf manually
+    // thread-local timing
+    timing_backend worker_timing_stats{
+        timing_lib::benchmark_timer<timing_backend>("worker thread timer")};
+    timing_backend worker_timing{worker_timing_stats};
 
     while (running->load(std::memory_order_acquire))
     {
-#ifdef PROFILE_PCM_ASYNC_INVOKE
-        auto t1 = std::chrono::high_resolution_clock::now();
+#ifdef PROFILE_ASYNC_INVOKE
+        worker_timing.start();
 #endif
-        //  Poll VM to check if trigger fired and process
         if (vm->invoke_cc_algorithm_on_trigger())
         {
-#ifdef PROFILE_PCM_ASYNC_INVOKE
-            auto t2 = std::chrono::high_resolution_clock::now();
-            u64 duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
-            std::cout << "[worker invocation] : " << duration_ns << " ns\n";
+#ifdef PROFILE_ASYNC_INVOKE
+            worker_timing.stop(true, "[worker invocation]");
 #endif
-            //vm->fetch_slab_output();
-            //std::cout << "ev=" << vm->get_signal_io_slab()->out.ev << std::endl; 
             updates_processed->fetch_add(1, std::memory_order_release);
         }
+#ifdef PROFILE_ASYNC_INVOKE
+        else
+        {
+            worker_timing.stop(false, "");
+        }
+#endif
     }
     std::cout << "[PCM Handler Thread] Exiting\n";
 }
@@ -568,31 +591,23 @@ static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
     if (evt.type == NetworkEvent::LOSS)
     {
         // Packet loss event
-        slab_in.rto = 0;
-        slab_in.ack = 0;
         slab_in.nack = 1;
-        slab_in.ecn = 0;
-        slab_in.data_tx = 0;
         slab_in.data_nacked = evt.packet_size;
-        slab_in.rtt = 0;
     }
     else
     {
         // Single packet ACK (with optional ECN marking)
-        slab_in.rto = 0;
         slab_in.ack = 1;
-        slab_in.nack = 0;
         slab_in.ecn = evt.ecn_marked ? 1 : 0;
         slab_in.data_tx = evt.packet_size;
-        slab_in.data_nacked = 0;
         slab_in.rtt = evt.rtt_sample_us;
     }
 
     // Common fields
     slab_in.in_flight = evt.packets_in_flight * (u64)evt.packet_size;
     slab_in.tx_backlog_bytes = 8 * 1024 * 1024; // Same as libccp example
-    slab_in.tx_ready_pkts = 1; // for LB
-    
+    slab_in.tx_ready_pkts = 1;                  // update backlog (for LB)
+
     // Flush the input to the VM
     pctx->vm->flush_slab_input();
 }
@@ -600,55 +615,54 @@ static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
 static void pcm_vm_invoke(void *ctx)
 {
     auto *pctx = static_cast<PcmVmContext *>(ctx);
-
     // SYNC mode: Main thread directly invokes the trigger check
     if (pctx->mode == PcmVmMode::SYNC)
     {
-        // auto t1 = std::chrono::high_resolution_clock::now();
         auto ret = pctx->vm->invoke_cc_algorithm_on_trigger();
         assert(ret);
-        // auto t2 = std::chrono::high_resolution_clock::now();
-        // u64 duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
-        // std::cout << "[worker invocation] : " << duration_ns << " ns\n";
     }
     // ASYNC mode: Handler thread runs invoke_cc_algorithm_on_trigger()
     // Datapath thread does nothing here - just submit events and fetch results
-    // The blocking fetch will wait for handler to process the trigger
+    // The subsequent blocking fetch will wait for handler to process the trigger
 }
 
 static CcAlgorithmAdapter::ControlOutput pcm_vm_fetch_output(void *ctx)
 {
     auto *pctx = static_cast<PcmVmContext *>(ctx);
+    bool skip = false;
 
     if (pctx->mode == PcmVmMode::ASYNC)
     {
         // ASYNC mode: Block until handler thread has processed a new update
         uint64_t current_updates;
-
         while ((current_updates = pctx->updates_processed.load(std::memory_order_acquire)) == pctx->updates_fetched)
         {
-            // Create empty background flushes to invalidate signal storage cache
-            // This emulates worst case for PCM when ACKs keep arriving
-            pctx->vm->flush_slab_input();
-            // Spin until new update from worker thread is available
+            // Create background flushes to invalidate signal storage cache
+            // This emulates worst case for PCM when ACKs from datapath keep arriving
+            // pctx->vm->flush_slab_input();
+            // Keep spinning until new update from worker thread is available
         }
-
-        // Update fetched counter to match processed updates
+        if (pctx->updates_fetched + 1 != current_updates)
+        {
+            std::cout << "[WARNING] datapath and worker are out of sync: current_updates=" << current_updates << " updates_fetched=" << pctx->updates_fetched << " Skipping measurement." << std::endl;
+            skip = true;
+        }
         pctx->updates_fetched = current_updates;
     }
     // SYNC mode: No waiting needed, invoke already happened
 
     // Fetch latest control values from VM
     pctx->vm->fetch_slab_output();
-
     CcAlgorithmAdapter::ControlOutput out;
     out.cwnd = pctx->io_slab->out.cwnd;
     out.rate_bytes_per_s = pctx->io_slab->out.rate;
+    out.ev = pctx->io_slab->out.ev;
+    out.skip = skip;
     return out;
 }
 
 // Create PCM VM adapter
-// algo_name: algorithm shared library name (e.g., "dcqcn")
+// algo_name: algorithm shared library name (e.g., "uec_dctcp")
 // mode: PcmVmMode::SYNC or PcmVmMode::ASYNC
 CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, PcmVmMode mode = PcmVmMode::ASYNC)
 {
@@ -710,7 +724,7 @@ CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, PcmVmMode mode =
         // Pin handler thread to core 1 through native handle from std::thread
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        CPU_SET(36, &cpuset);
+        CPU_SET(36, &cpuset); // optimal mapping for Intel(R) Xeon(R) Gold 6140 CPU @ 2.30GHz
         pthread_setaffinity_np(pctx.handler_thread.native_handle(), sizeof(cpu_set_t), &cpuset);
         std::cout << "[PCM] Handler thread pinned to core 1\n";
 #endif
@@ -759,23 +773,23 @@ int main(int argc, char **argv)
 {
     if (argc > 1 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help"))
     {
-        std::cout << "Usage: " << argv[0] << " [iters] [sleep_ms] [seed] [mode] [algo] [pcm_mode]\n"
+        std::cout << "Usage: " << argv[0] << " [iters] [seed] [no_loss] [mode] [algo] [pcm_mode]\n"
                   << "  iters: number of iterations (default: 100)\n"
-                  << "  sleep_ms: sleep between iterations in ms (default: 10)\n"
                   << "  seed: random seed (default: 0xC0FFEE)\n"
+                  << "  no_loss: 0 or 1 (default: 0)\n"
                   << "  mode: 'libccp' or 'pcm' (default: libccp)\n"
                   << "  algo: algorithm name (default: reno)\n"
                   << "  pcm_mode: 'sync' or 'async' (default: async, only for PCM mode)\n"
                   << "\nExamples:\n"
-                  << "  libccp mode:     " << argv[0] << " 1000 10 42 libccp reno\n"
-                  << "  PCM async mode:  " << argv[0] << " 1000 10 42 pcm dcqcn async\n"
-                  << "  PCM sync mode:   " << argv[0] << " 1000 10 42 pcm dcqcn sync\n";
+                  << "  libccp mode:     " << argv[0] << " 1000 42 0 libccp reno\n"
+                  << "  PCM async mode:  " << argv[0] << " 1000 42 0 pcm dcqcn async\n"
+                  << "  PCM sync mode:   " << argv[0] << " 1000 42 0 pcm dcqcn sync\n";
         return 0;
     }
 
     int iters = (argc > 1) ? std::max(1, std::atoi(argv[1])) : 100;
-    int sleep_ms = (argc > 2) ? std::max(0, std::atoi(argv[2])) : 10;
-    uint64_t seed = (argc > 3) ? (uint64_t)std::stoull(argv[3]) : 0xC0FFEE;
+    uint64_t seed = (argc > 2) ? (uint64_t)std::stoull(argv[2]) : 0xC0FFEE;
+    bool no_loss = (argc > 3) ? (std::atoi(argv[3]) != 0) : false;
     std::string mode = (argc > 4) ? argv[4] : "libccp";
     std::string algo = (argc > 5) ? argv[5] : "reno";
     std::string pcm_mode_str = (argc > 6) ? argv[6] : "async";
@@ -784,8 +798,8 @@ int main(int argc, char **argv)
     PcmVmMode pcm_mode = (pcm_mode_str == "sync") ? PcmVmMode::SYNC : PcmVmMode::ASYNC;
 
     // --- Generate random events upfront ---
-    std::cout << "[main] Generating " << iters << " random network events (seed=" << seed << ")...\n";
-    std::vector<NetworkEvent> events = generate_event_trace(iters, seed);
+    std::cout << "[main] Generating " << iters << " random network events (seed=" << seed << " no_loss=" << no_loss << ")...\n";
+    std::vector<NetworkEvent> events = generate_event_trace(iters, seed, no_loss);
 
     CcAlgorithmAdapter cc_adapter;
 
@@ -828,29 +842,34 @@ int main(int argc, char **argv)
         cc_adapter = create_libccp_adapter(&tb);
     }
 
-    std::cout << "[main] Running " << iters << " events (sleep_ms=" << sleep_ms
-              << ", seed=" << seed << ", mode=" << mode << ")\n";
+    std::cout << "[main] Running " << iters << " events (seed=" << seed << ", mode=" << mode << ")\n";
 
     // --- Drive with pregenerated events ---
     for (int i = 0; i < iters; i++)
     {
         const auto &evt = events[i];
 
-        auto t1 = std::chrono::high_resolution_clock::now();
+#if defined(PROFILE_SUBMIT_INVOKE) || defined(PROFILE_FULL_CYCLE)
+        timing.start();
+#endif
 
         // 1) Submit event to datapath
         cc_adapter.submit_event(cc_adapter.context, evt);
 
         // 2) Invoke CC algorithm
         cc_adapter.invoke(cc_adapter.context);
-#ifdef PROFILE_EVENT_SUBMISSION
-        auto t2 = std::chrono::high_resolution_clock::now();
+
+#ifdef PROFILE_SUBMIT_INVOKE
+        timing.stop(true, "[submit->invoke]");
 #endif
+
         // 3) Fetch control output
         auto post_output = cc_adapter.fetch_output(cc_adapter.context);
+
 #ifdef PROFILE_FULL_CYCLE
-        auto t2 = std::chrono::high_resolution_clock::now();
+        timing.stop(post_output.skip ? false : true, "[submit->invoke->fetch]");
 #endif
+
         // Clear one-shot flags (libccp-specific cleanup)
         if (mode == "libccp")
         {
@@ -860,12 +879,11 @@ int main(int argc, char **argv)
             }
         }
 
-        u64 duration_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count();
-
         // Log post-invoke state
-        // std::cout << "[iter " << i << ", outer_loop] cwnd=" << post_output.cwnd
-        //           << " rate=" << post_output.rate_bytes_per_s << " B/s\n";
-        // std::cout << "[iter " << i << ", timing] : " << duration_ns << " ns\n";
+#ifndef PROFILE_ASYNC_INVOKE
+        std::cout << "[iter " << i << ", outer_loop] cwnd=" << post_output.cwnd
+                  << " rate=" << post_output.rate_bytes_per_s << " ev=" << post_output.ev << " \n";
+#endif
     }
 
     // --- Teardown ---
