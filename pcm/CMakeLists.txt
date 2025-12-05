@@ -18,7 +18,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Configurable build options
 option(BUILD_HAC_IR "Build HAC LLVM IR generation" OFF)
-option(ENABLE_PROFILING "Enable Linux perf-based profiling" OFF)
+option(ENABLE_VM_PROFILING "Enable Linux perf-based profiling" OFF)
 
 # Set default build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -34,7 +34,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # Optional profiling
-if(ENABLE_PROFILING)
+if(ENABLE_VM_PROFILING)
     # Check if we're on Linux
     if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
         message(FATAL_ERROR "Profiling is only supported on Linux systems. Current system: ${CMAKE_SYSTEM_NAME}")
@@ -51,7 +51,21 @@ if(ENABLE_PROFILING)
     endif()
     
     message(STATUS "Profiling enabled: using perf headers from ${PERF_INCLUDE_DIR}")
-    add_compile_definitions(ENABLE_PROFILING)
+    add_compile_definitions(ENABLE_VM_PROFILING)
+
+    if(NOT DEFINED VM_PROF_BACKEND)
+        set(VM_PROF_BACKEND "rdtsc")
+    endif()
+
+    if(VM_PROF_BACKEND STREQUAL "perf")
+        add_compile_definitions(VM_PROF_BACKEND_PERF)
+    elseif(VM_PROF_BACKEND STREQUAL "chrono")
+        add_compile_definitions(VM_PROF_BACKEND_CHRONO)
+    elseif(VM_PROF_BACKEND STREQUAL "rdtsc")
+        # Default
+    else()
+        message(FATAL_ERROR "Unknown profiling backend: ${VM_PROF_BACKEND}")
+    endif()
 endif()
 
 # Directory structure
@@ -115,5 +129,8 @@ add_subdirectory(apps/htsim)
 
 message(STATUS "PCM Build Configuration:")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  Profiling: ${ENABLE_PROFILING}")
+message(STATUS "  Profiling: ${ENABLE_VM_PROFILING}")
+if(ENABLE_VM_PROFILING)
+    message(STATUS "  Profiling Backend: ${VM_PROF_BACKEND}")
+endif()
 message(STATUS "  IR generator: ${BUILD_HAC_IR}")

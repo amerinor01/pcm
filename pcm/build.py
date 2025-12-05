@@ -53,6 +53,9 @@ def main():
                        help='Enable HAC LLVM IR generation')
     parser.add_argument('--profiling', action='store_true',
                        help='Enable profiling support')
+    parser.add_argument('--profiling-backend', choices=['perf', 'chrono', 'rdtsc'],
+                       default='rdtsc',
+                       help='Select profiling backend (perf/chrono/rdtsc). Default: rdtsc')
     parser.add_argument('--clean', action='store_true',
                        help='Clean build directory first')
     parser.add_argument('--install', action='store_true',
@@ -88,6 +91,8 @@ def main():
     print(f"Build type: {build_type}")
     print(f"HAC IR generation: {build_hac_ir}")
     print(f"Profiling: {enable_profiling}")
+    if args.profiling:
+        print(f"Profiling backend: {args.profiling_backend}")
     print(f"Clean build: {args.clean}")
     print(f"Jobs: {jobs}")
     print(f"Project root: {project_root}")
@@ -107,10 +112,14 @@ def main():
         "cmake",
         f"-DCMAKE_BUILD_TYPE={build_type}",
         f"-DBUILD_HAC_IR={build_hac_ir}",
-        f"-DENABLE_PROFILING={enable_profiling}",
-        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
-        str(project_root)
+        f"-DENABLE_VM_PROFILING={enable_profiling}",
+        "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
     ]
+
+    if args.profiling:
+        cmake_args.append(f"-DVM_PROF_BACKEND={args.profiling_backend}")
+
+    cmake_args.append(str(project_root))
     
     if args.htsim_dir:
         cmake_args.insert(-1, f"-DHTSIM_ROOT_DIR={args.htsim_dir}")

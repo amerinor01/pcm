@@ -22,9 +22,13 @@
 
 #include <dlfcn.h> // dlopen/dlsym
 
+#ifdef ENABLE_VM_PROFILING
+#define ENABLE_TIMING_LIB
+#endif
+
 #include "pcm.h"
 #include "pcmh.h"
-#include "prof.h"
+#include "timing.hpp"
 
 /*
  Style guide:
@@ -80,17 +84,6 @@ using GetTimeFn = pcm_uint (*)();
 inline uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) {
     return ts_end - ts_start;
 }
-
-#ifdef ENABLE_PROFILING
-static void profiling_overhead_check() {
-    for (auto i = 0; i < 100; ++i) {
-        PCM_PERF_PROF_REGION_SCOPE_INIT(prof_overhead_test,
-                                        "PROFILING OVERHEAD");
-        PCM_PERF_PROF_REGION_START(prof_overhead_test);
-        PCM_PERF_PROF_REGION_END(prof_overhead_test, true);
-    }
-}
-#endif
 
 } // namespace util
 
@@ -155,7 +148,7 @@ struct PcmHandlerVmDesc {
     virtual void flush_slab_input() = 0;
     virtual void fetch_slab_output() = 0;
 
-#ifdef ENABLE_PROFILING
+#ifdef ENABLE_VM_PROFILING
     // Evaluate virtual call overhead
     virtual pcm_uint vcall_overhead_test() = 0;
 #endif
@@ -379,6 +372,21 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     util::GetTimeFn get_time_{nullptr};
     pcm_uint start_ts_{};
 
+#ifdef ENABLE_VM_PROFILING
+#ifdef VM_PROF_BACKEND_PERF
+    using timing_backend = timing_lib::PerfInstrTimer;
+#elif defined(VM_PROF_BACKEND_CHRONO)
+    using timing_backend = timing_lib::ChronoTimer;
+#else
+    using timing_backend = timing_lib::RdtscTimer;
+#endif
+#else
+    using timing_backend = timing_lib::TimerPlaceholder;
+#endif
+    timing_backend stats{
+        timing_lib::benchmark_timer<timing_backend>("PcmHandlerVm timer")};
+    timing_backend perf_timing_{stats};
+
     explicit PcmHandlerVm() {
         auto result = util::shared_symbol_open(
             "lib" + std::string(AlgoName) + ".so",
@@ -394,9 +402,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                 }
             });
         handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
-#ifdef ENABLE_PROFILING
-        util::profiling_overhead_check();
-#endif
     }
 
     // init_state has to be called by the derived class after the
@@ -470,8 +475,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     }
 
     void flush_slab_input() override {
-        // PCM_PERF_PROF_REGION_SCOPE_INIT(flush_io_slab, "FLUSH IO SLAB");
-        // PCM_PERF_PROF_REGION_START(flush_io_slab);
         // implicitly instantiate update_signals for all signals that
         // algorithm can have - for useless signals no code will be emitted.
         update_signals<PCM_SIG_ACK>(io_slab_.in.ack);
@@ -489,16 +492,12 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         update_signals<PCM_SIG_TX_BACKLOG_BYTES>(io_slab_.in.tx_backlog_bytes);
         // cleanup for the next flush
         io_slab_.in = PcmHandlerVmIoSlab::Input();
-        // PCM_PERF_PROF_REGION_END(flush_io_slab, true);
     }
 
     void fetch_slab_output() override {
-        // PCM_PERF_PROF_REGION_SCOPE_INIT(fetch_io_slab, "FETCH IO SLAB");
-        // PCM_PERF_PROF_REGION_START(fetch_io_slab);
         io_slab_.out.cwnd = get_control_first_match<PCM_CTRL_CWND>();
         io_slab_.out.rate = get_control_first_match<PCM_CTRL_RATE>();
         io_slab_.out.ev = get_control_first_match<PCM_CTRL_EV>();
-        // PCM_PERF_PROF_REGION_END(fetch_io_slab, true);
     }
 
     [[nodiscard]] constexpr pcm_uint collect_trigger_mask() {
@@ -576,30 +575,35 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     }
 
     [[nodiscard]] bool invoke_cc_algorithm_on_trigger() override {
-        PCM_PERF_PROF_REGION_SCOPE_INIT(trigger_cycle, "TRIGGER CYCLE");
-        PCM_PERF_PROF_REGION_START(trigger_cycle);
-
+        perf_timing_.start();
         pcm_uint trigger_mask = collect_trigger_mask();
         if (!trigger_mask) {
-            PCM_PERF_PROF_REGION_END(trigger_cycle, false);
+            perf_timing_.stop(false, "");
             return false;
         }
+        perf_timing_.stop(true, "[vm::invoke::collect_trigger_mask]");
 
+        perf_timing_.start();
         prepare_pre_invoke_snapshot(trigger_mask);
+        perf_timing_.stop(true, "[vm::invoke::prepare_pre_invoke_snapshot]");
+
+        perf_timing_.start();
         if (handler_main_cb_(reinterpret_cast<pcm_handler_datapath_snapshot>(
                 raw_snapshot_.data())) != PCM_SUCCESS) [[unlikely]] {
             // TODO: only this VM should die, not the whole stack.
             std::cerr << "Algorithm exited with error. Abort." << std::endl;
+            perf_timing_.stop(false, "");
             exit(EXIT_FAILURE);
         }
+        perf_timing_.stop(true, "[vm::invoke::handler_main_cb]");
 
+        perf_timing_.start();
         apply_post_invoke_snapshot();
-
-        PCM_PERF_PROF_REGION_END(trigger_cycle, true);
+        perf_timing_.stop(true, "[vm::invoke::apply_post_invoke_snapshot]");
         return true;
     }
 
-#ifdef ENABLE_PROFILING
+#ifdef ENABLE_VM_PROFILING
     pcm_uint vcall_overhead_test() override {
         volatile pcm_uint test = 42;
         return test;
