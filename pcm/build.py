@@ -56,6 +56,8 @@ def main():
     parser.add_argument('--profiling-backend', choices=['perf', 'chrono', 'rdtsc'],
                        default='rdtsc',
                        help='Select profiling backend (perf/chrono/rdtsc). Default: rdtsc')
+    parser.add_argument('--aligned-atomic-storage', action='store_true',
+                       help='Enable aligned atomic storage')
     parser.add_argument('--clean', action='store_true',
                        help='Clean build directory first')
     parser.add_argument('--install', action='store_true',
@@ -81,6 +83,7 @@ def main():
 
     build_hac_ir = "ON" if args.hac_ir else "OFF"
     enable_profiling = "ON" if args.profiling else "OFF"
+    aligned_atomic = "ON" if args.aligned_atomic_storage else "OFF"
     jobs = args.jobs if args.jobs else get_cpu_count()
     
     # Paths
@@ -88,11 +91,11 @@ def main():
     build_dir = Path(args.build_dir) if args.build_dir else project_root / "build"
     
     print("=== PCM CMake Build ===")
-    print(f"Build type: {build_type}")
     print(f"HAC IR generation: {build_hac_ir}")
     print(f"Profiling: {enable_profiling}")
     if args.profiling:
         print(f"Profiling backend: {args.profiling_backend}")
+    print(f"Aligned atomic storage: {aligned_atomic}")
     print(f"Clean build: {args.clean}")
     print(f"Jobs: {jobs}")
     print(f"Project root: {project_root}")
@@ -107,12 +110,12 @@ def main():
     # Create build directory
     build_dir.mkdir(parents=True, exist_ok=True)
     
-    # Configure CMake
     cmake_args = [
         "cmake",
         f"-DCMAKE_BUILD_TYPE={build_type}",
         f"-DBUILD_HAC_IR={build_hac_ir}",
         f"-DENABLE_VM_PROFILING={enable_profiling}",
+        f"-DATOMIC_PCM_VM_ALIGNED_STORAGE={aligned_atomic}",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
     ]
 

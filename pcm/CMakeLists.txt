@@ -19,6 +19,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Configurable build options
 option(BUILD_HAC_IR "Build HAC LLVM IR generation" OFF)
 option(ENABLE_VM_PROFILING "Enable Linux perf-based profiling" OFF)
+option(ATOMIC_PCM_VM_ALIGNED_STORAGE "Enable aligned atomic storage" OFF)
 
 # Set default build type
 if(NOT CMAKE_BUILD_TYPE)
@@ -32,6 +33,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Set position independent code for shared libraries
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+if(ATOMIC_PCM_VM_ALIGNED_STORAGE)
+    add_compile_definitions(ATOMIC_PCM_VM_ALIGNED_STORAGE)
+endif()
 
 # Optional profiling
 if(ENABLE_VM_PROFILING)

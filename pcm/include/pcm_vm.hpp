@@ -230,6 +230,8 @@ struct SignalDesc {
         }
 
         if constexpr (AccumType == PCM_SIG_ACCUM_SUM) {
+            if (update_value == 0)
+                return curr;
             return curr + update_value;
         } else if constexpr (AccumType == PCM_SIG_ACCUM_LAST) {
             return update_value;
@@ -705,11 +707,15 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         std::tuple_size<typename Base::SignalsTupleT>::value;
 
     // Atomic storage
+#ifdef ATOMIC_PCM_VM_ALIGNED_STORAGE
     struct alignas(64) AlignedAtomic {
+#else
+    struct AlignedAtomic {
+#endif
         std::atomic<pcm_uint> v;
     };
-    std::array<AlignedAtomic, kNumControls> controls_storage_;
-    std::array<AlignedAtomic, kNumSignals> signals_storage_;
+    alignas(64) std::array<AlignedAtomic, kNumControls> controls_storage_;
+    alignas(64) std::array<AlignedAtomic, kNumSignals> signals_storage_;
 
     explicit AtomicPcmHandlerVm() : Base() { Base::init_state(); }
 
@@ -751,6 +757,8 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         static_assert(SignalT::kIndex < kNumSignals);
 
         if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_SUM) {
+            if (val == 0)
+                return;
             signals_storage_[SignalT::kIndex].v.fetch_add(
                 val, std::memory_order_acq_rel);
         } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_LAST) {
