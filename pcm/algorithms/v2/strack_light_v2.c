@@ -16,6 +16,7 @@ int algorithm_main() {
     }
 
     pcm_uint trigger_mask = get_signal_trigger_mask();
+    bool processed = false; // sanity check
 
     // Read currents
     pcm_uint cur_ack = get_signal(SIG_NUM_ACK);
@@ -27,14 +28,17 @@ int algorithm_main() {
     if (trigger_mask & SIG_NUM_ACK) {
         set_var_uint(VAR_PREV_ACK, cur_ack);
         BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_ACK_EV) & PATH_MASK, 0);
+        processed = true;
     }
     if (trigger_mask & SIG_NUM_ECN) {
         set_var_uint(VAR_PREV_ECN, cur_ecn);
         BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_ECN_EV) & PATH_MASK, 1);
+        processed = true;
     }
     if (trigger_mask & SIG_NUM_NACK) {
         set_var_uint(VAR_PREV_NACK, cur_nack);
         BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_NACK_EV) & PATH_MASK, 1);
+        processed = true;
     }
 
     // TX path
@@ -66,7 +70,8 @@ int algorithm_main() {
         }
         ev |= get_var_uint(VAR_PATH_RANDOM) ^ (get_var_uint(VAR_PATH_RANDOM) & PATH_MASK);
         set_control(CTRL_NEXT_PKT_EV, ev);
+        processed = true;
     }
 
-    return PCM_SUCCESS;
+    return processed ? PCM_SUCCESS : PCM_ERROR;
 }

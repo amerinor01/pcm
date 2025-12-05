@@ -27,6 +27,8 @@ int algorithm_main() {
     pcm_uint delta_ecn = cur_ecn - get_var_uint(VAR_PREV_ECN);
     pcm_uint delta_backlog = cur_backlog - get_var_uint(VAR_PREV_BACKLOG);
 
+    bool processed = false; // sanity check
+
     if (trigger_mask & SIG_NUM_ACK) {
         set_var_uint(VAR_PREV_ACK, cur_ack);
         set_var_uint(VAR_PREV_ECN, cur_ecn);
@@ -39,6 +41,7 @@ int algorithm_main() {
             }
             head_idx = (head_idx + 1) & EVC_MASK;
         }
+        processed = true;
     }
 
     if (trigger_mask & SIG_TX_BACKLOG_SIZE) {
@@ -58,9 +61,10 @@ int algorithm_main() {
             --num_valid_evs;
         }
         set_control(CTRL_NEXT_PKT_EV, packet_ev);
+        processed = true;
     }
 
     set_var_uint(VAR_EVC_HEAD_IDX, head_idx);
     set_var_uint(VAR_EVC_NUM_VALID_EVS, num_valid_evs);
-    return PCM_SUCCESS;
+    return processed ? PCM_SUCCESS : PCM_ERROR;
 }

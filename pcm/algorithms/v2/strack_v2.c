@@ -1,9 +1,9 @@
+#include "strack_v2.h"
 #include "algo_utils.h"
 #include "pcmh.h"
 #include "stdbool.h"
 #include "stdio.h"
 #include "stdlib.h"
-#include "strack_v2.h"
 
 #define PATH_MASK (NO_OF_PATHS - 1)
 
@@ -19,8 +19,8 @@ int algorithm_main() {
     // Read Currents
     pcm_uint cur_ecn = get_signal(SIG_NUM_ECN);
     pcm_uint cur_nack = get_signal(SIG_NUM_NACK);
-    pcm_uint cur_ack = get_signal(SIG_NUM_ACK);
     pcm_uint cur_backlog = get_signal(SIG_TX_BACKLOG_SIZE);
+    bool processed = false; // sanity check
 
     // RX path
     if (trigger_mask & SIG_NUM_ECN) {
@@ -29,6 +29,7 @@ int algorithm_main() {
         pcm_uint ev = get_signal(SIG_ECN_EV) & PATH_MASK;
         pcm_uint new_penalty = (get_arr_uint(VAR_ARR_EVS_BITMAP, ev) + penalty) & MAX_PENALTY;
         set_arr_uint(VAR_ARR_EVS_BITMAP, ev, new_penalty);
+        processed = true;
     }
     if (trigger_mask & SIG_NUM_NACK) {
         set_var_uint(VAR_PREV_NACK, cur_nack);
@@ -36,10 +37,7 @@ int algorithm_main() {
         pcm_uint ev = get_signal(SIG_NACK_EV) & PATH_MASK;
         pcm_uint new_penalty = (get_arr_uint(VAR_ARR_EVS_BITMAP, ev) + penalty) & MAX_PENALTY;
         set_arr_uint(VAR_ARR_EVS_BITMAP, ev, new_penalty);
-    }
-    if (trigger_mask & SIG_NUM_ACK) {
-        set_var_uint(VAR_PREV_ACK, cur_ack);
-        // ACK processing consumed
+        processed = true;
     }
 
     // TX path
@@ -71,7 +69,8 @@ int algorithm_main() {
         }
         ev |= get_var_uint(VAR_PATH_RANDOM) ^ (get_var_uint(VAR_PATH_RANDOM) & PATH_MASK);
         set_control(CTRL_NEXT_PKT_EV, ev);
+        processed = true;
     }
 
-    return PCM_SUCCESS;
+    return processed ? PCM_SUCCESS : PCM_ERROR;
 }

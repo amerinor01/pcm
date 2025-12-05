@@ -19,6 +19,7 @@ int algorithm_main() {
     pcm_uint trigger_mask = get_signal_trigger_mask();
     pcm_uint head_idx = get_var_uint(VAR_EVC_HEAD_IDX);
     pcm_uint num_valid_evs = get_var_uint(VAR_EVC_NUM_VALID_EVS);
+    bool processed = false; // sanity check
 
     if (trigger_mask & SIG_NUM_ACK) {
         if (!get_signal(SIG_NUM_ECN)) {
@@ -29,9 +30,11 @@ int algorithm_main() {
             }
             head_idx = (head_idx + 1) & EVC_MASK;
         } else {
+            // just discard bad EV
             set_signal(SIG_NUM_ECN, 0);
         }
         set_signal(SIG_NUM_ACK, 0);
+        processed = true;
     }
 
     if (trigger_mask & SIG_TX_BACKLOG_SIZE) {
@@ -48,9 +51,10 @@ int algorithm_main() {
         }
         set_control(CTRL_NEXT_PKT_EV, packet_ev);
         update_signal(SIG_TX_BACKLOG_SIZE, -1);
+        processed = true;
     }
 
     set_var_uint(VAR_EVC_HEAD_IDX, head_idx);
     set_var_uint(VAR_EVC_NUM_VALID_EVS, num_valid_evs);
-    return PCM_SUCCESS;
+    return processed ? PCM_SUCCESS : PCM_ERROR;
 }
