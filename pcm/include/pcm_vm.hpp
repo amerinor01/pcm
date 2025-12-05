@@ -81,6 +81,17 @@ inline uint64_t get_time_diff(pcm_uint ts_start, pcm_uint ts_end) {
     return ts_end - ts_start;
 }
 
+#ifdef ENABLE_PROFILING
+static void profiling_overhead_check() {
+    for (auto i = 0; i < 100; ++i) {
+        PCM_PERF_PROF_REGION_SCOPE_INIT(prof_overhead_test,
+                                        "PROFILING OVERHEAD");
+        PCM_PERF_PROF_REGION_START(prof_overhead_test);
+        PCM_PERF_PROF_REGION_END(prof_overhead_test, true);
+    }
+}
+#endif
+
 } // namespace util
 
 // ============================================================================
@@ -383,11 +394,14 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                 }
             });
         handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
+#ifdef ENABLE_PROFILING
+        util::profiling_overhead_check();
+#endif
     }
 
-    // init_state has to be called by the derived class after the constructor
-    // got executed, because it uses methods of the derived class, using these
-    // methods in the based constructor is UB.
+    // init_state has to be called by the derived class after the
+    // constructor got executed, because it uses methods of the derived
+    // class, using these methods in the based constructor is UB.
     void init_state() {
         (([&]() {
              using T = Objs;
@@ -456,8 +470,10 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     }
 
     void flush_slab_input() override {
-        // implicitly instantiate update_signals for all signals that algorithm
-        // can have - for useless signals no code will be emitted.
+        // PCM_PERF_PROF_REGION_SCOPE_INIT(flush_io_slab, "FLUSH IO SLAB");
+        // PCM_PERF_PROF_REGION_START(flush_io_slab);
+        // implicitly instantiate update_signals for all signals that
+        // algorithm can have - for useless signals no code will be emitted.
         update_signals<PCM_SIG_ACK>(io_slab_.in.ack);
         update_signals<PCM_SIG_RTO>(io_slab_.in.rto);
         update_signals<PCM_SIG_NACK>(io_slab_.in.nack);
@@ -473,12 +489,16 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         update_signals<PCM_SIG_TX_BACKLOG_BYTES>(io_slab_.in.tx_backlog_bytes);
         // cleanup for the next flush
         io_slab_.in = PcmHandlerVmIoSlab::Input();
+        // PCM_PERF_PROF_REGION_END(flush_io_slab, true);
     }
 
     void fetch_slab_output() override {
+        // PCM_PERF_PROF_REGION_SCOPE_INIT(fetch_io_slab, "FETCH IO SLAB");
+        // PCM_PERF_PROF_REGION_START(fetch_io_slab);
         io_slab_.out.cwnd = get_control_first_match<PCM_CTRL_CWND>();
         io_slab_.out.rate = get_control_first_match<PCM_CTRL_RATE>();
         io_slab_.out.ev = get_control_first_match<PCM_CTRL_EV>();
+        // PCM_PERF_PROF_REGION_END(fetch_io_slab, true);
     }
 
     [[nodiscard]] constexpr pcm_uint collect_trigger_mask() {
@@ -508,6 +528,10 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     void prepare_pre_invoke_snapshot(pcm_uint trigger_mask) {
         raw_snapshot_[SnapshotLayout::kTriggerMaskOffset] = trigger_mask;
         raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset] = 0;
+
+        // Accumulate freshest pure elapsed time.
+        // TODO: check if this breaks timer logic (DCQCN needs it)
+        update_signals<PCM_SIG_ELAPSED_TIME>(0);
 
         (([&]() {
              using T = Objs;
@@ -539,12 +563,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                          impl->template set_signal_slot<T::kIndex>(
                              util::get_time_diff(start_ts_, get_time_()));
                      } else {
-                         // Snapshot application is a forced write, usually done
-                         // by single thread (the algorithm runner), but let's
-                         // reuse accumulation logic just in case, though
-                         // snapshot applies usually define the new baseline
-                         // value. However, the original code used accumulation
-                         // here.
                          impl->template accumulate_signal_slot<T>(
                              raw_snapshot_[SnapshotLayout::kSignalOffset +
                                            T::kIndex]);
@@ -566,10 +584,6 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
             PCM_PERF_PROF_REGION_END(trigger_cycle, false);
             return false;
         }
-
-        // Pure elapsed time signals.
-        // TODO: check if this breaks timer logic
-        update_signals<PCM_SIG_ELAPSED_TIME>(0);
 
         prepare_pre_invoke_snapshot(trigger_mask);
         if (handler_main_cb_(reinterpret_cast<pcm_handler_datapath_snapshot>(
@@ -595,11 +609,11 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
 
 // ============================================================================
 // "Simple" handler virtual machine implementation
-// Simple means that storage for controls and signals is just pcm_uint and is
-// not thread-safe.
+// Simple means that storage for controls and signals is just pcm_uint and
+// is not thread-safe.
 //
-// We follow two-step pattern for template specialization: a primary template
-// definition for SimplePcmHandlerVm followed by specialization.
+// We follow two-step pattern for template specialization: a primary
+// template definition for SimplePcmHandlerVm followed by specialization.
 //
 // Primary template allows to write readable code:
 // using MySpec = std::tuple<ControlDesc<...>, SignalDesc<...>>;
