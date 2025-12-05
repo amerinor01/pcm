@@ -40,7 +40,7 @@ int algorithm_main() {
     if (trigger_mask & SIG_TX_BACKLOG_SIZE) {
         pcm_uint packet_ev = 0;
         if (num_valid_evs == 0 || get_var_uint(VAR_EV_EXPLORE_COUNTER) > 0) {
-            packet_ev = HASH(get_var_uint(VAR_EV_SEED));
+            packet_ev = HASH(get_var_uint(VAR_EV_SEED)) & PATH_MASK;
             set_var_uint(VAR_EV_SEED, packet_ev);
             set_var_uint(VAR_EV_EXPLORE_COUNTER, get_var_uint(VAR_EV_EXPLORE_COUNTER) - 1);
         } else {

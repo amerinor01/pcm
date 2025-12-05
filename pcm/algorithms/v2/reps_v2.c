@@ -49,7 +49,7 @@ int algorithm_main() {
 
         pcm_uint packet_ev = 0;
         if (num_valid_evs == 0 || get_var_uint(VAR_EV_EXPLORE_COUNTER) > 0) {
-            packet_ev = HASH(get_var_uint(VAR_EV_SEED));
+            packet_ev = HASH(get_var_uint(VAR_EV_SEED)) & PATH_MASK;
             set_var_uint(VAR_EV_SEED, packet_ev);
             if (get_var_uint(VAR_EV_EXPLORE_COUNTER) > 0) {
                 set_var_uint(VAR_EV_EXPLORE_COUNTER, get_var_uint(VAR_EV_EXPLORE_COUNTER) - 1);
