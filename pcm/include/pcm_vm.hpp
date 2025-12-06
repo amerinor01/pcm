@@ -143,10 +143,6 @@ struct PcmHandlerVmDesc {
             pcm_uint rate{};
             pcm_uint ev{};
         } out;
-
-        using FlushInputFn = void (*)(void *ctx);
-        FlushInputFn flush_input{nullptr};
-        void *ctx{nullptr};
     } io_slab_;
 
     PcmHandlerVmIoSlab *get_signal_io_slab() { return &io_slab_; };
@@ -407,17 +403,12 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                 }
             });
         handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
-
-        io_slab_.ctx = this;
-        io_slab_.flush_input = [](void *ctx) {
-            static_cast<PcmHandlerVm *>(ctx)->flush_slab_input();
-        };
     }
 
     // init_state has to be called by the derived class after the
     // constructor got executed, because it uses methods of the derived
     // class, using these methods in the based constructor is UB.
-    void init_state() {
+    void init_state(size_t controls_storage_size, size_t signals_storage_size) {
         (([&]() {
              using T = Objs;
              if constexpr (is_control_v<T>) {
@@ -438,6 +429,19 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              }
          }()),
          ...);
+        std::cerr
+            << "[PcmHandlerVm] algo_name=" << std::string(AlgoName)
+            << " num_controls="
+            << std::tuple_size_v<ControlsTupleT> << " num_signals="
+            << std::tuple_size_v<SignalsTupleT> << " num_variables="
+            << std::tuple_size_v<VariablesTupleT> << " ctrl_storage_size_B="
+            << controls_storage_size
+            << " sig_storage_size_B=" << signals_storage_size
+            << " last_trigger_vals_size_B=" << sizeof(last_trigger_vals_)
+            << " snapshot_size_B=" << sizeof(raw_snapshot_) << " tot_vm_size_B="
+            << (controls_storage_size + signals_storage_size +
+                sizeof(last_trigger_vals_) + sizeof(raw_snapshot_))
+            << std::endl;
     }
 
     void add_get_time_source(util::GetTimeFn get_time_source) override {
@@ -489,7 +493,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
          ...);
     }
 
-    void flush_slab_input() override final {
+    void flush_slab_input() override {
         // implicitly instantiate update_signals for all signals that
         // algorithm can have - for useless signals no code will be emitted.
         update_signals<PCM_SIG_ACK>(io_slab_.in.ack, io_slab_.in.mask);
@@ -664,7 +668,9 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     std::array<pcm_uint, kNumControls> controls_storage_;
     std::array<pcm_uint, kNumSignals> signals_storage_;
 
-    explicit SimplePcmHandlerVm() : Base() { Base::init_state(); }
+    explicit SimplePcmHandlerVm() : Base() {
+        Base::init_state(sizeof(controls_storage_), sizeof(signals_storage_));
+    }
 
     void apply_post_invoke_snapshot_impl() {
         std::copy_n(Base::raw_snapshot_.begin() +
@@ -735,7 +741,9 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     alignas(64) std::array<AlignedAtomic, kNumControls> controls_storage_;
     alignas(64) std::array<AlignedAtomic, kNumSignals> signals_storage_;
 
-    explicit AtomicPcmHandlerVm() : Base() { Base::init_state(); }
+    explicit AtomicPcmHandlerVm() : Base() {
+        Base::init_state(sizeof(controls_storage_), sizeof(signals_storage_));
+    }
 
     void apply_post_invoke_snapshot_impl() {
         (([&]() {
