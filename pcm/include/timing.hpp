@@ -279,7 +279,7 @@ using PerfInstrTimer = TimerPlaceholder;
 #endif
 
 // Helper to determine TSC frequency (Cycles per Nanosecond)
-double calibrate_tsc() {
+inline double calibrate_tsc() {
     std::cout << "Calibrating TSC frequency...\n";
     ChronoTimer chrono;
     RdtscTimer rdtsc;
