@@ -18,7 +18,7 @@ SEED = 42
 NO_LOSS = 0
 
 ALGOS = [
-    "newreno", "dctcp", "swift", "dcqcn", "smartt", "nscc", "uec_dctcp",
+    "newreno", "dctcp", "swift", "smartt", "nscc", "uec_dctcp",
     "strack", "strack_light", "ops_lb", "reps", "cubic",
     "uec_dctcp_v2", "newreno_v2", "dctcp_v2", "cubic_v2", "swift_v2",
     "nscc_v2", "smartt_v2", "ops_lb_v2", "reps_v2", "strack_v2", "strack_light_v2"
@@ -39,14 +39,14 @@ CONFIGS = [
         "tb_args": []
     },
     {
-        "name": "tb-submit-invoke-rdtsc",
+        "name": "tb-submit-rdtsc",
         "pcm_args": [],
-        "tb_args": ["PROFILE_SUBMIT_INVOKE=y"]
+        "tb_args": ["PROFILE_SUBMIT=y"]
     },
     {
-        "name": "tb-submit-invoke-perf",
+        "name": "tb-submit-perf",
         "pcm_args": [],
-        "tb_args": ["TIMING_BACKEND=PERF", "PROFILE_SUBMIT_INVOKE=y"]
+        "tb_args": ["TIMING_BACKEND=PERF", "PROFILE_SUBMIT=y"]
     },
     {
         "name": "tb-full-cycle-rdtsc",
@@ -68,6 +68,15 @@ CONFIGS = [
         "pcm_args": [],
         "tb_args": ["TIMING_BACKEND=PERF", "PROFILE_ASYNC_INVOKE=y"]
     },
+]
+
+#ATOMIC_OPTS = [
+#    {"suffix": "", "args": []},
+#    {"suffix": "-aligned", "args": ["--aligned-atomic-storage"]}
+#]
+
+ATOMIC_OPTS = [
+    {"suffix": "", "args": []}
 ]
 
 def run_command(cmd, cwd, log_file_path=None, check=True):
@@ -137,61 +146,73 @@ def main():
     # And pcm_dir is: .../pcm-sdk/pcm/
     # So we go up two levels from pcm_dir to get to the common root
     # This matches the shell script logic: $(dirname "$PCM_DIR")/uet-htsim/htsim/sim/
-    htsim_dir = pcm_dir.parent.parent / "uet-htsim" / "htsim" / "sim"
-    
-    for config in CONFIGS:
-        exp_name = config["name"]
-        pcm_args = config["pcm_args"]
-        tb_args = config["tb_args"]
-        
-        print(f"\n>>> Starting Experiment Set: {exp_name}")
-        print(f"    PCM Args:   {' '.join(pcm_args) if pcm_args else '[Default]'}")
-        print(f"    TB Args:    {' '.join(tb_args) if tb_args else '[Default]'}")
-        
-        exp_log_dir = log_root / exp_name
-        exp_log_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 1. Rebuild PCM Framework
-        print("    [Build] Rebuilding PCM...")
-        build_cmd = ["./build.py", "--clean", f"--htsim-dir={htsim_dir}", "--relwithdebinfo"] + pcm_args
-        run_command(build_cmd, cwd=pcm_dir, log_file_path=exp_log_dir / "build_pcm.log")
-        
-        # 2. Rebuild Testbench
-        print("    [Build] Rebuilding Testbench...")
-        # Clean first
-        run_command(["make", "clean"], cwd=ccp_dir, check=False) # Don't fail if clean fails
-        
-        # Build
-        make_cmd = ["make", "testbench_with_portus"] + tb_args
-        run_command(make_cmd, cwd=ccp_dir, log_file_path=exp_log_dir / "build_tb.log")
-        
-        # 3. Run Experiments
-        print("    [Run] Starting iterations...")
-        
-        for algo in ALGOS:
-            for mode in MODES:
-                log_filename = f"{exp_name}_{algo}_{mode}_{SEED}_{ITERS}.log"
-                log_file = exp_log_dir / log_filename
+    htsim_dir = pcm_dir.parent / "uet-htsim" / "htsim" / "sim"
+
+    for atomic_opt in ATOMIC_OPTS:
+        for config in CONFIGS:
+            # Skip perf-based configs when using aligned atomic storage
+            if "--aligned-atomic-storage" in atomic_opt["args"]:
+                is_perf_config = False
+                if any("perf" in arg for arg in config["pcm_args"]):
+                    is_perf_config = True
+                if any("TIMING_BACKEND=PERF" in arg for arg in config["tb_args"]):
+                    is_perf_config = True
                 
-                print(f"        Running {algo} ({mode})... ", end="", flush=True)
-                
-                # ./testbench_with_portus [iters] [seed] [no_loss] [mode] [algo] [pcm_mode]
-                run_cmd = [
-                    "./testbench_with_portus",
-                    str(ITERS),
-                    str(SEED),
-                    str(NO_LOSS),
-                    "pcm",
-                    algo,
-                    mode
-                ]
-                
-                success = run_command(run_cmd, cwd=ccp_dir, log_file_path=log_file, check=False)
-                
-                if success:
-                    print("Done.")
-                else:
-                    print("Failed! (Check log)")
+                if is_perf_config:
+                    continue
+
+            exp_name = config["name"] + atomic_opt["suffix"]
+            pcm_args = config["pcm_args"] + atomic_opt["args"]
+            tb_args = config["tb_args"]
+            
+            print(f"\n>>> Starting Experiment Set: {exp_name}")
+            print(f"    PCM Args:   {' '.join(pcm_args) if pcm_args else '[Default]'}")
+            print(f"    TB Args:    {' '.join(tb_args) if tb_args else '[Default]'}")
+            
+            exp_log_dir = log_root / exp_name
+            exp_log_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 1. Rebuild PCM Framework
+            print("    [Build] Rebuilding PCM...")
+            build_cmd = ["./build.py", "--clean", f"--htsim-dir={htsim_dir}", "--relwithdebinfo"] + pcm_args
+            run_command(build_cmd, cwd=pcm_dir, log_file_path=exp_log_dir / "build_pcm.log")
+            
+            # 2. Rebuild Testbench
+            print("    [Build] Rebuilding Testbench...")
+            # Clean first
+            run_command(["make", "clean"], cwd=ccp_dir, check=False) # Don't fail if clean fails
+            
+            # Build
+            make_cmd = ["make", "testbench_with_portus"] + tb_args
+            run_command(make_cmd, cwd=ccp_dir, log_file_path=exp_log_dir / "build_tb.log")
+            
+            # 3. Run Experiments
+            print("    [Run] Starting iterations...")
+            
+            for algo in ALGOS:
+                for mode in MODES:
+                    log_filename = f"{exp_name}_{algo}_{mode}_{SEED}_{ITERS}.log"
+                    log_file = exp_log_dir / log_filename
+                    
+                    print(f"        Running {algo} ({mode})... ", end="", flush=True)
+                    
+                    # ./testbench_with_portus [iters] [seed] [no_loss] [mode] [algo] [pcm_mode]
+                    run_cmd = [
+                        "./testbench_with_portus",
+                        str(ITERS),
+                        str(SEED),
+                        str(NO_LOSS),
+                        "pcm",
+                        algo,
+                        mode
+                    ]
+                    
+                    success = run_command(run_cmd, cwd=ccp_dir, log_file_path=log_file, check=False)
+                    
+                    if success:
+                        print("Done.")
+                    else:
+                        print("Failed! (Check log)")
 
     print("\n==================================================")
     print("All experiments completed.")

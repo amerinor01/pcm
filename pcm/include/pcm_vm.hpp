@@ -136,12 +136,17 @@ struct PcmHandlerVmDesc {
             pcm_uint nack_ev{};
             pcm_uint tx_ready_pkts{};
             pcm_uint tx_backlog_bytes{};
+            pcm_uint mask{};
         } in;
         struct Output {
             pcm_uint cwnd{};
             pcm_uint rate{};
             pcm_uint ev{};
         } out;
+
+        using FlushInputFn = void (*)(void *ctx);
+        FlushInputFn flush_input{nullptr};
+        void *ctx{nullptr};
     } io_slab_;
 
     PcmHandlerVmIoSlab *get_signal_io_slab() { return &io_slab_; };
@@ -230,8 +235,6 @@ struct SignalDesc {
         }
 
         if constexpr (AccumType == PCM_SIG_ACCUM_SUM) {
-            if (update_value == 0)
-                return curr;
             return curr + update_value;
         } else if constexpr (AccumType == PCM_SIG_ACCUM_LAST) {
             return update_value;
@@ -404,6 +407,11 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
                 }
             });
         handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
+
+        io_slab_.ctx = this;
+        io_slab_.flush_input = [](void *ctx) {
+            static_cast<PcmHandlerVm *>(ctx)->flush_slab_input();
+        };
     }
 
     // init_state has to be called by the derived class after the
@@ -456,18 +464,23 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         return result;
     }
 
-    template <pcm_signal_t Match> void update_signals(pcm_uint v) {
+    template <pcm_signal_t Match>
+    void update_signals(pcm_uint v, pcm_uint update_mask) {
         (([&](auto *self) {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
                  if constexpr (T::kIsAccum) {
                      if constexpr (T::kSigType == Match) {
                          auto *impl = static_cast<PcmHandlerVmImplT *>(self);
-                         if constexpr (T::kSigType == PCM_SIG_ELAPSED_TIME) {
-                             impl->template set_signal_slot<T::kIndex>(
-                                 util::get_time_diff(start_ts_, get_time_()));
-                         } else {
-                             impl->template accumulate_signal_slot<T>(v);
+                         if (update_mask & (1 << T::kSigType)) {
+                             if constexpr (T::kSigType ==
+                                           PCM_SIG_ELAPSED_TIME) {
+                                 impl->template set_signal_slot<T::kIndex>(
+                                     util::get_time_diff(start_ts_,
+                                                         get_time_()));
+                             } else {
+                                 impl->template accumulate_signal_slot<T>(v);
+                             }
                          }
                      }
                  }
@@ -476,24 +489,27 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
          ...);
     }
 
-    void flush_slab_input() override {
+    void flush_slab_input() override final {
         // implicitly instantiate update_signals for all signals that
         // algorithm can have - for useless signals no code will be emitted.
-        update_signals<PCM_SIG_ACK>(io_slab_.in.ack);
-        update_signals<PCM_SIG_RTO>(io_slab_.in.rto);
-        update_signals<PCM_SIG_NACK>(io_slab_.in.nack);
-        update_signals<PCM_SIG_ECN>(io_slab_.in.ecn);
-        update_signals<PCM_SIG_RTT>(io_slab_.in.rtt);
-        update_signals<PCM_SIG_DATA_TX>(io_slab_.in.data_tx);
-        update_signals<PCM_SIG_DATA_NACKED>(io_slab_.in.data_nacked);
-        update_signals<PCM_SIG_IN_FLIGHT>(io_slab_.in.in_flight);
-        update_signals<PCM_SIG_ACK_EV>(io_slab_.in.ack_ev);
-        update_signals<PCM_SIG_ECN_EV>(io_slab_.in.ecn_ev);
-        update_signals<PCM_SIG_NACK_EV>(io_slab_.in.nack_ev);
-        update_signals<PCM_SIG_TX_READY_PKTS>(io_slab_.in.tx_ready_pkts);
-        update_signals<PCM_SIG_TX_BACKLOG_BYTES>(io_slab_.in.tx_backlog_bytes);
-        // cleanup for the next flush
-        io_slab_.in = PcmHandlerVmIoSlab::Input();
+        update_signals<PCM_SIG_ACK>(io_slab_.in.ack, io_slab_.in.mask);
+        update_signals<PCM_SIG_RTO>(io_slab_.in.rto, io_slab_.in.mask);
+        update_signals<PCM_SIG_NACK>(io_slab_.in.nack, io_slab_.in.mask);
+        update_signals<PCM_SIG_ECN>(io_slab_.in.ecn, io_slab_.in.mask);
+        update_signals<PCM_SIG_RTT>(io_slab_.in.rtt, io_slab_.in.mask);
+        update_signals<PCM_SIG_DATA_TX>(io_slab_.in.data_tx, io_slab_.in.mask);
+        update_signals<PCM_SIG_DATA_NACKED>(io_slab_.in.data_nacked,
+                                            io_slab_.in.mask);
+        update_signals<PCM_SIG_IN_FLIGHT>(io_slab_.in.in_flight,
+                                          io_slab_.in.mask);
+        update_signals<PCM_SIG_ACK_EV>(io_slab_.in.ack_ev, io_slab_.in.mask);
+        update_signals<PCM_SIG_ECN_EV>(io_slab_.in.ecn_ev, io_slab_.in.mask);
+        update_signals<PCM_SIG_NACK_EV>(io_slab_.in.nack_ev, io_slab_.in.mask);
+        update_signals<PCM_SIG_TX_READY_PKTS>(io_slab_.in.tx_ready_pkts,
+                                              io_slab_.in.mask);
+        update_signals<PCM_SIG_TX_BACKLOG_BYTES>(io_slab_.in.tx_backlog_bytes,
+                                                 io_slab_.in.mask);
+        io_slab_.in.mask = 0;
     }
 
     void fetch_slab_output() override {
@@ -532,7 +548,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
 
         // Accumulate freshest pure elapsed time.
         // TODO: check if this breaks timer logic (DCQCN needs it)
-        update_signals<PCM_SIG_ELAPSED_TIME>(0);
+        update_signals<PCM_SIG_ELAPSED_TIME>(0, 1 << PCM_SIG_ELAPSED_TIME);
 
         (([&]() {
              using T = Objs;
@@ -555,23 +571,25 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     void apply_post_invoke_snapshot() {
         auto set_signal_mask =
             raw_snapshot_[SnapshotLayout::kSignalSetMaskOffset];
-        (([&](auto *self) {
-             using T = Objs;
-             if constexpr (is_signal_v<T>) {
-                 if (set_signal_mask & T::kMask) {
-                     auto *impl = static_cast<PcmHandlerVmImplT *>(self);
-                     if constexpr (T::kSigType == PCM_SIG_ELAPSED_TIME) {
-                         impl->template set_signal_slot<T::kIndex>(
-                             util::get_time_diff(start_ts_, get_time_()));
-                     } else {
-                         impl->template accumulate_signal_slot<T>(
-                             raw_snapshot_[SnapshotLayout::kSignalOffset +
-                                           T::kIndex]);
+        if (set_signal_mask) {
+            (([&](auto *self) {
+                 using T = Objs;
+                 if constexpr (is_signal_v<T>) {
+                     if (set_signal_mask & T::kMask) {
+                         auto *impl = static_cast<PcmHandlerVmImplT *>(self);
+                         if constexpr (T::kSigType == PCM_SIG_ELAPSED_TIME) {
+                             impl->template set_signal_slot<T::kIndex>(
+                                 util::get_time_diff(start_ts_, get_time_()));
+                         } else {
+                             impl->template accumulate_signal_slot<T>(
+                                 raw_snapshot_[SnapshotLayout::kSignalOffset +
+                                               T::kIndex]);
+                         }
                      }
                  }
-             }
-         }(this)),
-         ...);
+             }(this)),
+             ...);
+        }
         static_cast<PcmHandlerVmImplT *>(this)
             ->apply_post_invoke_snapshot_impl();
     }
@@ -757,8 +775,6 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
         static_assert(SignalT::kIndex < kNumSignals);
 
         if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_SUM) {
-            if (val == 0)
-                return;
             signals_storage_[SignalT::kIndex].v.fetch_add(
                 val, std::memory_order_acq_rel);
         } else if constexpr (SignalT::kAccumType == PCM_SIG_ACCUM_LAST) {

@@ -40,17 +40,22 @@
 #include <pthread.h>
 #include <sched.h>
 
+// RDTSC
+#if defined(_MSC_VER)
+#include <intrin.h>
+#else
+#include <x86intrin.h>
+#endif
+
 extern "C"
 {
 #include "ccp.h"
 }
 
 // Profiling modes
-// #define PROFILE_SUBMIT_INVOKE 1
+// #define PROFILE_SUBMIT 1
 // #define PROFILE_ASYNC_INVOKE 1
-#if !defined(PROFILE_SUBMIT_INVOKE) && !defined(PROFILE_ASYNC_INVOKE) && !defined(PROFILE_FULL_CYCLE)
-#define PROFILE_FULL_CYCLE 1
-#endif
+// #define PROFILE_FULL_CYCLE 1
 
 #define ENABLE_TIMING_LIB 1
 #include "../pcm/include/timing.hpp"
@@ -587,12 +592,17 @@ static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
 {
     auto *pctx = static_cast<PcmVmContext *>(ctx);
     auto &slab_in = pctx->io_slab->in;
+    auto &vm = pctx->vm;
 
+#if defined(PROFILE_SUBMIT)
+    timing.start();
+#endif
     if (evt.type == NetworkEvent::LOSS)
     {
         // Packet loss event
         slab_in.nack = 1;
         slab_in.data_nacked = evt.packet_size;
+        slab_in.mask |= (1 << PCM_SIG_NACK) | (1 << PCM_SIG_DATA_NACKED);
     }
     else
     {
@@ -601,15 +611,20 @@ static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
         slab_in.ecn = evt.ecn_marked ? 1 : 0;
         slab_in.data_tx = evt.packet_size;
         slab_in.rtt = evt.rtt_sample_us;
+        slab_in.mask |= (1 << PCM_SIG_ACK) | (evt.ecn_marked ? (1 << PCM_SIG_ECN) : 0) | (1 << PCM_SIG_DATA_TX) | (1 << PCM_SIG_RTT);
     }
 
     // Common fields
     slab_in.in_flight = evt.packets_in_flight * (u64)evt.packet_size;
     slab_in.tx_backlog_bytes = 8 * 1024 * 1024; // Same as libccp example
     slab_in.tx_ready_pkts = 1;                  // update backlog (for LB)
+    slab_in.mask |= (1 << PCM_SIG_IN_FLIGHT) | (1 << PCM_SIG_TX_BACKLOG_BYTES) | (1 << PCM_SIG_TX_READY_PKTS);
 
     // Flush the input to the VM
-    pctx->vm->flush_slab_input();
+    vm->flush_slab_input();
+#ifdef PROFILE_SUBMIT
+    timing.stop(true, "[submit->invoke]");
+#endif
 }
 
 static void pcm_vm_invoke(void *ctx)
@@ -703,10 +718,17 @@ CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, PcmVmMode mode =
     static pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab *io_slab = vm->get_signal_io_slab();
 
     // Add time source (using steady_clock for microsecond precision)
+    // vm->add_get_time_source([]() -> pcm_uint
+    //                         { return (pcm_uint)std::chrono::duration_cast<std::chrono::microseconds>(
+    //                                      std::chrono::steady_clock::now().time_since_epoch())
+    //                               .count(); });
+    // vm->add_get_time_source([]() -> pcm_uint
+    //                         { return (pcm_uint)std::chrono::duration_cast<std::chrono::nanoseconds>(
+    //                                      std::chrono::high_resolution_clock::now().time_since_epoch())
+    //                               .count(); });
+    // auto ghz = timing_lib::calibrate_tsc();
     vm->add_get_time_source([]() -> pcm_uint
-                            { return (pcm_uint)std::chrono::duration_cast<std::chrono::microseconds>(
-                                         std::chrono::steady_clock::now().time_since_epoch())
-                                  .count(); });
+                            { return (pcm_uint)(__rdtsc() / 2.3); });
 
     // Setup context
     static PcmVmContext pctx;
@@ -721,20 +743,20 @@ CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, PcmVmMode mode =
         pctx.handler_thread = std::thread(pcm_vm_handler_thread_fn, vm, &pctx.running, &pctx.updates_processed);
         std::cout << "[PCM] Handler thread started\n";
 #ifdef __linux__
-        // Pin handler thread to core 1 through native handle from std::thread
+        // Pin handler thread to core 49 (sibling core) through native handle from std::thread
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        CPU_SET(36, &cpuset); // optimal mapping for Intel(R) Xeon(R) Gold 6140 CPU @ 2.30GHz
+        CPU_SET(49, &cpuset); // optimal mapping for Intel(R) Xeon(R) Gold 6140 CPU @ 2.30GHz
         pthread_setaffinity_np(pctx.handler_thread.native_handle(), sizeof(cpu_set_t), &cpuset);
         std::cout << "[PCM] Handler thread pinned to core 1\n";
 #endif
     }
 
 #ifdef __linux__
-    // Pin main thread to core 0
+    // Pin main thread to core 13
     cpu_set_t main_cpuset;
     CPU_ZERO(&main_cpuset);
-    CPU_SET(0, &main_cpuset);
+    CPU_SET(13, &main_cpuset);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &main_cpuset);
     std::cout << "[PCM] Main thread pinned to core 0\n";
 #endif
@@ -849,7 +871,7 @@ int main(int argc, char **argv)
     {
         const auto &evt = events[i];
 
-#if defined(PROFILE_SUBMIT_INVOKE) || defined(PROFILE_FULL_CYCLE)
+#if defined(PROFILE_FULL_CYCLE)
         timing.start();
 #endif
 
@@ -858,10 +880,6 @@ int main(int argc, char **argv)
 
         // 2) Invoke CC algorithm
         cc_adapter.invoke(cc_adapter.context);
-
-#ifdef PROFILE_SUBMIT_INVOKE
-        timing.stop(true, "[submit->invoke]");
-#endif
 
         // 3) Fetch control output
         auto post_output = cc_adapter.fetch_output(cc_adapter.context);
@@ -880,10 +898,8 @@ int main(int argc, char **argv)
         }
 
         // Log post-invoke state
-#ifndef PROFILE_ASYNC_INVOKE
-        std::cout << "[iter " << i << ", outer_loop] cwnd=" << post_output.cwnd
-                  << " rate=" << post_output.rate_bytes_per_s << " ev=" << post_output.ev << " \n";
-#endif
+        // std::cout << "[iter " << i << ", outer_loop] cwnd=" << post_output.cwnd
+        //           << " rate=" << post_output.rate_bytes_per_s << " ev=" << post_output.ev << " \n";
     }
 
     // --- Teardown ---

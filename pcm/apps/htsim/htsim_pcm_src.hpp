@@ -261,6 +261,10 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         io_slab->in.rtt = UecSrc::_raw_rtt;
         io_slab->in.in_flight = UecSrc::_in_flight;
         io_slab->in.tx_backlog_bytes = UecSrc::_backlog;
+        io_slab->in.mask |=
+            (1 << PCM_SIG_ACK) | (skip ? (1 << PCM_SIG_ECN) : 0) |
+            (1 << PCM_SIG_DATA_TX) | (1 << PCM_SIG_RTT) |
+            (1 << PCM_SIG_IN_FLIGHT) | (1 << PCM_SIG_TX_BACKLOG_BYTES);
         _scheduler.getVm(_pcm_vm_id).flush_slab_input();
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             if (_scheduler.pollVm(_pcm_vm_id)) {
@@ -281,6 +285,8 @@ class PcmSrc final : public UecSrc, public PcmScheduledContext {
         io_slab->in.nack = 1;
         io_slab->in.data_nacked = nacked_bytes;
         io_slab->in.rtt = UecSrc::_base_rtt + UecSrc::_network_rtt;
+        io_slab->in.mask |= (1 << PCM_SIG_NACK) | (1 << PCM_SIG_DATA_NACKED) |
+                            (1 << PCM_SIG_RTT);
         _scheduler.getVm(_pcm_vm_id).flush_slab_input();
         if (_scheduler.schedulerTypeGet() == PcmScheduler::ProgressType::SYNC) {
             if (_scheduler.pollVm(_pcm_vm_id)) {
