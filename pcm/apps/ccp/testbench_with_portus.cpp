@@ -7,34 +7,32 @@
 // - Generates random ACK/ECN/loss/timeout-like events
 // - Receives congestion control decisions via adapter interface
 //
-// Build (libccp mode):
-//   clang++ -std=c++11 -o testbench_with_portus testbench_with_portus.cpp -L. -lccp -I. -lpthread
-// Build (PCM mode):
-//   clang++ -std=c++17 -o testbench_with_portus testbench_with_portus.cpp
-//     -I../pcm-sdk/pcm/include -L../pcm-sdk/pcm/build/lib -Wl,-rpath,../pcm-sdk/pcm/build/lib
+// - Atomatic Build
+// make testbench_with_portus PROFILE_FULL_CYCLE=y TIMING_BACKEND=RDTSC
+//
 //
 // Run (libccp):
-//   Terminal 1: cd /path/to/generic-cong-avoid && ./target/release/reno --ipc=unix
-//   Terminal 2: ./testbench_with_portus 1000 10 42 libccp reno
+//   Terminal 1: cd /path/to/generic-cong-avoid && ./target/release/reno
+//   --ipc=unix --per_ack Terminal 2: ./testbench_with_portus 100000 1 42 0 ccp reno sync 48 13
 // Run (PCM):
-//   ./testbench_with_portus 1000 10 42 pcm dcqcn
+//   numactl -C 13 ./testbench_with_portus 100000 1 42 0 pcm newreno sync 48 13
 
+#include <atomic> // for std::atomic in PcmVmContext
 #include <chrono>
-#include <atomic>  // for std::atomic in PcmVmContext
-#include <cstddef> // for offsetof
 #include <csignal>
+#include <cstddef> // for offsetof
 #include <cstdint>
 #include <cstring>
 #include <iostream>
 #include <random>
-#include <thread> // for sleep_for and std::thread
 #include <sys/syscall.h>
+#include <thread> // for sleep_for and std::thread
 
 // Unix socket includes
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 // Thread mapping
 #include <pthread.h>
@@ -93,7 +91,8 @@ struct NetworkEvent
 };
 
 // ---------- Event trace generation ----------
-std::vector<NetworkEvent> generate_event_trace(int num_events, uint64_t seed, bool no_loss)
+std::vector<NetworkEvent> generate_event_trace(int num_events, uint64_t seed,
+                                               bool no_loss)
 {
     std::vector<NetworkEvent> events;
     events.reserve(num_events);
@@ -141,15 +140,16 @@ std::vector<NetworkEvent> generate_event_trace(int num_events, uint64_t seed, bo
 // Allows plugging in different CC implementations (libccp, native, etc.)
 struct CcAlgorithmAdapter
 {
-    void *context; // Opaque context (e.g., ccp_connection*, datapath state, etc.)
+    void *
+        context; // Opaque context (e.g., ccp_connection*, datapath state, etc.)
 
     // 1) Submit new event to the datapath
     // Takes the event, updates internal state
-    void (*submit_event)(void *ctx, const NetworkEvent &evt);
+    void (*submit_event)(void *ctx, const NetworkEvent &evt, int flow_id);
 
     // 2) Invoke CC algorithm
     // Processes the event and computes new control values
-    void (*invoke)(void *ctx);
+    void (*invoke)(void *ctx, int flow_id);
 
     // 3) Fetch control output
     // Returns updated cwnd and rate
@@ -160,7 +160,7 @@ struct CcAlgorithmAdapter
         u32 ev{};
         bool skip{};
     };
-    ControlOutput (*fetch_output)(void *ctx);
+    ControlOutput (*fetch_output)(void *ctx, int flow_id);
 };
 
 // ============================================================================
@@ -193,8 +193,8 @@ static void dp_log(struct ccp_datapath *, enum ccp_log_level lvl,
 {
     const char *L[] = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR"};
     int li = (lvl >= TRACE && lvl <= ERROR) ? (int)lvl : (int)INFO;
-    std::string s = (msg_size > 0) ? std::string(msg, (size_t)msg_size)
-                                   : std::string(msg);
+    std::string s =
+        (msg_size > 0) ? std::string(msg, (size_t)msg_size) : std::string(msg);
     std::cerr << "[libccp " << L[li] << "] " << s << "\n";
 }
 
@@ -221,11 +221,12 @@ static int dp_send_msg(struct ccp_datapath *, char *msg, int len)
     }
 
     // Use sendto() with the stored Portus address
-    int sent = sendto(portus_sock, msg, len, 0,
-                      (struct sockaddr *)&portus_addr, portus_addr_len);
+    int sent = sendto(portus_sock, msg, len, 0, (struct sockaddr *)&portus_addr,
+                      portus_addr_len);
     if (sent < 0)
     {
-        std::cerr << "[IPC] Failed to send message: " << strerror(errno) << "\n";
+        std::cerr << "[IPC] Failed to send message: " << strerror(errno)
+                  << "\n";
         return -1;
     }
 
@@ -288,7 +289,8 @@ int libccp_process_ipc_messages(struct ccp_datapath *dp)
         }
         // auto t2 = std::chrono::high_resolution_clock::now();
         // std::cout << "ccp_read_msg: "
-        //           << std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count()
+        //           << std::chrono::duration_cast<std::chrono::nanoseconds>(t2
+        //           - t1).count()
         //           << " ns\n";
 
         messages_processed++;
@@ -306,7 +308,8 @@ int libccp_connect_to_portus(const char *socket_path = "/tmp/ccp/portus")
     portus_sock = socket(AF_UNIX, SOCK_DGRAM, 0);
     if (portus_sock < 0)
     {
-        std::cerr << "[IPC] Failed to create socket: " << strerror(errno) << "\n";
+        std::cerr << "[IPC] Failed to create socket: " << strerror(errno)
+                  << "\n";
         return -1;
     }
 
@@ -323,15 +326,18 @@ int libccp_connect_to_portus(const char *socket_path = "/tmp/ccp/portus")
 
     // Create unique socket path based on PID
     char bind_path[108];
-    snprintf(bind_path, sizeof(bind_path), "/tmp/ccp/testbench%02d", getpid() % 100);
+    snprintf(bind_path, sizeof(bind_path), "/tmp/ccp/testbench%02d",
+             getpid() % 100);
     strcpy(bind_addr.sun_path, bind_path);
 
     // Remove old socket if exists
     unlink(bind_path);
 
-    // Calculate bind address length using offsetof (portable across macOS/Linux)
-    // IMPORTANT: Must include the null terminator (+1) in the length!
-    socklen_t bind_len = offsetof(struct sockaddr_un, sun_path) + strlen(bind_addr.sun_path) + 1;
+    // Calculate bind address length using offsetof (portable across
+    // macOS/Linux) IMPORTANT: Must include the null terminator (+1) in the
+    // length!
+    socklen_t bind_len =
+        offsetof(struct sockaddr_un, sun_path) + strlen(bind_addr.sun_path) + 1;
 
     if (bind(portus_sock, (struct sockaddr *)&bind_addr, bind_len) < 0)
     {
@@ -346,9 +352,11 @@ int libccp_connect_to_portus(const char *socket_path = "/tmp/ccp/portus")
     portus_addr.sun_family = AF_UNIX;
     strcpy(portus_addr.sun_path, socket_path);
 
-    // Calculate actual address length using offsetof (portable across macOS/Linux)
-    // IMPORTANT: Must include the null terminator (+1) in the length!
-    portus_addr_len = offsetof(struct sockaddr_un, sun_path) + strlen(portus_addr.sun_path) + 1;
+    // Calculate actual address length using offsetof (portable across
+    // macOS/Linux) IMPORTANT: Must include the null terminator (+1) in the
+    // length!
+    portus_addr_len = offsetof(struct sockaddr_un, sun_path) +
+                      strlen(portus_addr.sun_path) + 1;
 
     std::cout << "[IPC] Bound to " << bind_path << "\n";
     std::cout << "[IPC] Will send to: " << socket_path
@@ -394,7 +402,8 @@ int libccp_setup_datapath(LibccpTestbed *tb)
 }
 
 // ---------- Flow creation ----------
-ccp_connection *libccp_create_flow(LibccpTestbed *tb, const char *cong_alg = "reno")
+ccp_connection *libccp_create_flow(LibccpTestbed *tb,
+                                   const char *cong_alg = "reno")
 {
     ccp_datapath_info info{};
     info.init_cwnd = 10 * 1460;
@@ -466,22 +475,25 @@ struct LibccpContext
 // Global context for libccp adapter (since we only have one connection)
 static LibccpContext g_libccp_ctx;
 
-static void libccp_submit_event(void *ctx, const NetworkEvent &evt)
+static void libccp_submit_event(void *ctx, const NetworkEvent &evt, int flow_id)
 {
+    (void)flow_id;
     auto *lctx = static_cast<LibccpContext *>(ctx);
     libccp_apply_event(lctx->testbed->active_conn, evt);
 }
 
-static void libccp_invoke(void *ctx)
+static void libccp_invoke(void *ctx, int flow_id)
 {
+    (void)flow_id;
     auto *lctx = static_cast<LibccpContext *>(ctx);
 
     // Let CCP process (may send measurements to Portus)
     ccp_invoke(lctx->testbed->active_conn);
 }
 
-static CcAlgorithmAdapter::ControlOutput libccp_fetch_output(void *ctx)
+static CcAlgorithmAdapter::ControlOutput libccp_fetch_output(void *ctx, int flow_id)
 {
+    (void)flow_id;
     auto *lctx = static_cast<LibccpContext *>(ctx);
 
     // Poll for responses from Portus until we get message or timeout
@@ -544,55 +556,64 @@ enum class PcmVmMode
     ASYNC // Dedicated handler thread calls invoke_cc_algorithm_on_trigger
 };
 
-struct PcmVmContext
+struct PcmFlowContext
 {
     pcm_vm::PcmHandlerVmDesc *vm;
     pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab *io_slab;
-    PcmVmMode mode;                                         // Operating mode
-    std::thread handler_thread;                             // ASYNC mode: dedicated handler thread
-    std::atomic<bool> running{true};                        // ASYNC mode: thread control flag
-    alignas(64) std::atomic<uint64_t> updates_processed{0}; // ASYNC mode: incremented by handler when trigger fires
-    alignas(64) uint64_t updates_fetched{0};                // ASYNC mode: main thread only, tracks last fetched update
+    alignas(64) std::atomic<uint64_t> updates_processed{0};
+    alignas(64) uint64_t updates_fetched{0};
+};
+
+struct PcmVmContext
+{
+    std::vector<std::unique_ptr<PcmFlowContext>> flows;
+    PcmVmMode mode;                  // Operating mode
+    std::thread handler_thread;      // ASYNC mode: dedicated handler thread
+    std::atomic<bool> running{true}; // ASYNC mode: thread control flag
 };
 
 // Handler thread function - runs invoke_cc_algorithm_on_trigger() in tight loop
-static void pcm_vm_handler_thread_fn(pcm_vm::PcmHandlerVmDesc *vm, std::atomic<bool> *running,
-                                     std::atomic<uint64_t> *updates_processed)
+static void pcm_vm_handler_thread_fn(PcmVmContext *pctx)
 {
-    std::cout << "[PCM Handler Thread] Started. TID=" << syscall(SYS_gettid) << "\n";
+    std::cout << "[PCM Handler Thread] Started. TID=" << syscall(SYS_gettid)
+              << "\n";
     // usleep(10000000); // sleep to see TID and attach perf manually
     // thread-local timing
     timing_backend worker_timing_stats{
         timing_lib::benchmark_timer<timing_backend>("worker thread timer")};
     timing_backend worker_timing{worker_timing_stats};
 
-    while (running->load(std::memory_order_acquire))
+    while (pctx->running.load(std::memory_order_acquire))
     {
-#ifdef PROFILE_ASYNC_INVOKE
-        worker_timing.start();
-#endif
-        if (vm->invoke_cc_algorithm_on_trigger())
+        for (auto &flow : pctx->flows)
         {
 #ifdef PROFILE_ASYNC_INVOKE
-            worker_timing.stop(true, "[worker invocation]");
+            worker_timing.start();
 #endif
-            updates_processed->fetch_add(1, std::memory_order_release);
-        }
+            if (flow->vm->invoke_cc_algorithm_on_trigger())
+            {
+                flow->updates_processed.fetch_add(1, std::memory_order_release);
 #ifdef PROFILE_ASYNC_INVOKE
-        else
-        {
-            worker_timing.stop(false, "");
-        }
+                worker_timing.stop(true, "[worker invocation]");
 #endif
+            }
+#ifdef PROFILE_ASYNC_INVOKE
+            else
+            {
+                worker_timing.stop(false, "");
+            }
+#endif
+        }
     }
     std::cout << "[PCM Handler Thread] Exiting\n";
 }
 
-static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
+static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt, int flow_id)
 {
     auto *pctx = static_cast<PcmVmContext *>(ctx);
-    auto &slab_in = pctx->io_slab->in;
-    auto &vm = pctx->vm;
+    auto &flow = pctx->flows[flow_id];
+    auto &slab_in = flow->io_slab->in;
+    auto &vm = flow->vm;
 
 #if defined(PROFILE_SUBMIT)
     timing.start();
@@ -611,14 +632,17 @@ static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
         slab_in.ecn = evt.ecn_marked ? 1 : 0;
         slab_in.data_tx = evt.packet_size;
         slab_in.rtt = evt.rtt_sample_us;
-        slab_in.mask |= (1 << PCM_SIG_ACK) | (evt.ecn_marked ? (1 << PCM_SIG_ECN) : 0) | (1 << PCM_SIG_DATA_TX) | (1 << PCM_SIG_RTT);
+        slab_in.mask |= (1 << PCM_SIG_ACK) |
+                        (evt.ecn_marked ? (1 << PCM_SIG_ECN) : 0) |
+                        (1 << PCM_SIG_DATA_TX) | (1 << PCM_SIG_RTT);
     }
 
     // Common fields
     slab_in.in_flight = evt.packets_in_flight * (u64)evt.packet_size;
     slab_in.tx_backlog_bytes = 8 * 1024 * 1024; // Same as libccp example
     slab_in.tx_ready_pkts = 1;                  // update backlog (for LB)
-    slab_in.mask |= (1 << PCM_SIG_IN_FLIGHT) | (1 << PCM_SIG_TX_BACKLOG_BYTES) | (1 << PCM_SIG_TX_READY_PKTS);
+    slab_in.mask |= (1 << PCM_SIG_IN_FLIGHT) | (1 << PCM_SIG_TX_BACKLOG_BYTES) |
+                    (1 << PCM_SIG_TX_READY_PKTS);
 
     // Flush the input to the VM
     vm->flush_slab_input();
@@ -627,59 +651,74 @@ static void pcm_vm_submit_event(void *ctx, const NetworkEvent &evt)
 #endif
 }
 
-static void pcm_vm_invoke(void *ctx)
+static void pcm_vm_invoke(void *ctx, int flow_id)
 {
     auto *pctx = static_cast<PcmVmContext *>(ctx);
+    auto &flow = pctx->flows[flow_id];
     // SYNC mode: Main thread directly invokes the trigger check
     if (pctx->mode == PcmVmMode::SYNC)
     {
-        auto ret = pctx->vm->invoke_cc_algorithm_on_trigger();
+        auto ret = flow->vm->invoke_cc_algorithm_on_trigger();
         assert(ret);
     }
     // ASYNC mode: Handler thread runs invoke_cc_algorithm_on_trigger()
     // Datapath thread does nothing here - just submit events and fetch results
-    // The subsequent blocking fetch will wait for handler to process the trigger
+    // The subsequent blocking fetch will wait for handler to process the
+    // trigger
 }
 
-static CcAlgorithmAdapter::ControlOutput pcm_vm_fetch_output(void *ctx)
+static CcAlgorithmAdapter::ControlOutput pcm_vm_fetch_output(void *ctx, int flow_id)
 {
     auto *pctx = static_cast<PcmVmContext *>(ctx);
+    auto &flow = pctx->flows[flow_id];
     bool skip = false;
 
     if (pctx->mode == PcmVmMode::ASYNC)
     {
         // ASYNC mode: Block until handler thread has processed a new update
         uint64_t current_updates;
-        while ((current_updates = pctx->updates_processed.load(std::memory_order_acquire)) == pctx->updates_fetched)
+        while ((current_updates = flow->updates_processed.load(
+                    std::memory_order_acquire)) == flow->updates_fetched)
         {
             // Create background flushes to invalidate signal storage cache
-            // This emulates worst case for PCM when ACKs from datapath keep arriving
-            // pctx->vm->flush_slab_input();
-            // Keep spinning until new update from worker thread is available
+            // This emulates worst case for PCM when ACKs from datapath keep
+            // arriving pctx->vm->flush_slab_input(); Keep spinning until new
+            // update from worker thread is available
         }
-        if (pctx->updates_fetched + 1 != current_updates)
+        if (flow->updates_fetched + 1 != current_updates)
         {
-            std::cout << "[WARNING] datapath and worker are out of sync: current_updates=" << current_updates << " updates_fetched=" << pctx->updates_fetched << " Skipping measurement." << std::endl;
+            std::cout << "[WARNING] datapath and worker are out of sync: "
+                         "current_updates="
+                      << current_updates
+                      << " updates_fetched=" << flow->updates_fetched
+                      << " Skipping measurement." << std::endl;
             skip = true;
         }
-        pctx->updates_fetched = current_updates;
+        flow->updates_fetched = current_updates;
     }
     // SYNC mode: No waiting needed, invoke already happened
 
     // Fetch latest control values from VM
-    pctx->vm->fetch_slab_output();
     CcAlgorithmAdapter::ControlOutput out;
-    out.cwnd = pctx->io_slab->out.cwnd;
-    out.rate_bytes_per_s = pctx->io_slab->out.rate;
-    out.ev = pctx->io_slab->out.ev;
+#if defined(PROFILE_FETCH)
+    timing.start();
+#endif
+    flow->vm->fetch_slab_output();
+    out.cwnd = flow->io_slab->out.cwnd;
+    out.rate_bytes_per_s = flow->io_slab->out.rate;
+    out.ev = flow->io_slab->out.ev;
     out.skip = skip;
+#if defined(PROFILE_FETCH)
+    timing.stop(true, "[fetch]");
+#endif
     return out;
 }
 
 // Create PCM VM adapter
 // algo_name: algorithm shared library name (e.g., "uec_dctcp")
 // mode: PcmVmMode::SYNC or PcmVmMode::ASYNC
-CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, PcmVmMode mode = PcmVmMode::ASYNC)
+CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, int nflows,
+                                         PcmVmMode mode, int handler_core, int main_core)
 {
     // Load the algorithm's factory function
     std::string lib_name = std::string("lib") + algo_name + "_spec.so";
@@ -699,56 +738,63 @@ CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, PcmVmMode mode =
     auto result = pcm_vm::util::shared_symbol_open(lib_name, factory_fn);
     if (!result.has_value())
     {
-        std::cerr << "[PCM] Failed to load PCM algorithm library: " << lib_name << "\n";
-        std::cerr << "[PCM] Make sure the library is in LD_LIBRARY_PATH or same directory\n";
+        std::cerr << "[PCM] Failed to load PCM algorithm library: " << lib_name
+                  << "\n";
+        std::cerr << "[PCM] Make sure the library is in LD_LIBRARY_PATH or "
+                     "same directory\n";
         throw std::runtime_error("Failed to load PCM algorithm: " + lib_name);
     }
 
     auto [so_handle, raw_fn_ptr] = result.value();
-    auto factory = reinterpret_cast<pcm_vm::PcmHandlerVmDesc *(*)()>(raw_fn_ptr);
+    auto factory =
+        reinterpret_cast<pcm_vm::PcmHandlerVmDesc *(*)()>(raw_fn_ptr);
 
     std::cout << "[PCM] Successfully loaded library and factory function\n";
-    std::cout << "[PCM] Mode: " << (mode == PcmVmMode::SYNC ? "sync" : "async") << "\n";
-
-    // Create VM instance
-    std::cout << "[PCM] Creating VM instance...\n";
-    static pcm_vm::PcmHandlerVmDesc *vm = factory(); // Static to keep VM alive
-    std::cout << "[PCM] VM instance created successfully\n";
-
-    static pcm_vm::PcmHandlerVmDesc::PcmHandlerVmIoSlab *io_slab = vm->get_signal_io_slab();
-
-    // Add time source (using steady_clock for microsecond precision)
-    // vm->add_get_time_source([]() -> pcm_uint
-    //                         { return (pcm_uint)std::chrono::duration_cast<std::chrono::microseconds>(
-    //                                      std::chrono::steady_clock::now().time_since_epoch())
-    //                               .count(); });
-    // vm->add_get_time_source([]() -> pcm_uint
-    //                         { return (pcm_uint)std::chrono::duration_cast<std::chrono::nanoseconds>(
-    //                                      std::chrono::high_resolution_clock::now().time_since_epoch())
-    //                               .count(); });
-    // auto ghz = timing_lib::calibrate_tsc();
-    vm->add_get_time_source([]() -> pcm_uint
-                            { return (pcm_uint)(__rdtsc() / 2.3); });
+    std::cout << "[PCM] Mode: " << (mode == PcmVmMode::SYNC ? "sync" : "async")
+              << "\n";
 
     // Setup context
     static PcmVmContext pctx;
-    pctx.vm = vm;
-    pctx.io_slab = io_slab;
     pctx.mode = mode;
     pctx.running.store(true, std::memory_order_release);
+
+    for (int i = 0; i < nflows; i++)
+    {
+        // Create VM instance
+        std::cout << "[PCM] Creating VM instance " << i << "...\n";
+        auto *vm = factory();
+        std::cout << "[PCM] VM instance created successfully\n";
+
+        auto *io_slab = vm->get_signal_io_slab();
+
+        vm->add_get_time_source(
+            []() -> pcm_uint
+            { return (pcm_uint)(__rdtsc() / 2.3); });
+
+        auto flow = std::unique_ptr<PcmFlowContext>(new PcmFlowContext());
+        flow->vm = vm;
+        flow->io_slab = io_slab;
+        flow->updates_processed.store(0);
+        flow->updates_fetched = 0;
+        pctx.flows.push_back(std::move(flow));
+    }
 
     if (mode == PcmVmMode::ASYNC)
     {
         // Start handler thread (ASYNC mode only)
-        pctx.handler_thread = std::thread(pcm_vm_handler_thread_fn, vm, &pctx.running, &pctx.updates_processed);
+        pctx.handler_thread =
+            std::thread(pcm_vm_handler_thread_fn, &pctx);
         std::cout << "[PCM] Handler thread started\n";
 #ifdef __linux__
-        // Pin handler thread to core 49 (sibling core) through native handle from std::thread
+        // Pin handler thread to core 49 (sibling core) through native handle
+        // from std::thread
         cpu_set_t cpuset;
         CPU_ZERO(&cpuset);
-        CPU_SET(49, &cpuset); // optimal mapping for Intel(R) Xeon(R) Gold 6140 CPU @ 2.30GHz
-        pthread_setaffinity_np(pctx.handler_thread.native_handle(), sizeof(cpu_set_t), &cpuset);
-        std::cout << "[PCM] Handler thread pinned to core 1\n";
+        CPU_SET(handler_core, &cpuset); // optimal mapping for Intel(R) Xeon(R) Gold 6140
+                                        // CPU @ 2.30GHz
+        pthread_setaffinity_np(pctx.handler_thread.native_handle(),
+                               sizeof(cpu_set_t), &cpuset);
+        std::cout << "[PCM] Handler thread pinned to core " << handler_core << "\n";
 #endif
     }
 
@@ -756,9 +802,9 @@ CcAlgorithmAdapter create_pcm_vm_adapter(const char *algo_name, PcmVmMode mode =
     // Pin main thread to core 13
     cpu_set_t main_cpuset;
     CPU_ZERO(&main_cpuset);
-    CPU_SET(13, &main_cpuset);
+    CPU_SET(main_core, &main_cpuset);
     pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &main_cpuset);
-    std::cout << "[PCM] Main thread pinned to core 0\n";
+    std::cout << "[PCM] Main thread pinned to core " << main_core << "\n";
 #endif
 
     CcAlgorithmAdapter adapter;
@@ -793,35 +839,56 @@ void cleanup_pcm_vm_adapter(CcAlgorithmAdapter &adapter)
 // ---------- Main ----------
 int main(int argc, char **argv)
 {
-    if (argc > 1 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help"))
+    if (argc > 1 &&
+        (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help"))
     {
-        std::cout << "Usage: " << argv[0] << " [iters] [seed] [no_loss] [mode] [algo] [pcm_mode]\n"
+        std::cout << "Usage: " << argv[0]
+                  << " [iters] [nflows] [seed] [no_loss] [mode] [algo] [pcm_mode] [handler_core] [main_core]\n"
                   << "  iters: number of iterations (default: 100)\n"
+                  << "  nflows: number of flows (default: 1)\n"
                   << "  seed: random seed (default: 0xC0FFEE)\n"
                   << "  no_loss: 0 or 1 (default: 0)\n"
                   << "  mode: 'libccp' or 'pcm' (default: libccp)\n"
                   << "  algo: algorithm name (default: reno)\n"
-                  << "  pcm_mode: 'sync' or 'async' (default: async, only for PCM mode)\n"
+                  << "  pcm_mode: 'sync' or 'async' (default: async, only for "
+                     "PCM mode)\n"
+                  << "  handler_core: core ID for handler thread (default: 48)\n"
+                  << "  main_core: core ID for main thread (default: 13)\n"
                   << "\nExamples:\n"
-                  << "  libccp mode:     " << argv[0] << " 1000 42 0 libccp reno\n"
-                  << "  PCM async mode:  " << argv[0] << " 1000 42 0 pcm dcqcn async\n"
-                  << "  PCM sync mode:   " << argv[0] << " 1000 42 0 pcm dcqcn sync\n";
+                  << "  libccp mode:     " << argv[0]
+                  << " 1000 10 42 0 libccp reno\n"
+                  << "  PCM async mode:  " << argv[0]
+                  << " 1000 10 42 0 pcm dcqcn async 48 13\n"
+                  << "  PCM sync mode:   " << argv[0]
+                  << " 1000 10 42 0 pcm dcqcn sync 48 13\n";
         return 0;
     }
 
     int iters = (argc > 1) ? std::max(1, std::atoi(argv[1])) : 100;
-    uint64_t seed = (argc > 2) ? (uint64_t)std::stoull(argv[2]) : 0xC0FFEE;
-    bool no_loss = (argc > 3) ? (std::atoi(argv[3]) != 0) : false;
-    std::string mode = (argc > 4) ? argv[4] : "libccp";
-    std::string algo = (argc > 5) ? argv[5] : "reno";
-    std::string pcm_mode_str = (argc > 6) ? argv[6] : "async";
+    int nflows = (argc > 2) ? std::atoi(argv[2]) : 1;
+    uint64_t seed = (argc > 3) ? (uint64_t)std::stoull(argv[3]) : 0xC0FFEE;
+    bool no_loss = (argc > 4) ? (std::atoi(argv[4]) != 0) : false;
+    std::string mode = (argc > 5) ? argv[5] : "libccp";
+    std::string algo = (argc > 6) ? argv[6] : "reno";
+    std::string pcm_mode_str = (argc > 7) ? argv[7] : "async";
+    int handler_core = (argc > 8) ? std::atoi(argv[8]) : 48;
+    int main_core = (argc > 9) ? std::atoi(argv[9]) : 13;
 
     // Parse PCM mode
-    PcmVmMode pcm_mode = (pcm_mode_str == "sync") ? PcmVmMode::SYNC : PcmVmMode::ASYNC;
+    PcmVmMode pcm_mode =
+        (pcm_mode_str == "sync") ? PcmVmMode::SYNC : PcmVmMode::ASYNC;
 
     // --- Generate random events upfront ---
-    std::cout << "[main] Generating " << iters << " random network events (seed=" << seed << " no_loss=" << no_loss << ")...\n";
-    std::vector<NetworkEvent> events = generate_event_trace(iters, seed, no_loss);
+    std::cout << "[main] Generating " << iters
+              << " random network events (seed=" << seed
+              << " no_loss=" << no_loss << ")...\n";
+
+    std::vector<std::vector<NetworkEvent>> flow_traces;
+    flow_traces.reserve(nflows);
+    for (int i = 0; i < nflows; ++i)
+    {
+        flow_traces.push_back(generate_event_trace(iters, seed + i, no_loss));
+    }
 
     CcAlgorithmAdapter cc_adapter;
 
@@ -831,13 +898,15 @@ int main(int argc, char **argv)
     if (mode == "pcm")
     {
         // --- PCM VM mode ---
-        std::cout << "[main] Using PCM VM mode with algorithm: " << algo << "\n";
-        cc_adapter = create_pcm_vm_adapter(algo.c_str(), pcm_mode);
+        std::cout << "[main] Using PCM VM mode with algorithm: " << algo
+                  << "\n";
+        cc_adapter = create_pcm_vm_adapter(algo.c_str(), nflows, pcm_mode, handler_core, main_core);
     }
     else
     {
         // --- libccp mode (default) ---
-        std::cout << "[main] Using libccp mode with algorithm: " << algo << "\n";
+        std::cout << "[main] Using libccp mode with algorithm: " << algo
+                  << "\n";
 
         // Connect to Portus FIRST
         if (libccp_connect_to_portus() < 0)
@@ -864,44 +933,50 @@ int main(int argc, char **argv)
         cc_adapter = create_libccp_adapter(&tb);
     }
 
-    std::cout << "[main] Running " << iters << " events (seed=" << seed << ", mode=" << mode << ")\n";
+    std::cout << "[main] Running " << iters << " events (seed=" << seed
+              << ", mode=" << mode << ")\n";
 
     // --- Drive with pregenerated events ---
     for (int i = 0; i < iters; i++)
     {
-        const auto &evt = events[i];
+        for (int j = 0; j < nflows; j++)
+        {
+            const auto &evt = flow_traces[j][i];
 
 #if defined(PROFILE_FULL_CYCLE)
-        timing.start();
+            timing.start();
 #endif
 
-        // 1) Submit event to datapath
-        cc_adapter.submit_event(cc_adapter.context, evt);
+            // 1) Submit event to datapath
+            cc_adapter.submit_event(cc_adapter.context, evt, j);
 
-        // 2) Invoke CC algorithm
-        cc_adapter.invoke(cc_adapter.context);
+            // 2) Invoke CC algorithm
+            cc_adapter.invoke(cc_adapter.context, j);
 
-        // 3) Fetch control output
-        auto post_output = cc_adapter.fetch_output(cc_adapter.context);
+            // 3) Fetch control output
+            auto post_output = cc_adapter.fetch_output(cc_adapter.context, j);
 
 #ifdef PROFILE_FULL_CYCLE
-        timing.stop(post_output.skip ? false : true, "[submit->invoke->fetch]");
+            timing.stop(post_output.skip ? false : true,
+                        "[submit->invoke->fetch]");
 #endif
 
-        // Clear one-shot flags (libccp-specific cleanup)
-        if (mode == "libccp")
-        {
-            if (tb.active_conn)
+            // Clear one-shot flags (libccp-specific cleanup)
+            if (mode == "libccp")
             {
-                tb.active_conn->prims.was_timeout = false;
+                if (tb.active_conn)
+                {
+                    tb.active_conn->prims.was_timeout = false;
+                }
             }
+
+            // Log post-invoke state
+            // std::cout << "[iter " << i << ", outer_loop] cwnd=" <<
+            // post_output.cwnd
+            //           << " rate=" << post_output.rate_bytes_per_s << "
+            //           ev=" << post_output.ev << " \n";
         }
-
-        // Log post-invoke state
-        // std::cout << "[iter " << i << ", outer_loop] cwnd=" << post_output.cwnd
-        //           << " rate=" << post_output.rate_bytes_per_s << " ev=" << post_output.ev << " \n";
     }
-
     // --- Teardown ---
     std::cout << "[main] Cleaning up...\n";
 
@@ -911,7 +986,8 @@ int main(int argc, char **argv)
         if (tb.active_conn)
         {
             ccp_connection_free(&tb.dp, tb.active_conn->index);
-            std::cout << "[conn] Freed sid=" << tb.active_conn->index << "\n";
+            std::cout << "[conn] Freed sid=" << tb.active_conn->index
+                      << "\n";
         }
 
         // Close socket

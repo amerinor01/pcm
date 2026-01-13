@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Batch experiment runner for PCM SDK and libccp testbench.
+[test]Batch experiment runner for PCM SDK and libccp testbench.
 Replaces run_experiments.sh with a more robust Python implementation.
 """
 
@@ -13,7 +13,7 @@ from pathlib import Path
 import time
 
 # --- Configuration ---
-ITERS = 10000
+ITERS = 100000
 SEED = 42
 NO_LOSS = 0
 
@@ -70,16 +70,45 @@ CONFIGS = [
     },
 ]
 
-#ATOMIC_OPTS = [
-#    {"suffix": "", "args": []},
-#    {"suffix": "-aligned", "args": ["--aligned-atomic-storage"]}
-#]
-
-ATOMIC_OPTS = [
-    {"suffix": "", "args": []}
+# Build Configurations
+CONFIGS = [
+    {
+        "name": "vm-shell-overhead-rdtsc",
+        "pcm_args": ["--profiling", "--profiling-backend=rdtsc"],
+        "tb_args": []
+    },
+    {
+        "name": "vm-shell-overhead-perf",
+        "pcm_args": ["--profiling", "--profiling-backend=perf"],
+        "tb_args": []
+    },
 ]
 
-def run_command(cmd, cwd, log_file_path=None, check=True):
+# Build Configurations
+CONFIGS = [
+    {
+        "name": "tb-submit-rdtsc",
+        "pcm_args": [],
+        "tb_args": ["PROFILE_FETCH=y"]
+    },
+    {
+        "name": "tb-submit-perf",
+        "pcm_args": [],
+        "tb_args": ["TIMING_BACKEND=PERF", "PROFILE_FETCH=y"]
+    }
+]
+
+MAPPINGS = [
+    {"suffix": "ht", "handler_core": "49", "main_core": "13"},
+    {"suffix": "mc", "handler_core": "47", "main_core": "13"}
+]
+
+COMPILERS = [
+    {"name": "gcc", "cc": "gcc", "cxx": "g++"},
+    {"name": "clang", "cc": "clang", "cxx": "clang++"}
+]
+
+def run_command(cmd, cwd, log_file_path=None, check=True, env=None):
     """
     Run a command in a specific directory, optionally logging output to a file.
     """
@@ -93,7 +122,7 @@ def run_command(cmd, cwd, log_file_path=None, check=True):
         # Open file for writing (this will truncate existing file)
         with open(log_file_path, "w") as f:
             try:
-                subprocess.run(cmd, cwd=cwd, check=check, stdout=f, stderr=subprocess.STDOUT)
+                subprocess.run(cmd, cwd=cwd, check=check, stdout=f, stderr=subprocess.STDOUT, env=env)
                 return True
             except subprocess.CalledProcessError as e:
                 print(f"    [Error] Command failed: {cmd_str}")
@@ -103,7 +132,7 @@ def run_command(cmd, cwd, log_file_path=None, check=True):
                 return False
     else:
         try:
-            subprocess.run(cmd, cwd=cwd, check=check)
+            subprocess.run(cmd, cwd=cwd, check=check, env=env)
             return True
         except subprocess.CalledProcessError as e:
             print(f"    [Error] Command failed: {cmd_str}")
@@ -137,6 +166,7 @@ def main():
     print(f"Log Root:      {log_root}")
     print(f"Iterations:    {ITERS}")
     print(f"Seed:          {SEED}")
+    print(f"Test")
     print("==================================================")
 
     log_root.mkdir(parents=True, exist_ok=True)
@@ -148,21 +178,18 @@ def main():
     # This matches the shell script logic: $(dirname "$PCM_DIR")/uet-htsim/htsim/sim/
     htsim_dir = pcm_dir.parent / "uet-htsim" / "htsim" / "sim"
 
-    for atomic_opt in ATOMIC_OPTS:
-        for config in CONFIGS:
-            # Skip perf-based configs when using aligned atomic storage
-            if "--aligned-atomic-storage" in atomic_opt["args"]:
-                is_perf_config = False
-                if any("perf" in arg for arg in config["pcm_args"]):
-                    is_perf_config = True
-                if any("TIMING_BACKEND=PERF" in arg for arg in config["tb_args"]):
-                    is_perf_config = True
-                
-                if is_perf_config:
-                    continue
+    for compiler in COMPILERS:
+        env = os.environ.copy()
+        env["CC"] = compiler["cc"]
+        env["CXX"] = compiler["cxx"]
+        
+        print(f"\n==================================================")
+        print(f"Compiler Set: {compiler['name']} (CC={compiler['cc']}, CXX={compiler['cxx']})")
+        print(f"==================================================")
 
-            exp_name = config["name"] + atomic_opt["suffix"]
-            pcm_args = config["pcm_args"] + atomic_opt["args"]
+        for config in CONFIGS:
+            exp_name = f"{compiler['name']}-{config['name']}"
+            pcm_args = config["pcm_args"]
             tb_args = config["tb_args"]
             
             print(f"\n>>> Starting Experiment Set: {exp_name}")
@@ -175,44 +202,51 @@ def main():
             # 1. Rebuild PCM Framework
             print("    [Build] Rebuilding PCM...")
             build_cmd = ["./build.py", "--clean", f"--htsim-dir={htsim_dir}", "--relwithdebinfo"] + pcm_args
-            run_command(build_cmd, cwd=pcm_dir, log_file_path=exp_log_dir / "build_pcm.log")
+            run_command(build_cmd, cwd=pcm_dir, log_file_path=exp_log_dir / "build_pcm.log", env=env)
             
             # 2. Rebuild Testbench
             print("    [Build] Rebuilding Testbench...")
             # Clean first
-            run_command(["make", "clean"], cwd=ccp_dir, check=False) # Don't fail if clean fails
+            run_command(["make", "clean"], cwd=ccp_dir, check=False, env=env) # Don't fail if clean fails
             
             # Build
             make_cmd = ["make", "testbench_with_portus"] + tb_args
-            run_command(make_cmd, cwd=ccp_dir, log_file_path=exp_log_dir / "build_tb.log")
+            run_command(make_cmd, cwd=ccp_dir, log_file_path=exp_log_dir / "build_tb.log", env=env)
             
             # 3. Run Experiments
             print("    [Run] Starting iterations...")
             
             for algo in ALGOS:
                 for mode in MODES:
-                    log_filename = f"{exp_name}_{algo}_{mode}_{SEED}_{ITERS}.log"
-                    log_file = exp_log_dir / log_filename
-                    
-                    print(f"        Running {algo} ({mode})... ", end="", flush=True)
-                    
-                    # ./testbench_with_portus [iters] [seed] [no_loss] [mode] [algo] [pcm_mode]
-                    run_cmd = [
-                        "./testbench_with_portus",
-                        str(ITERS),
-                        str(SEED),
-                        str(NO_LOSS),
-                        "pcm",
-                        algo,
-                        mode
-                    ]
-                    
-                    success = run_command(run_cmd, cwd=ccp_dir, log_file_path=log_file, check=False)
-                    
-                    if success:
-                        print("Done.")
-                    else:
-                        print("Failed! (Check log)")
+                    for mapping in MAPPINGS:
+                        if mode == "sync" and mapping["suffix"] != "ht":
+                            continue
+
+                        log_filename = f"{exp_name}_{algo}_{mode}_{mapping['suffix']}_{SEED}_{ITERS}.log"
+                        log_file = exp_log_dir / log_filename
+                        
+                        print(f"        Running {algo} ({mode}) [{mapping['suffix']}]... ", end="", flush=True)
+                        
+                        # ./testbench_with_portus [iters] [nflows] [seed] [no_loss] [mode] [algo] [pcm_mode] [handler_core] [main_core]
+                        run_cmd = [
+                            "./testbench_with_portus",
+                            str(ITERS),
+                            str(1),
+                            str(SEED),
+                            str(NO_LOSS),
+                            "pcm",
+                            algo,
+                            mode,
+                            mapping["handler_core"],
+                            mapping["main_core"]
+                        ]
+                        print(f"{run_cmd}", flush=True)
+                        success = run_command(run_cmd, cwd=ccp_dir, log_file_path=log_file, check=False, env=env)
+                        
+                        if success:
+                            print("Done.")
+                        else:
+                            print("Failed! (Check log)")
 
     print("\n==================================================")
     print("All experiments completed.")
