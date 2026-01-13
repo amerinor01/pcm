@@ -50,13 +50,6 @@ signals:
     type: PCM_SIG_NACK
     accumulation: PCM_SIG_ACCUM_SUM
     trigger_threshold: 1
-  - name: ACK_EV
-    type: PCM_SIG_ACK_EV
-    accumulation: PCM_SIG_ACCUM_LAST
-  - name: NUM_ACK
-    type: PCM_SIG_ACK
-    accumulation: PCM_SIG_ACCUM_SUM
-    trigger_threshold: 1
   - name: TX_BACKLOG_SIZE
     type: PCM_SIG_TX_READY_PKTS
     accumulation: PCM_SIG_ACCUM_SUM

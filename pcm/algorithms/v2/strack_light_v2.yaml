@@ -1,0 +1,88 @@
+algorithm:
+  name: strack_light_v2
+  description: "UEC bitmap-based LB algorithm (Optimized)"
+
+constants:
+  - name: NO_OF_PATHS
+    type: uint
+    value: 64
+  - name: MAX_PENALTY
+    type: uint
+    value: 15
+
+variables:
+  - name: ARR_EVS_BITMAP
+    arr_len: 2
+    initial_value: 0
+    type: uint
+  - name: IS_INITIALIZED
+    initial_value: 0
+    type: uint
+  - name: PATH_RANDOM
+    initial_value: 0
+    type: uint
+  - name: PATH_XOR
+    initial_value: 0
+    type: uint
+  - name: CUR_EV_IDX
+    initial_value: 0
+    type: uint
+  - name: PREV_ACK
+    initial_value: 0
+    type: uint
+  - name: PREV_ECN
+    initial_value: 0
+    type: uint
+  - name: PREV_NACK
+    initial_value: 0
+    type: uint
+  - name: PREV_BACKLOG
+    initial_value: 0
+    type: uint
+
+signals:
+  - name: ECN_EV
+    type: PCM_SIG_ECN_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+    reset_upon_trigger: "false"
+  - name: NUM_ECN
+    type: PCM_SIG_ECN
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: NACK_EV
+    type: PCM_SIG_NACK_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+    reset_upon_trigger: "false"
+  - name: NUM_NACK
+    type: PCM_SIG_NACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: ACK_EV
+    type: PCM_SIG_ACK_EV
+    accumulation: PCM_SIG_ACCUM_LAST
+    reset_upon_trigger: "false"
+  - name: NUM_ACK
+    type: PCM_SIG_ACK
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+  - name: TX_BACKLOG_SIZE
+    type: PCM_SIG_TX_READY_PKTS
+    accumulation: PCM_SIG_ACCUM_SUM
+    trigger_type: PCM_SIG_TRIGGER_DELTA
+    trigger_op: ">="
+    trigger_threshold: 1
+    reset_upon_trigger: "false"
+
+controls:
+  - name: NEXT_PKT_EV
+    type: PCM_CTRL_EV
+    initial_value: 0

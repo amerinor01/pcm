@@ -19,19 +19,23 @@ int algorithm_main() {
     }
 
     pcm_uint trigger_mask = get_signal_trigger_mask();
+    bool processed = false; // sanity check
 
     // RX path
     if (trigger_mask & SIG_NUM_ACK) {
         BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_ACK_EV) & PATH_MASK, 0);
         set_signal(SIG_NUM_ACK, 0);
+        processed = true;
     }
     if (trigger_mask & SIG_NUM_ECN) {
         BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_ECN_EV) & PATH_MASK, 1);
         set_signal(SIG_NUM_ECN, 0);
+        processed = true;
     }
     if (trigger_mask & SIG_NUM_NACK) {
         BITMAP_HELPER_SET_ENTRY(VAR_ARR_EVS_BITMAP, get_signal(SIG_NACK_EV) & PATH_MASK, 1);
         set_signal(SIG_NUM_NACK, 0);
+        processed = true;
     }
 
     // TX path
@@ -63,7 +67,8 @@ int algorithm_main() {
         ev |= get_var_uint(VAR_PATH_RANDOM) ^ (get_var_uint(VAR_PATH_RANDOM) & PATH_MASK);
         set_control(CTRL_NEXT_PKT_EV, ev);
         update_signal(SIG_TX_BACKLOG_SIZE, -1);
+        processed = true;
     }
 
-    return PCM_SUCCESS;
+    return processed ? PCM_SUCCESS : PCM_ERROR;
 }

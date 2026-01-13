@@ -9,6 +9,10 @@
 #include "newreno.h"
 #elif BUILD_ALGO_DCTCP
 #include "dctcp.h"
+#elif BUILD_ALGO_NEWRENO_V2
+#include "newreno_v2.h"
+#elif BUILD_ALGO_DCTCP_V2
+#include "dctcp_v2.h"
 #endif
 
 /* Generic TCP-related code shared by NewReno and DCTCP */

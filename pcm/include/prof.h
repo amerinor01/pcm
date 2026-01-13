@@ -134,7 +134,7 @@ struct pcm_perf_context {
             PROF_LOG_FATAL("pcm-perf: %s prof read failed",                    \
                            perf_obj.scope_prefix);                             \
                                                                                \
-        uint64_t cycles, instructions;                                         \
+        uint64_t cycles = 0, instructions = 0;                                 \
         for (uint64_t j = 0; j < data.nr; ++j) {                               \
             if (data.values[j].id == perf_obj.id_cycles) {                     \
                 cycles = data.values[j].value;                                 \
@@ -154,6 +154,115 @@ struct pcm_perf_context {
             PROF_LOG_PRINT("pcm-perf: %s %lu cycles %lu instructions\n",       \
                            perf_obj.scope_prefix, cycles, instructions);       \
     }
+
+/* -------------------------------------------------------------------------- */
+/* Standalone Cycles Profiling                                                */
+/* -------------------------------------------------------------------------- */
+
+struct pcm_perf_cyc_context {
+    int fd;
+    const char *scope_prefix;
+};
+
+#define PCM_PERF_PROF_CYC_REGION_SCOPE_INIT(perf_obj, scope_prefix_str)        \
+    struct pcm_perf_cyc_context perf_obj = {                                   \
+        .fd = -1,                                                              \
+        .scope_prefix = scope_prefix_str,                                      \
+    };
+
+#define PCM_PERF_PROF_CYC_REGION_START(perf_obj)                               \
+    {                                                                          \
+        struct perf_event_attr pe;                                             \
+        memset(&pe, 0, sizeof(pe));                                            \
+        pe.type = PERF_TYPE_HARDWARE;                                          \
+        pe.size = sizeof(struct perf_event_attr);                              \
+        pe.config = PERF_COUNT_HW_CPU_CYCLES;                                  \
+        pe.disabled = 1;                                                       \
+        pe.exclude_kernel = 1;                                                 \
+        pe.exclude_hv = 1;                                                     \
+        perf_obj.fd = perf_event_open(&pe, 0, -1, -1, 0);                      \
+        if (perf_obj.fd == -1)                                                 \
+            PROF_LOG_FATAL("pcm-perf: %s prof perf_event_open (cycles)",       \
+                           perf_obj.scope_prefix);                             \
+        if (ioctl(perf_obj.fd, PERF_EVENT_IOC_RESET, 0))                       \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl RESET failed",             \
+                           perf_obj.scope_prefix);                             \
+        if (ioctl(perf_obj.fd, PERF_EVENT_IOC_ENABLE, 0))                      \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl ENABLE failed",            \
+                           perf_obj.scope_prefix);                             \
+    }
+
+#define PCM_PERF_PROF_CYC_REGION_END(perf_obj, report)                         \
+    {                                                                          \
+        if (ioctl(perf_obj.fd, PERF_EVENT_IOC_DISABLE, 0))                     \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl DISABLE failed",           \
+                           perf_obj.scope_prefix);                             \
+        uint64_t count = 0;                                                    \
+        if (read(perf_obj.fd, &count, sizeof(count)) != sizeof(count))         \
+            PROF_LOG_FATAL("pcm-perf: %s prof read failed",                    \
+                           perf_obj.scope_prefix);                             \
+        if (close(perf_obj.fd))                                                \
+            PROF_LOG_FATAL("pcm-perf: %s prof close failed",                   \
+                           perf_obj.scope_prefix);                             \
+        if (report)                                                            \
+            PROF_LOG_PRINT("pcm-perf: %s %lu cycles\n", perf_obj.scope_prefix, \
+                           count);                                             \
+    }
+
+/* -------------------------------------------------------------------------- */
+/* Standalone Instructions Profiling                                          */
+/* -------------------------------------------------------------------------- */
+
+struct pcm_perf_instr_context {
+    int fd;
+    const char *scope_prefix;
+};
+
+#define PCM_PERF_PROF_INSTR_REGION_SCOPE_INIT(perf_obj, scope_prefix_str)      \
+    struct pcm_perf_instr_context perf_obj = {                                 \
+        .fd = -1,                                                              \
+        .scope_prefix = scope_prefix_str,                                      \
+    };
+
+#define PCM_PERF_PROF_INSTR_REGION_START(perf_obj)                             \
+    {                                                                          \
+        struct perf_event_attr pe;                                             \
+        memset(&pe, 0, sizeof(pe));                                            \
+        pe.type = PERF_TYPE_HARDWARE;                                          \
+        pe.size = sizeof(struct perf_event_attr);                              \
+        pe.config = PERF_COUNT_HW_INSTRUCTIONS;                                \
+        pe.disabled = 1;                                                       \
+        pe.exclude_kernel = 1;                                                 \
+        pe.exclude_hv = 1;                                                     \
+        perf_obj.fd = perf_event_open(&pe, 0, -1, -1, 0);                      \
+        if (perf_obj.fd == -1)                                                 \
+            PROF_LOG_FATAL("pcm-perf: %s prof perf_event_open (instr)",        \
+                           perf_obj.scope_prefix);                             \
+        if (ioctl(perf_obj.fd, PERF_EVENT_IOC_RESET, 0))                       \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl RESET failed",             \
+                           perf_obj.scope_prefix);                             \
+        if (ioctl(perf_obj.fd, PERF_EVENT_IOC_ENABLE, 0))                      \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl ENABLE failed",            \
+                           perf_obj.scope_prefix);                             \
+    }
+
+#define PCM_PERF_PROF_INSTR_REGION_END(perf_obj, report)                       \
+    {                                                                          \
+        if (ioctl(perf_obj.fd, PERF_EVENT_IOC_DISABLE, 0))                     \
+            PROF_LOG_FATAL("pcm-perf: %s prof ioctl DISABLE failed",           \
+                           perf_obj.scope_prefix);                             \
+        uint64_t count = 0;                                                    \
+        if (read(perf_obj.fd, &count, sizeof(count)) != sizeof(count))         \
+            PROF_LOG_FATAL("pcm-perf: %s prof read failed",                    \
+                           perf_obj.scope_prefix);                             \
+        if (close(perf_obj.fd))                                                \
+            PROF_LOG_FATAL("pcm-perf: %s prof close failed",                   \
+                           perf_obj.scope_prefix);                             \
+        if (report)                                                            \
+            PROF_LOG_PRINT("pcm-perf: %s %lu instructions\n",                  \
+                           perf_obj.scope_prefix, count);                      \
+    }
+
 #endif
 
 #else
@@ -166,6 +275,26 @@ struct pcm_perf_context {
     }
 
 #define PCM_PERF_PROF_REGION_END(perf_obj, report)                             \
+    {                                                                          \
+    }
+
+#define PCM_PERF_PROF_CYC_REGION_SCOPE_INIT(perf_obj, scope_prefix_str)        \
+    {                                                                          \
+    }
+#define PCM_PERF_PROF_CYC_REGION_START(perf_obj)                               \
+    {                                                                          \
+    }
+#define PCM_PERF_PROF_CYC_REGION_END(perf_obj, report)                         \
+    {                                                                          \
+    }
+
+#define PCM_PERF_PROF_INSTR_REGION_SCOPE_INIT(perf_obj, scope_prefix_str)      \
+    {                                                                          \
+    }
+#define PCM_PERF_PROF_INSTR_REGION_START(perf_obj)                             \
+    {                                                                          \
+    }
+#define PCM_PERF_PROF_INSTR_REGION_END(perf_obj, report)                       \
     {                                                                          \
     }
 

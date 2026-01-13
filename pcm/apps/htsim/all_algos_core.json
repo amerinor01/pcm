@@ -17,8 +17,14 @@
     "newreno",
     "swift", 
     "smartt",
-    "dcqcn",
     "dctcp",
-    "cubic"
+    "cubic",
+    "nscc_v2",
+    "uec_dctcp_v2",
+    "newreno_v2",
+    "swift_v2", 
+    "smartt_v2",
+    "dctcp_v2",
+    "cubic_v2"
   ]
 }

@@ -207,15 +207,13 @@ int algorithm_main() {
     pcm_uint cur_cwnd = get_control(CTRL_CWND_BYTES);
 
     pcm_uint trigger_mask = get_signal_trigger_mask();
-    if (trigger_mask & SIG_NUM_NACK) {
+    if (trigger_mask & SIG_NUM_NACKED_BYTES) {
         nscc_handle_loss_signal(ALGO_CTX_PASS, &cur_cwnd);
-        update_signal(SIG_NUM_NACK, -get_signal(SIG_NUM_NACK));
         update_signal(SIG_NUM_NACKED_BYTES, -get_signal(SIG_NUM_NACKED_BYTES));
         goto save_state;
-    } else if (trigger_mask & SIG_NUM_ACK) {
+    } else if (trigger_mask & SIG_NUM_ACKED_BYTES) {
         nscc_handle_ack(ALGO_CTX_PASS, q_delay, &cur_cwnd);
         nscc_fulfill_adjustment(ALGO_CTX_PASS, &cur_cwnd);
-        update_signal(SIG_NUM_ACK, -get_signal(SIG_NUM_ACK));
         update_signal(SIG_NUM_ACKED_BYTES, -get_signal(SIG_NUM_ACKED_BYTES));
         if (get_signal(SIG_NUM_ECN)) {
             update_signal(SIG_NUM_ECN, -get_signal(SIG_NUM_ECN));

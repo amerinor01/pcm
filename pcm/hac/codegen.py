@@ -117,22 +117,21 @@ class AlgorithmCodeGenerator:
                 var["initial_value"] = resolve(var["initial_value"])
 
         # Snapshot layout:
-        # mask | (2 * signals) | controls | variables
-        # 2 * signals because of thresholds (up to 1 per signal)
+        # mask | signals | controls | variables
         self.mask_offset = 0
-        self.signal_offset = self.mask_offset + 1
+        self.set_signal_mask_offset = self.mask_offset + 1
+        self.signal_offset = self.set_signal_mask_offset + 1
         self.num_signals = len(self.config.get("signals", []))
         self.num_controls = len(self.config.get("controls", []))
         # Count total variable slots (including array elements)
         self.num_variable_slots = sum(
             var.get("num_entries", 1) for var in self.config.get("variables", [])
         )
-        self.threshold_offset = self.signal_offset + self.num_signals
-        self.control_offset = self.threshold_offset + self.num_signals
+        self.control_offset = self.signal_offset + self.num_signals
         self.variable_offset = self.control_offset + self.num_controls
         self.snapshot_size = (
-            1
-            + (2 * self.num_signals)
+            2
+            + self.num_signals
             + self.num_controls
             + self.num_variable_slots
         )
@@ -140,6 +139,7 @@ class AlgorithmCodeGenerator:
     def _generate_pcmc(self) -> str:
         # Collect all tuple elements first
         variable_defs = []
+        trigger_fn_defs = []
         tuple_elements = []
 
         # Add signals
@@ -148,11 +148,56 @@ class AlgorithmCodeGenerator:
             for sig in self.config.get("signals", []):
                 typ, accum = sig["type"], sig["accumulation"]
                 name = f"SIG_{sig['name']}"
-                thr = "PCM_SIG_NO_TRIGGER"
-                if "trigger_threshold" in sig:
-                    thr = sig["trigger_threshold"]
+                
+                init_val = sig.get("initial_value")
+                if init_val is None:
+                    init_val = "0"
+
+                reset_upon_trigger = sig.get("reset_upon_trigger")
+                if reset_upon_trigger is None:
+                    reset_upon_trigger = "true"
+                if reset_upon_trigger not in ["true", "false"]:
+                    raise ValueError(f"Signal {sig['name']} has invalid reset_upon_trigger: {reset_upon_trigger}")
+
+                trigger_type_enum = "PCM_SIG_TRIGGER_UNSPEC"
+                trigger_fn = "nullptr"
+
+                trigger_op = sig.get("trigger_op")
+                if trigger_op is None:
+                    trigger_op = ">="
+
+                trigger_valid_ops = [">", "<", ">=", "<=", "==", "!=", "&", "|", "^", "&&", "||"]
+                if trigger_op not in trigger_valid_ops:
+                    raise ValueError(f"Signal {sig['name']} has invalid trigger_op: {trigger_op}")
+
+                threshold = sig.get("trigger_threshold")
+                trigger_type_str = sig.get("trigger_type")
+
+                if trigger_type_str:
+                    if trigger_type_str not in ["PCM_SIG_TRIGGER_RAW", "PCM_SIG_TRIGGER_DELTA", "PCM_SIG_TRIGGER_MAGNITUDE"]:
+                        raise ValueError(
+                            f"Signal {sig['name']} has invalid trigger_type: {trigger_type_str}. Must be RAW, DELTA, or MAGNITUDE."
+                        )
+
+                    if threshold is None:
+                        raise ValueError(
+                            f"Signal {sig['name']} has trigger_type {trigger_type_str} but no trigger_threshold."
+                        )
+
+                    trigger_type_enum = trigger_type_str
+                    trigger_fn = f"{sig['name']}_trigger_fn"
+                    trigger_fn_defs.append(
+                        f"inline bool {trigger_fn}(pcm_uint val) {{ return val {trigger_op} {threshold}; }}"
+                    )
+                elif threshold is not None: # default setup for old handler compatibility
+                    trigger_type_enum = "PCM_SIG_TRIGGER_RAW"
+                    trigger_fn = f"{sig['name']}_trigger_fn"
+                    trigger_fn_defs.append(
+                        f"inline bool {trigger_fn}(pcm_uint val) {{ return val {trigger_op} {threshold}; }}"
+                    )
+
                 tuple_elements.append(
-                    f"    pcm_vm::SignalDesc<{typ}, {accum}, {thr}, {name}>"
+                    f"    pcm_vm::SignalDesc<{typ}, {init_val}, {accum}, {trigger_type_enum}, {trigger_fn}, {reset_upon_trigger}, {name}>"
                 )
 
         # Add controls
@@ -161,18 +206,18 @@ class AlgorithmCodeGenerator:
             for ctrl in self.config.get("controls", []):
                 typ = ctrl["type"]
                 name = f"CTRL_{ctrl['name']}"
-                init = ctrl.get("initial_value")
-                tuple_elements.append(f"    pcm_vm::ControlDesc<{typ}, {init}, {name}>")
+                init_val = ctrl.get("initial_value")
+                tuple_elements.append(f"    pcm_vm::ControlDesc<{typ}, {init_val}, {name}>")
 
         # Add variables
         if self.config.get("variables", []):
             tuple_elements.append("    /* Variables */")
             for var in self.config.get("variables", []):
                 name = f"VAR_{var['name']}"
-                init = var.get("initial_value")
+                init_val = var.get("initial_value")
                 dtype = var.get("type")
                 variable_defs.append(
-                    f"inline constexpr pcm_{dtype} init_val_{name} = {init};"
+                    f"inline constexpr pcm_{dtype} init_val_{name} = {init_val};"
                 )
                 for elem_idx in range(var.get("num_entries")):
                     tuple_elements.append(
@@ -183,6 +228,9 @@ class AlgorithmCodeGenerator:
         lines.append("#include <tuple>")
         lines.append('#include "pcm_vm.hpp"')
         lines.append(f'#include "{self.algorithm_name}.h"')
+        lines.append("")
+        for fn_def in trigger_fn_defs:
+            lines.append(fn_def)
         lines.append("")
         for var_def in variable_defs:
             lines.append(var_def)
@@ -216,8 +264,8 @@ class AlgorithmCodeGenerator:
             f"using {self.algorithm_name}_SnapshotLayout = pcm_vm::SnapshotMemoryLayout<"
         )
         lines.append(f"    {self.mask_offset},        // kTriggerMaskOffset")
+        lines.append(f"    {self.set_signal_mask_offset}, // kSignalSetMaskOffset")
         lines.append(f"    {self.signal_offset},      // kSignalOffset")
-        lines.append(f"    {self.threshold_offset},   // kThresholdOffset")
         lines.append(f"    {self.control_offset},     // kControlOffset")
         lines.append(f"    {self.variable_offset},    // kVariableOffset")
         lines.append(f"    {self.snapshot_size}            // kSnapshotSize")
@@ -226,9 +274,18 @@ class AlgorithmCodeGenerator:
         lines.append(
             f"using PcmHandlerVmSpecType = pcm_vm::SimplePcmHandlerVm<{self.algorithm_name}_AlgoName, {self.algorithm_name}_SnapshotLayout, DatapathSpec>;"
         )
+        lines.append(
+            f"using PcmHandlerVmAtomicSpecType = pcm_vm::AtomicPcmHandlerVm<{self.algorithm_name}_AlgoName, {self.algorithm_name}_SnapshotLayout, DatapathSpec>;"
+        )
+        lines.append('extern "C" {')
         lines.append(f"pcm_vm::PcmHandlerVmDesc* __{self.algorithm_name}_spec_get()")
         lines.append("{")
         lines.append("    return new PcmHandlerVmSpecType{};")
+        lines.append("}")
+        lines.append(f"pcm_vm::PcmHandlerVmDesc* __{self.algorithm_name}_atomic_spec_get()")
+        lines.append("{")
+        lines.append("    return new PcmHandlerVmAtomicSpecType{};")
+        lines.append("}")
         lines.append("}")
         return "\n".join(lines)
 
@@ -277,8 +334,8 @@ class AlgorithmCodeGenerator:
 
         for offset in [
             f"#define MASK_OFFSET {self.mask_offset}",
+            f"#define SET_SIGNAL_MASK_OFFSET {self.set_signal_mask_offset}",
             f"#define SIGNAL_OFFSET {self.signal_offset}",
-            f"#define THRESHOLD_OFFSET {self.threshold_offset}",
             f"#define CONTROL_OFFSET {self.control_offset}",
             f"#define VAR_OFFSET {self.variable_offset}",
         ]:

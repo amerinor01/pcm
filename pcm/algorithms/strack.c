@@ -1,9 +1,9 @@
+#include "strack.h"
 #include "algo_utils.h"
 #include "pcmh.h"
 #include "stdbool.h"
 #include "stdio.h"
 #include "stdlib.h"
-#include "strack.h"
 
 #define PATH_MASK (NO_OF_PATHS - 1)
 
@@ -18,6 +18,7 @@ int algorithm_main() {
     }
 
     pcm_uint trigger_mask = get_signal_trigger_mask();
+    bool processed = false; // sanity check
 
     // RX path
     if (trigger_mask & SIG_NUM_ECN) {
@@ -26,6 +27,7 @@ int algorithm_main() {
         pcm_uint new_penalty = (get_arr_uint(VAR_ARR_EVS_BITMAP, ev) + penalty) & MAX_PENALTY;
         set_arr_uint(VAR_ARR_EVS_BITMAP, ev, new_penalty);
         set_signal(SIG_NUM_ECN, 0);
+        processed = true;
     }
     if (trigger_mask & SIG_NUM_NACK) {
         pcm_uint penalty = 4;
@@ -33,6 +35,7 @@ int algorithm_main() {
         pcm_uint new_penalty = (get_arr_uint(VAR_ARR_EVS_BITMAP, ev) + penalty) & MAX_PENALTY;
         set_arr_uint(VAR_ARR_EVS_BITMAP, ev, new_penalty);
         set_signal(SIG_NUM_NACK, 0);
+        processed = true;
     }
     // TODO: add RTO
 
@@ -65,7 +68,8 @@ int algorithm_main() {
         ev |= get_var_uint(VAR_PATH_RANDOM) ^ (get_var_uint(VAR_PATH_RANDOM) & PATH_MASK);
         set_control(CTRL_NEXT_PKT_EV, ev);
         update_signal(SIG_TX_BACKLOG_SIZE, -1);
+        processed = true;
     }
 
-    return PCM_SUCCESS;
+    return processed ? PCM_SUCCESS : PCM_ERROR;
 }

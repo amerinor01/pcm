@@ -1,23 +1,22 @@
-#include "pcmh.h"
 #include "cubic.h"
 #include "algo_utils.h"
-#include "pcm.h"
 #include "math.h"
+#include "pcm.h"
+#include "pcmh.h"
 #include "tcp_utils.h"
 
 static PCM_FORCE_INLINE void tcp_cubic_perform_decrease(ALGO_CTX_ARGS) {
     pcm_float cwnd_at_loss_mss = get_var_float(VAR_CTRL_WINDOW_MSS);
     // replace to be constant
     // get another beta to represent ECN/NACK diff
-    pcm_float beta_cubic = get_var_float(VAR_BETA);
 
-    pcm_float new_sstresh_mss = MAX(beta_cubic * cwnd_at_loss_mss, 2);
-    pcm_float new_cwnd_mss = MAX(beta_cubic * cwnd_at_loss_mss, 1);
+    pcm_float new_sstresh_mss = MAX(BETA * cwnd_at_loss_mss, 2);
+    pcm_float new_cwnd_mss = MAX(BETA * cwnd_at_loss_mss, 1);
 
-    // fast implementation for cubic root required 
+    // fast implementation for cubic root required
     // - implementation that always terminates
     // - doesnt rely on cbrt
-    pcm_float K = cbrt(((pcm_float)(cwnd_at_loss_mss - new_cwnd_mss)) / get_var_float(VAR_C));
+    pcm_float K = cbrt(((pcm_float)(cwnd_at_loss_mss - new_cwnd_mss)) / C);
     set_var_float(VAR_W_MAX_MSS, cwnd_at_loss_mss);
     set_var_float(VAR_CTRL_WINDOW_MSS, new_cwnd_mss);
     set_var_float(VAR_SSTHRESH, new_sstresh_mss);
@@ -35,19 +34,18 @@ static PCM_FORCE_INLINE void tcp_cubic_perform_increase(ALGO_CTX_ARGS, pcm_uint 
     pcm_uint t_picoseconds = get_signal(SIG_ELAPSED_TIME) - get_var_uint(VAR_LAST_ADJ);
     pcm_float t_seconds = ((pcm_float)t_picoseconds) / 1e12;
 
-    pcm_float beta_cubic = get_var_float(VAR_BETA);
     pcm_float w_max = get_var_float(VAR_W_MAX_MSS);
     pcm_float K = get_var_float(VAR_K);
     // check if it is a TCP friendly region
-    pcm_float W_est = get_var_float(VAR_W_EST_MSS) + (3*(1-beta_cubic)/(1+beta_cubic)) * (num_acks/cwnd_mss);
+    pcm_float W_est = get_var_float(VAR_W_EST_MSS) + (3 * (1 - BETA) / (1 + BETA)) * (num_acks / cwnd_mss);
     set_var_float(VAR_W_EST_MSS, W_est);
 
     pcm_float factor_t = (t_seconds - K);
-    pcm_float w_cubic_t_seconds = get_var_float(VAR_C) * factor_t * factor_t * factor_t + w_max;
-    
+    pcm_float w_cubic_t_seconds = C * factor_t * factor_t * factor_t + w_max;
+
     pcm_float t_and_rtt_seconds = t_seconds + RTT_seconds;
     pcm_float factor_t_and_rtt = (t_and_rtt_seconds - K);
-    pcm_float w_cubic_t_and_rtt_seconds = get_var_float(VAR_C) * factor_t_and_rtt * factor_t_and_rtt * factor_t_and_rtt + w_max;
+    pcm_float w_cubic_t_and_rtt_seconds = C * factor_t_and_rtt * factor_t_and_rtt * factor_t_and_rtt + w_max;
     // add ifdef/for tcp friendliness
     // TCP friendly condition
     if (w_cubic_t_seconds < W_est) {
@@ -65,12 +63,12 @@ static PCM_FORCE_INLINE void tcp_cubic_perform_increase(ALGO_CTX_ARGS, pcm_uint 
             // printf("doing well\n value factor %f\n", factor);
         }
 
-        pcm_float new_cwnd = cwnd_mss + ((pcm_float)(target - cwnd_mss))/cwnd_mss * num_acks;
+        pcm_float new_cwnd = cwnd_mss + ((pcm_float)(target - cwnd_mss)) / cwnd_mss * num_acks;
         set_var_float(VAR_CTRL_WINDOW_MSS, new_cwnd);
     }
 }
 
-PCM_FORCE_INLINE void tcp_cubic_slow_start(ALGO_CTX_ARGS, pcm_float *cur_cwnd, pcm_uint *acks_to_consume) {
+static PCM_FORCE_INLINE void tcp_cubic_slow_start(ALGO_CTX_ARGS, pcm_float *cur_cwnd, pcm_uint *acks_to_consume) {
     pcm_float to_ssthresh = MIN(*acks_to_consume, get_var_float(VAR_SSTHRESH) - *cur_cwnd);
     // printf("to_ssthresh %f\n", to_ssthresh);
     // printf("VAR_SSTHRESH %f\n", get_var_float(VAR_SSTHRESH));
@@ -92,10 +90,8 @@ int algorithm_main() {
         tcp_cubic_perform_decrease(ALGO_CTX_PASS);
 
         update_signal(SIG_NUM_NACK, -get_signal(SIG_NUM_NACK));
-        update_signal(SIG_NUM_NACKED_BYTES, -get_signal(SIG_NUM_NACKED_BYTES));
 
     } else if (trigger_mask & SIG_NUM_ACK) {
-        pcm_uint acked_bytes = get_signal(SIG_NUM_ACKED_BYTES);
         pcm_uint num_acks = get_signal(SIG_NUM_ACK);
         pcm_uint acks_to_consume = num_acks;
         if (get_signal(SIG_NUM_ECN)) {
@@ -105,12 +101,11 @@ int algorithm_main() {
             if (cur_cwnd_mss < get_var_float(VAR_SSTHRESH)) {
                 tcp_cubic_slow_start(ALGO_CTX_PASS, &cur_cwnd_mss, &acks_to_consume);
                 update_signal(SIG_NUM_ACK, -(num_acks - acks_to_consume));
-            }  
+            }
             if (acks_to_consume) {
                 tcp_cubic_perform_increase(ALGO_CTX_PASS, acks_to_consume);
             }
         }
-        update_signal(SIG_NUM_ACKED_BYTES, -acked_bytes);
         update_signal(SIG_NUM_ACK, -acks_to_consume);
     }
 
