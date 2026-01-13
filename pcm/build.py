@@ -58,6 +58,8 @@ def main():
                        help='Select profiling backend (perf/chrono/rdtsc). Default: rdtsc')
     parser.add_argument('--aligned-atomic-storage', action='store_true',
                        help='Enable aligned atomic storage')
+    parser.add_argument('--log-snapshot-sns', action='store_true',
+                       help='Enable snapshot sequence number logging')
     parser.add_argument('--clean', action='store_true',
                        help='Clean build directory first')
     parser.add_argument('--install', action='store_true',
@@ -84,6 +86,7 @@ def main():
     build_hac_ir = "ON" if args.hac_ir else "OFF"
     enable_profiling = "ON" if args.profiling else "OFF"
     aligned_atomic = "ON" if args.aligned_atomic_storage else "OFF"
+    log_snapshot_sns = "ON" if args.log_snapshot_sns else "OFF"
     jobs = args.jobs if args.jobs else get_cpu_count()
     
     # Paths
@@ -96,6 +99,7 @@ def main():
     if args.profiling:
         print(f"Profiling backend: {args.profiling_backend}")
     print(f"Aligned atomic storage: {aligned_atomic}")
+    print(f"Log snapshot SNS: {log_snapshot_sns}")
     print(f"Clean build: {args.clean}")
     print(f"Jobs: {jobs}")
     print(f"Project root: {project_root}")
@@ -116,6 +120,7 @@ def main():
         f"-DBUILD_HAC_IR={build_hac_ir}",
         f"-DENABLE_VM_PROFILING={enable_profiling}",
         f"-DATOMIC_PCM_VM_ALIGNED_STORAGE={aligned_atomic}",
+        f"-DLOG_SNAPSHOT_SNS={log_snapshot_sns}",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
     ]
 

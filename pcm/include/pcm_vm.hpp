@@ -365,13 +365,19 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     std::shared_ptr<void> algorithm_so_handle_;
     pcm_handler_main_cb handler_main_cb_{nullptr};
     // Snapshot storage exposed to handler
-    std::array<pcm_uint, SnapshotLayout::kSnapshotSize> raw_snapshot_{};
+    alignas(
+        64) std::array<pcm_uint, SnapshotLayout::kSnapshotSize> raw_snapshot_{};
     // Array of last signal values that fired up a trigger (for delta/magnitude
     // trigger mode)
-    std::array<pcm_uint, std::tuple_size_v<SignalsTupleT>> last_trigger_vals_{};
+    alignas(64) std::array<
+        pcm_uint, std::tuple_size_v<SignalsTupleT>> last_trigger_vals_{};
     // Hooks to datapath time source
     util::GetTimeFn get_time_{nullptr};
     pcm_uint start_ts_{};
+
+#ifdef LOG_SNAPSHOT_SNS
+    alignas(64) std::array<pcm_uint, 128> sn_diff_histogram{};
+#endif
 
 #ifdef ENABLE_VM_PROFILING
 #ifdef VM_PROF_BACKEND_PERF
@@ -405,6 +411,15 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         handler_main_cb_ = reinterpret_cast<pcm_handler_main_cb>(raw_fn_ptr);
     }
 
+    ~PcmHandlerVm() {
+#ifdef LOG_SNAPSHOT_SNS
+        for (size_t i = 0; i < sn_diff_histogram.size(); ++i) {
+            std::cout << "bin=" << i << " val=" << sn_diff_histogram[i]
+                      << std::endl;
+        }
+#endif
+    }
+
     // init_state has to be called by the derived class after the
     // constructor got executed, because it uses methods of the derived
     // class, using these methods in the based constructor is UB.
@@ -429,6 +444,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              }
          }()),
          ...);
+
         std::cerr
             << "[PcmHandlerVm] algo_name=" << std::string(AlgoName)
             << " num_controls="
@@ -438,7 +454,8 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
             << controls_storage_size
             << " sig_storage_size_B=" << signals_storage_size
             << " last_trigger_vals_size_B=" << sizeof(last_trigger_vals_)
-            << " snapshot_size_B=" << sizeof(raw_snapshot_) << " tot_vm_size_B="
+            << " snapshot_size_B=" << sizeof(raw_snapshot_)
+            << "tot_vm_size_B = "
             << (controls_storage_size + signals_storage_size +
                 sizeof(last_trigger_vals_) + sizeof(raw_snapshot_))
             << std::endl;
@@ -494,6 +511,8 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
     }
 
     void flush_slab_input() override {
+        auto *impl = static_cast<PcmHandlerVmImplT *>(this);
+        impl->increment_signal_update_sn();
         // implicitly instantiate update_signals for all signals that
         // algorithm can have - for useless signals no code will be emitted.
         update_signals<PCM_SIG_ACK>(io_slab_.in.ack, io_slab_.in.mask);
@@ -554,6 +573,10 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
         // TODO: check if this breaks timer logic (DCQCN needs it)
         update_signals<PCM_SIG_ELAPSED_TIME>(0, 1 << PCM_SIG_ELAPSED_TIME);
 
+#ifdef LOG_SNAPSHOT_SNS
+        auto *impl = static_cast<PcmHandlerVmImplT *>(this);
+        auto old_sn = impl->get_signal_update_sn();
+#endif
         (([&]() {
              using T = Objs;
              if constexpr (is_signal_v<T>) {
@@ -570,6 +593,10 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
              }
          }()),
          ...);
+#ifdef LOG_SNAPSHOT_SNS
+        auto cur_sn = impl->get_signal_update_sn();
+        ++sn_diff_histogram[(cur_sn - old_sn) % sn_diff_histogram.size()];
+#endif
     }
 
     void apply_post_invoke_snapshot() {
@@ -667,6 +694,7 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     // pcm_uint storage
     std::array<pcm_uint, kNumControls> controls_storage_;
     std::array<pcm_uint, kNumSignals> signals_storage_;
+    pcm_uint signals_update_sn_{};
 
     explicit SimplePcmHandlerVm() : Base() {
         Base::init_state(sizeof(controls_storage_), sizeof(signals_storage_));
@@ -677,6 +705,11 @@ struct SimplePcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
                         SnapshotLayout::kControlOffset,
                     kNumControls, controls_storage_.begin());
     }
+
+    [[nodiscard]] pcm_uint get_signal_update_sn() const {
+        return signals_update_sn_;
+    }
+    void increment_signal_update_sn() { ++signals_update_sn_; }
 
     template <std::size_t I> [[nodiscard]] pcm_uint get_control_slot() const {
         static_assert(I < kNumControls);
@@ -740,6 +773,7 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
     };
     alignas(64) std::array<AlignedAtomic, kNumControls> controls_storage_;
     alignas(64) std::array<AlignedAtomic, kNumSignals> signals_storage_;
+    alignas(64) std::atomic<pcm_uint> signal_update_sn_{};
 
     explicit AtomicPcmHandlerVm() : Base() {
         Base::init_state(sizeof(controls_storage_), sizeof(signals_storage_));
@@ -755,6 +789,13 @@ struct AtomicPcmHandlerVm<AlgoName, SnapshotLayout, std::tuple<Ds...>>
              }
          }()),
          ...);
+    }
+
+    [[nodiscard]] pcm_uint get_signal_update_sn() const {
+        return signal_update_sn_.load(std::memory_order_acquire);
+    }
+    void increment_signal_update_sn() {
+        signal_update_sn_.fetch_add(1, std::memory_order_acq_rel);
     }
 
     template <std::size_t I> [[nodiscard]] pcm_uint get_control_slot() const {
