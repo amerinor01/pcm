@@ -34,13 +34,7 @@ variables:
   - name: IS_INITIALIZED
     initial_value: 0
     type: uint
-  - name: PREV_ACK
-    initial_value: 0
-    type: uint
   - name: PREV_ECN
-    initial_value: 0
-    type: uint
-  - name: PREV_BACKLOG
     initial_value: 0
     type: uint
 

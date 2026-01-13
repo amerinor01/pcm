@@ -18,19 +18,14 @@ int algorithm_main() {
     pcm_uint num_valid_evs = get_var_uint(VAR_EVC_NUM_VALID_EVS);
 
     // Read Currents
-    pcm_uint cur_ack = get_signal(SIG_NUM_ACK);
     pcm_uint cur_ecn = get_signal(SIG_NUM_ECN);
-    pcm_uint cur_backlog = get_signal(SIG_TX_BACKLOG_SIZE);
 
     // Calculate Deltas
-    pcm_uint delta_ack = cur_ack - get_var_uint(VAR_PREV_ACK);
     pcm_uint delta_ecn = cur_ecn - get_var_uint(VAR_PREV_ECN);
-    pcm_uint delta_backlog = cur_backlog - get_var_uint(VAR_PREV_BACKLOG);
 
     bool processed = false; // sanity check
 
     if (trigger_mask & SIG_NUM_ACK) {
-        set_var_uint(VAR_PREV_ACK, cur_ack);
         set_var_uint(VAR_PREV_ECN, cur_ecn);
 
         if (!delta_ecn) {
@@ -45,8 +40,6 @@ int algorithm_main() {
     }
 
     if (trigger_mask & SIG_TX_BACKLOG_SIZE) {
-        set_var_uint(VAR_PREV_BACKLOG, cur_backlog);
-
         pcm_uint packet_ev = 0;
         if (num_valid_evs == 0 || get_var_uint(VAR_EV_EXPLORE_COUNTER) > 0) {
             packet_ev = HASH(get_var_uint(VAR_EV_SEED)) & PATH_MASK;
