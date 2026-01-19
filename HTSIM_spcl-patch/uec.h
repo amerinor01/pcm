@@ -143,7 +143,7 @@ public:
     /**
      * Initialize per-connection NSCC parameters.
      */
-    void initNscc(mem_b cwnd, simtime_picosec peer_rtt=UecSrc::_network_rtt);
+    virtual void initNscc(mem_b cwnd, simtime_picosec peer_rtt=UecSrc::_network_rtt);
     /**
      * Initialize per-connection RCCC parameters.
      */
