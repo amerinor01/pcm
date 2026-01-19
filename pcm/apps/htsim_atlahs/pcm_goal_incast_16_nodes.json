@@ -16,7 +16,6 @@
     "-pcm_enable -pcm_cc_config_file ./apps/htsim_atlahs/example_incast/pcm_cc_config_0.json",
     "-pcm_enable -pcm_cc_config_file ./apps/htsim_atlahs/example_incast/pcm_cc_config_1.json",
     "-pcm_enable -pcm_cc_config_file ./apps/htsim_atlahs/example_incast/pcm_cc_config_2.json",
-    "-pcm_enable -pcm_cc_config_file ./apps/htsim_atlahs/example_incast/pcm_cc_config_3.json",
-    "-pcm_enable -pcm_cc_config_file ./apps/htsim_atlahs/example_incast/pcm_cc_config_4.json"
+    "-pcm_enable -pcm_cc_config_file ./apps/htsim_atlahs/example_incast/pcm_cc_config_3.json"
   ]
 }
