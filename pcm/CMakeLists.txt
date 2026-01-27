@@ -17,7 +17,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Configurable build options
-option(BUILD_HTSIM_PLUGIN "Build HTSIM plugin" OFF)
+option(BUILD_HTSIM_ATLAHS_PLUGIN "Build HTSIM ATLAHS plugin" OFF)
 option(BUILD_HAC_IR "Build HAC LLVM IR generation" OFF)
 option(ENABLE_VM_PROFILING "Enable Linux perf-based profiling" OFF)
 option(ATOMIC_PCM_VM_ALIGNED_STORAGE "Enable aligned atomic storage" OFF)
@@ -133,15 +133,13 @@ add_subdirectory(algorithms)
 # HTSIM
 # ===============================================
 
-if(BUILD_HTSIM_PLUGIN)
-    add_subdirectory(apps/htsim)
-endif()
+add_subdirectory(apps/htsim)
 
 # ===============================================
 # HTSIM ATLAHS Application
 # ===============================================
 
-if(BUILD_HTSIM_PLUGIN)
+if(BUILD_HTSIM_ATLAHS_PLUGIN)
     add_subdirectory(apps/htsim_atlahs)
 endif()
 
@@ -151,8 +149,8 @@ endif()
 
 message(STATUS "PCM Build Configuration:")
 message(STATUS "  Build type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  HTSIM plugin: ${BUILD_HTSIM_PLUGIN}")
-message(STATUS "  HTSIM ATLAHS plugin: ${BUILD_HTSIM_PLUGIN}")
+message(STATUS "  HTSIM plugin: ON")
+message(STATUS "  HTSIM ATLAHS plugin: ${BUILD_HTSIM_ATLAHS_PLUGIN}")
 message(STATUS "  Profiling: ${ENABLE_VM_PROFILING}")
 if(ENABLE_VM_PROFILING)
     message(STATUS "  Profiling Backend: ${VM_PROF_BACKEND}")

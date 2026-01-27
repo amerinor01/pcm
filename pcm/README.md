@@ -158,8 +158,7 @@ cmake --build build --parallel
 ```bash
 cd pcm
 
-cmake -S . -B build -DBUILD_HTSIM_PLUGIN=ON
-cmake --build build --parallel
+python3 build.py --debug --clean --build-htsim-atlahs
 ```
 
 ### 5. Run Applications

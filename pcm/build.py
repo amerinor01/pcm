@@ -68,6 +68,8 @@ def main():
                        help='Build directory (default: ./build)')
     parser.add_argument('--jobs', '-j', type=int, metavar='N',
                        help=f'Number of parallel jobs (default: {get_cpu_count()})')
+    parser.add_argument('--build-htsim-atlahs', action='store_true',
+                       help='Enable HTSIM ATLAHS plugin building support')
     
     args = parser.parse_args()
     
@@ -87,6 +89,7 @@ def main():
     enable_profiling = "ON" if args.profiling else "OFF"
     aligned_atomic = "ON" if args.aligned_atomic_storage else "OFF"
     log_snapshot_sns = "ON" if args.log_snapshot_sns else "OFF"
+    build_htsim_atlahs = "ON" if args.build_htsim_atlahs else "OFF"
     jobs = args.jobs if args.jobs else get_cpu_count()
     
     # Paths
@@ -121,6 +124,7 @@ def main():
         f"-DENABLE_VM_PROFILING={enable_profiling}",
         f"-DATOMIC_PCM_VM_ALIGNED_STORAGE={aligned_atomic}",
         f"-DLOG_SNAPSHOT_SNS={log_snapshot_sns}",
+        f"-DBUILD_HTSIM_ATLAHS_PLUGIN={build_htsim_atlahs}",
         "-DCMAKE_EXPORT_COMPILE_COMMANDS=ON"
     ]
 
