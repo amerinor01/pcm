@@ -153,7 +153,15 @@ cmake -S . -B build
 cmake --build build --parallel
 ```
 
-### 4. Build PCM
+### 4. Build `xxHash`
+
+```bash
+cd xxHash
+
+make
+```
+
+### 5. Build PCM
 
 ```bash
 cd pcm
@@ -161,7 +169,7 @@ cd pcm
 python3 build.py --debug --clean --build-htsim-atlahs
 ```
 
-### 5. Run Applications
+### 6. Run Applications
 
 #### CM Mode
 
