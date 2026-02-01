@@ -3,7 +3,7 @@
   "input_files": [
     "./apps/htsim_atlahs/example_incast/16_nodes_incast.bin -nodes 16 -topo ./apps/htsim_atlahs/example_incast/tree16.topo"
   ],
-  "htsim_params": "-end 100000",
+  "htsim_params": "-end 100000000",
   "run_without_pcm": true,
   "baseline_config": "-sender_cc_only",
   "pcm_delay_config": "-pcm_sched_poll_delay 1000 -pcm_handler_delay 1000",

@@ -34,7 +34,7 @@ def run_command(cmd, output_dir, test_name, create_plot=False):
     try:
         with open(stdout_file, 'w') as stdout_f, open(stderr_file, 'w') as stderr_f:
             result = subprocess.run(cmd, stdout=stdout_f, stderr=stderr_f, 
-                                  timeout=300, check=False)
+                                  timeout=3000, check=False)
         
         success = result.returncode == 0
         status = "SUCCESS" if success else f"FAILED (exit {result.returncode})"
