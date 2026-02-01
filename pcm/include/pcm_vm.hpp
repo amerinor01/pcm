@@ -455,7 +455,7 @@ struct PcmHandlerVm : PcmHandlerVmDesc {
             << " sig_storage_size_B=" << signals_storage_size
             << " last_trigger_vals_size_B=" << sizeof(last_trigger_vals_)
             << " snapshot_size_B=" << sizeof(raw_snapshot_)
-            << "tot_vm_size_B = "
+            << " tot_vm_size_B = "
             << (controls_storage_size + signals_storage_size +
                 sizeof(last_trigger_vals_) + sizeof(raw_snapshot_))
             << std::endl;
