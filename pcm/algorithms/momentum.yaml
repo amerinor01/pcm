@@ -15,6 +15,11 @@ constants:
     type: uint
     value: !eval "MTU"
     description: "Minimum congestion window in bytes"
+  
+  - name: BRTT
+    type: uint
+    value: "FABRIC_BRTT"
+    description: "Base round-trip time in picoseconds"
 
   - name: MAXIMUM_INFLIGHT_BYTES
     type: uint
@@ -28,7 +33,8 @@ constants:
   
   - name: ALPHA
     type: float
-    value: 16.0
+    # value: 16.0
+    value: 2.0
     description: "Base for exponential growth term of congestion window"
   
   - name: LOG_ALPHA
@@ -38,17 +44,19 @@ constants:
   
   - name: GAMMA_MIN
     type: float
-    value: !eval "MTU * 10" # bytes
+    # value: !eval "MTU * 1.0" # bytes
+    value: !eval "MTU * 0.5" # bytes
     description: "Minimum gamma parameter"
   
   - name: GAMMA_MAX
     type: float
-    value: !eval "MTU * 100" # bytes
+    # value: !eval "MTU * 10.0" # bytes
+    value: !eval "MTU * 2.0" # bytes
     description: "Maximum gamma parameter"
   
   - name: LOG_GAMMA_POWER
     type: float
-    value: 1.5
+    value: 1.6
     description: "The logarithm of the gamma power parameter, the higher the value, the more room will be allocated for distinguishing flows at the beginning"
   
   - name: GAMMA_POWER
@@ -58,13 +66,18 @@ constants:
   
   - name: BETA_MARGIN
     type: float
-    value: 1.2
+    value: 1.0
     description: "The margin multiplier for the beta parameter"
   
   - name: BETA
     type: float
     value: !eval "LOG_ALPHA * MAXIMUM_CWND_BYTES * BETA_MARGIN"
     description: "The beta parameter for congestion window decrease, computed to cancle out the exponential growth factor at full congestion"
+  
+  - name: ALGO_V2
+    type: int
+    value: 1
+    description: "Whether to use the v2 version of the algorithm"
   
 signals:
   - name: NUM_ACKED_BYTES
@@ -90,14 +103,21 @@ signals:
   - name: BYTES_TO_SEND
     type: PCM_SIG_TX_BACKLOG_BYTES
     accumulation: PCM_SIG_ACCUM_LAST
+  - name: BYTES_SENT
+    type: PCM_SIG_DATA_TX
+    accumulation: PCM_SIG_ACCUM_SUM
 
 controls:
   - name: CWND_BYTES
     type: PCM_CTRL_CWND
-    initial_value: "FABRIC_MAX_CWND"
+    initial_value: "MINIMUM_CWND_BYTES"
   
 variables:
   - name: LAST_ACK_TRIGGERED_TIME
     initial_value: 0
     type: uint
     description: "The timestamp of the last triggered ACK event"
+  - name: INIT
+    initial_value: 0
+    type: uint
+    description: "Whether this is the first time the handler is invoked"

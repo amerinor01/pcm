@@ -2,8 +2,8 @@
 # This directory contains both the HTSIM plugin and the HTSIM application
 
 # Set HTSIM build directory
-if(NOT HTSIM_ROOT_DIR)
-    set(HTSIM_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../uec-transport-simulation-code-main/htsim/sim/")
+if(NOT DEFINED HTSIM_ROOT_DIR)
+    set(HTSIM_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../uet-htsim/htsim/sim/")
 endif()
 
 # Validate HTSIM directory exists

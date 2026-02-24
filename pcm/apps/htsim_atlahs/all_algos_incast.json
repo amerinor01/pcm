@@ -1,0 +1,30 @@
+{
+  "binary": "./build/bin/htsim_flow_app_atlahs",
+  "input_files": [
+    "./apps/htsim/incast_8_1MB.cm"
+  ],
+  "htsim_params": "-end 30000",
+  "run_without_pcm": true,
+  "baseline_config": "-sender_cc_algo",
+  "baseline_algorithms": [
+    "nscc",
+    "dctcp"
+  ],
+  "pcm_config": "-pcm_sched_poll_delay 1000 -pcm_handler_delay 1000 -pcm_algorithm",
+  "pcm_algorithms": [
+    "nscc",
+    "uec_dctcp",
+    "newreno",
+    "swift", 
+    "smartt",
+    "dctcp",
+    "cubic",
+    "nscc_v2",
+    "uec_dctcp_v2",
+    "newreno_v2",
+    "swift_v2", 
+    "smartt_v2",
+    "dctcp_v2",
+    "cubic_v2"
+  ]
+}

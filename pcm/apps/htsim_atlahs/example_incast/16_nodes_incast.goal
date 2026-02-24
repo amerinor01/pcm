@@ -1,0 +1,111 @@
+num_ranks 16
+
+rank 0 {
+l1: calc 0 cpu 0
+l2: recv 1073741824b from 1 tag 010
+l3: recv 1073741824b from 2 tag 020
+l4: recv 1073741824b from 3 tag 010
+l5: recv 1073741824b from 4 tag 020
+l6: recv 1073741824b from 5 tag 010
+l7: recv 1073741824b from 6 tag 020
+l8: recv 1073741824b from 7 tag 010
+l9: recv 1073741824b from 8 tag 020
+l10: recv 1073741824b from 9 tag 010
+l11: recv 1073741824b from 10 tag 020
+l12: recv 1073741824b from 11 tag 010
+l13: recv 1073741824b from 12 tag 020
+l14: recv 1073741824b from 13 tag 010
+l15: recv 1073741824b from 14 tag 020
+l16: recv 1073741824b from 15 tag 010
+l17: calc 0 cpu 0
+}
+
+rank 1 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
+
+rank 2 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 020
+l3: calc 0 cpu 0
+}
+
+rank 3 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
+
+rank 4 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 020
+l3: calc 0 cpu 0
+}
+
+rank 5 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
+
+rank 6 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 020
+l3: calc 0 cpu 0
+}
+
+rank 7 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
+
+rank 8 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 020
+l3: calc 0 cpu 0
+}
+
+rank 9 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
+
+rank 10 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 020
+l3: calc 0 cpu 0
+}
+
+rank 11 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
+
+rank 12 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 020
+l3: calc 0 cpu 0
+}
+
+rank 13 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
+
+rank 14 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 020
+l3: calc 0 cpu 0
+}
+
+rank 15 {
+l1: calc 0 cpu 0
+l2: send 1073741824b to 0 tag 010
+l3: calc 0 cpu 0
+}
