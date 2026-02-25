@@ -185,7 +185,7 @@ static PCM_FORCE_INLINE void nscc_fulfill_adjustment(ALGO_CTX_ARGS, pcm_uint *cu
         *cur_cwnd += get_var_uint(VAR_FULFILL_ADJ_INCREMENT) / *cur_cwnd;
         if ((get_signal(SIG_ELAPSED_TIME) - get_var_uint(VAR_LAST_FULFILL_ADJ_TIME)) >
             FULFILL_ADJ_TIME_THRESH) {
-            cur_cwnd += (pcm_uint)ETA;
+            *cur_cwnd += (pcm_uint)ETA;
             set_var_uint(VAR_LAST_FULFILL_ADJ_TIME, get_signal(SIG_ELAPSED_TIME));
         }
         set_var_uint(VAR_FULFILL_ADJ_BYTES, 0);
