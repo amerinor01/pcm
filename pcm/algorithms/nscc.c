@@ -169,7 +169,13 @@ static PCM_FORCE_INLINE void nscc_handle_loss_signal(ALGO_CTX_ARGS, pcm_uint *cu
 
     if (!nscc_quick_adapt(ALGO_CTX_PASS, 0, true, true, get_signal(SIG_NUM_NACKED_BYTES),
                           cur_cwnd)) { // && (!_receiver_based_cc || !last_hop)) {
-        *cur_cwnd = MAX((pcm_uint)(*cur_cwnd - get_signal(SIG_NUM_NACKED_BYTES)), (pcm_uint)MSS);
+        pcm_uint nacked = get_signal(SIG_NUM_NACKED_BYTES);
+        if (*cur_cwnd <= nacked) {
+            *cur_cwnd = MSS;
+        } else {
+            pcm_uint new_cwnd = *cur_cwnd - nacked;
+            *cur_cwnd = (new_cwnd < MSS) ? MSS : new_cwnd;
+        }
         // printf("DEBUG LOGGING: Core case: flow=%p t_now=%llu branch=LOSS _cwnd=%llu\n", ctx,
         //        get_signal(SIG_ELAPSED_TIME), *cur_cwnd);
     } else {
