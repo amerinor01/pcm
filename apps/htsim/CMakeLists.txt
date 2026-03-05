@@ -3,7 +3,7 @@
 
 # Set HTSIM build directory
 if(NOT DEFINED HTSIM_ROOT_DIR)
-    set(HTSIM_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../uet-htsim/htsim/sim/")
+    set(HTSIM_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../third-party/uet-htsim/htsim/sim/")
 endif()
 
 # Validate HTSIM directory exists

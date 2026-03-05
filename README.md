@@ -56,7 +56,7 @@ cd ./third-party/xxHash && make
 The PCM project can be built using `build.py` script which acts as a wrapper for CMake:
 
 ```bash
-./build.py --htsim-dir=$(pwd)/third-party/uet-htsim/htsim/sim/ --relwithdebinfo
+./build.py --relwithdebinfo
 ```
 
 ### 4. Test PCM congestion control algorithms with an incast traffic matrix
