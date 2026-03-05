@@ -1,10 +1,10 @@
 [submodule "uet-htsim"]
-	path = uet-htsim
+	path = third-party/uet-htsim
 	url = https://github.com/ultraethernet/uet-htsim.git
 [submodule "xxHash"]
-	path = xxHash
+	path = third-party/xxHash
 	url = https://github.com/Cyan4973/xxHash.git
 [submodule "HTSIM_spcl"]
-	path = HTSIM_spcl
+	path = third-party/HTSIM_spcl
 	url = https://github.com/ZhiyiHu1999/HTSIM_spcl.git
 	branch = feature/parameterizing
