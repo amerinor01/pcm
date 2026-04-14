@@ -12,17 +12,17 @@ static PCM_FORCE_INLINE bool smartt_quick_adapt(ALGO_CTX_ARGS, pcm_uint t_now, p
     //        state->now, state->qa_deadline, state->bytes_to_ignore,
     //        state->bytes_ignored, state->acked_bytes, state->trigger_qa);
     bool adapted = false;
-    if (t_now >= get_var_uint(VAR_QA_DEADLINE)) {
-        if (get_var_uint(VAR_QA_DEADLINE) != 0 && get_var_uint(VAR_TRIGGER_QA)) {
-            set_var_uint(VAR_TRIGGER_QA, 0);
+    if (t_now >= get_var_uint(QA_DEADLINE)) {
+        if (get_var_uint(QA_DEADLINE) != 0 && get_var_uint(TRIGGER_QA)) {
+            set_var_uint(TRIGGER_QA, 0);
             adapted = true;
-            set_var_uint(VAR_BYTES_TO_IGNORE,
+            set_var_uint(BYTES_TO_IGNORE,
                          *cur_cwnd); // TODO: use inflight bytes
-            *cur_cwnd = (pcm_uint)(MAX(get_var_uint(VAR_ACKED_BYTES) * QA_SCALING, (pcm_uint)MSS));
-            set_var_uint(VAR_BYTES_IGNORED, 0);
+            *cur_cwnd = (pcm_uint)(MAX(get_var_uint(ACKED_BYTES) * QA_SCALING, (pcm_uint)MSS));
+            set_var_uint(BYTES_IGNORED, 0);
         }
-        set_var_uint(VAR_ACKED_BYTES, 0);
-        set_var_uint(VAR_QA_DEADLINE, t_now + TRTT);
+        set_var_uint(ACKED_BYTES, 0);
+        set_var_uint(QA_DEADLINE, t_now + TRTT);
     }
     return adapted;
 }
@@ -32,8 +32,8 @@ static PCM_FORCE_INLINE void smartt_handle_loss_signal(ALGO_CTX_ARGS, pcm_uint t
     //  SMaRTT paper explicitly mentions that NACKED/TRIMMED/RTO'ed
     //  packet needs to be retransmistted here.
     //  we assume datapath handles this outside
-    if (get_var_uint(VAR_BYTES_IGNORED) >= get_var_uint(VAR_BYTES_TO_IGNORE)) {
-        set_var_uint(VAR_TRIGGER_QA, 1);
+    if (get_var_uint(BYTES_IGNORED) >= get_var_uint(BYTES_TO_IGNORE)) {
+        set_var_uint(TRIGGER_QA, 1);
         smartt_quick_adapt(ALGO_CTX_PASS, t_now, cur_cwnd);
     }
 }
@@ -45,18 +45,18 @@ static PCM_FORCE_INLINE bool smartt_fast_increase(ALGO_CTX_ARGS, pcm_uint num_ec
     //     BRTT, num_ecns, state->fast_count, *cur_cwnd,
     //     state->fast_active);
     if ((ABS((pcm_float)rtt_sample - BRTT) < (FI_BRTT_TOL * (pcm_float)BRTT)) && !num_ecns) {
-        set_var_uint(VAR_FAST_COUNT,
-                     get_var_uint(VAR_FAST_COUNT) + MSS); // last_pkt_size
-        if (get_var_uint(VAR_FAST_COUNT) > *cur_cwnd || get_var_uint(VAR_FAST_ACTIVE)) {
+        set_var_uint(FAST_COUNT,
+                     get_var_uint(FAST_COUNT) + MSS); // last_pkt_size
+        if (get_var_uint(FAST_COUNT) > *cur_cwnd || get_var_uint(FAST_ACTIVE)) {
             // *cur_cwnd += (pcm_uint)(SMARTT_K_CONST * MSS);
             *cur_cwnd += MSS;
-            set_var_uint(VAR_FAST_ACTIVE, 1);
+            set_var_uint(FAST_ACTIVE, 1);
         }
     } else {
-        set_var_uint(VAR_FAST_COUNT, 0);
-        set_var_uint(VAR_FAST_ACTIVE, 0);
+        set_var_uint(FAST_COUNT, 0);
+        set_var_uint(FAST_ACTIVE, 0);
     }
-    return get_var_uint(VAR_FAST_ACTIVE);
+    return get_var_uint(FAST_ACTIVE);
 }
 
 static PCM_FORCE_INLINE void smartt_core_cases(pcm_uint num_ecns, pcm_uint rtt_sample, pcm_uint *cur_cwnd) {
@@ -83,11 +83,11 @@ static PCM_FORCE_INLINE void smartt_core_cases(pcm_uint num_ecns, pcm_uint rtt_s
 
 static PCM_FORCE_INLINE void smartt_handle_ack(ALGO_CTX_ARGS, pcm_uint num_ecns, pcm_uint rtt_sample, pcm_uint t_now, pcm_uint *cur_cwnd) {
     // TODO: last_pkt_size, not MSS?
-    set_var_uint(VAR_ACKED_BYTES, get_var_uint(VAR_ACKED_BYTES) + MSS);
+    set_var_uint(ACKED_BYTES, get_var_uint(ACKED_BYTES) + MSS);
 
-    if (get_var_uint(VAR_BYTES_IGNORED) < get_var_uint(VAR_BYTES_TO_IGNORE)) {
-        set_var_uint(VAR_BYTES_IGNORED,
-                     get_var_uint(VAR_BYTES_IGNORED) + MSS); // TODO: += last_pkt_size
+    if (get_var_uint(BYTES_IGNORED) < get_var_uint(BYTES_TO_IGNORE)) {
+        set_var_uint(BYTES_IGNORED,
+                     get_var_uint(BYTES_IGNORED) + MSS); // TODO: += last_pkt_size
     } else if (!smartt_quick_adapt(ALGO_CTX_PASS, t_now, cur_cwnd) ||
                !smartt_fast_increase(ALGO_CTX_PASS, num_ecns, rtt_sample, cur_cwnd)) {
         smartt_core_cases(num_ecns, rtt_sample, cur_cwnd);
@@ -95,33 +95,33 @@ static PCM_FORCE_INLINE void smartt_handle_ack(ALGO_CTX_ARGS, pcm_uint num_ecns,
 }
 
 int algorithm_main() {
-    pcm_uint rtt_sample = get_signal(SIG_RTT_SAMPLE); // we don't use/support avg RTT (yet)
-    pcm_uint t_now = get_signal(SIG_ELAPSED_TIME);
-    pcm_uint cur_cwnd = get_control(CTRL_CWND_BYTES);
+    pcm_uint rtt_sample = get_signal(RTT_SAMPLE); // we don't use/support avg RTT (yet)
+    pcm_uint t_now = get_signal(ELAPSED_TIME);
+    pcm_uint cur_cwnd = get_control(CWND_BYTES);
 
-    if (get_signal(SIG_NUM_NACK) > 0) {
+    if (get_signal(NUM_NACK) > 0) {
         smartt_handle_loss_signal(ALGO_CTX_PASS, t_now, &cur_cwnd);
-        update_signal(SIG_NUM_NACK, -1);
+        update_signal(NUM_NACK, -1);
         goto save_state;
     }
 
-    if (get_signal(SIG_NUM_RTO) > 0) {
+    if (get_signal(NUM_RTO) > 0) {
         smartt_handle_loss_signal(ALGO_CTX_PASS, t_now, &cur_cwnd);
-        update_signal(SIG_NUM_RTO, -1);
+        update_signal(NUM_RTO, -1);
         goto save_state;
     }
 
-    if (get_signal(SIG_NUM_ACK) > 0) {
-        pcm_uint num_ecns = get_signal(SIG_NUM_ECN);
+    if (get_signal(NUM_ACK) > 0) {
+        pcm_uint num_ecns = get_signal(NUM_ECN);
         smartt_handle_ack(ALGO_CTX_PASS, num_ecns, rtt_sample, t_now, &cur_cwnd);
-        update_signal(SIG_NUM_ACK, -1);
+        update_signal(NUM_ACK, -1);
         if (num_ecns) {
-            update_signal(SIG_NUM_ECN, -1);
+            update_signal(NUM_ECN, -1);
         }
     }
 
 save_state:
-    set_control(CTRL_CWND_BYTES, cur_cwnd);
+    set_control(CWND_BYTES, cur_cwnd);
 
     return PCM_SUCCESS;
 }

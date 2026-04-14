@@ -147,7 +147,7 @@ class AlgorithmCodeGenerator:
             tuple_elements.append("    /* Signals */")
             for sig in self.config.get("signals", []):
                 typ, accum = sig["type"], sig["accumulation"]
-                name = f"SIG_{sig['name']}"
+                name = f"{sig['name']}"
                 
                 init_val = sig.get("initial_value")
                 if init_val is None:
@@ -205,7 +205,7 @@ class AlgorithmCodeGenerator:
             tuple_elements.append("    /* Controls */")
             for ctrl in self.config.get("controls", []):
                 typ = ctrl["type"]
-                name = f"CTRL_{ctrl['name']}"
+                name = f"{ctrl['name']}"
                 init_val = ctrl.get("initial_value")
                 tuple_elements.append(f"    pcm_vm::ControlDesc<{typ}, {init_val}, {name}>")
 
@@ -213,7 +213,7 @@ class AlgorithmCodeGenerator:
         if self.config.get("variables", []):
             tuple_elements.append("    /* Variables */")
             for var in self.config.get("variables", []):
-                name = f"VAR_{var['name']}"
+                name = f"{var['name']}"
                 init_val = var.get("initial_value")
                 dtype = var.get("type")
                 variable_defs.append(
@@ -328,7 +328,7 @@ class AlgorithmCodeGenerator:
                 index = str(item["index"])
                 if mask:
                     index = f"1 << {item['index']}"
-                lines.append(f"    {cathegory}_{item['name']} = {index},")
+                lines.append(f"    {item['name']} = {index},")
             lines.append("};")
             lines.append("")
 

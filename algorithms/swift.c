@@ -23,13 +23,13 @@ static PCM_FORCE_INLINE pcm_float swift_target_delay(pcm_uint cur_cwnd) {
 
 static PCM_FORCE_INLINE void swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks, pcm_uint rtt_sample, bool can_decrease,
                                                 pcm_uint *cur_cwnd) {
-    set_var_uint(VAR_RETX_CNT, 0);
-    //set_var_uint(VAR_ACKED, get_var(VAR_ACKED) + num_acks * MSS);
+    set_var_uint(RETX_CNT, 0);
+    //set_var_uint(ACKED, get_var(ACKED) + num_acks * MSS);
     pcm_float target_delay = swift_target_delay(*cur_cwnd);
 
     if (rtt_sample < target_delay) {
         /* Additive Increase */
-        //*cur_cwnd += MSS * AI * (get_var_uint(VAR_ACKED) / *cur_cwnd);
+        //*cur_cwnd += MSS * AI * (get_var_uint(ACKED) / *cur_cwnd);
         *cur_cwnd += (MSS * AI * num_acks * MSS) / *cur_cwnd;
         // Note: we DO NOT support FP fractional cwnd (yet)
         // if (state->cwnd >= 1) {
@@ -47,15 +47,15 @@ static PCM_FORCE_INLINE void swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks
 }
 
 static PCM_FORCE_INLINE void swift_rtt_estimate(ALGO_CTX_ARGS, pcm_uint rtt_sample) {
-    if (get_var_uint(VAR_RTT_ESTIM) > 0) {
-        set_var_uint(VAR_RTT_ESTIM, 7 * get_var_uint(VAR_RTT_ESTIM) / 8 + rtt_sample / 8);
+    if (get_var_uint(RTT_ESTIM) > 0) {
+        set_var_uint(RTT_ESTIM, 7 * get_var_uint(RTT_ESTIM) / 8 + rtt_sample / 8);
     } else {
-        set_var_uint(VAR_RTT_ESTIM, rtt_sample);
+        set_var_uint(RTT_ESTIM, rtt_sample);
     }
 }
 
 static PCM_FORCE_INLINE void swift_nack_recovery(ALGO_CTX_ARGS, bool can_decrease, pcm_uint *cur_cwnd) {
-    set_var_uint(VAR_RETX_CNT, 0);
+    set_var_uint(RETX_CNT, 0);
     if (can_decrease) {
         *cur_cwnd = (pcm_float)(*cur_cwnd) * (1.0 - MAX_MDF);
     }
@@ -63,8 +63,8 @@ static PCM_FORCE_INLINE void swift_nack_recovery(ALGO_CTX_ARGS, bool can_decreas
 
 // TODO: test me in RTO-based simulation
 static PCM_FORCE_INLINE void swift_timeout_recovery(ALGO_CTX_ARGS, bool can_decrease, pcm_uint *cur_cwnd) {
-    set_var_uint(VAR_RETX_CNT, get_var_uint(VAR_RETX_CNT) + 1);
-    if (get_var_uint(VAR_RETX_CNT) >= RETX_RESET_THRESH) {
+    set_var_uint(RETX_CNT, get_var_uint(RETX_CNT) + 1);
+    if (get_var_uint(RETX_CNT) >= RETX_RESET_THRESH) {
         *cur_cwnd = MSS; // minimum possible cwnd
     } else if (can_decrease) {
         *cur_cwnd = (pcm_float)(*cur_cwnd) * (1.0 - MAX_MDF);
@@ -82,13 +82,13 @@ static PCM_FORCE_INLINE void swift_timeout_recovery(ALGO_CTX_ARGS, bool can_decr
  *  TODO: support pacer delay
  */
 int algorithm_main() {
-    pcm_uint t_now = get_signal(SIG_ELAPSED_TIME);
-    pcm_uint rtt_sample = get_signal(SIG_RTT);
-    pcm_uint num_acks = get_signal(SIG_ACK);
-    pcm_uint cur_cwnd = get_control(CTRL_CWND);
+    pcm_uint t_now = get_signal(ELAPSED_TIME);
+    pcm_uint rtt_sample = get_signal(RTT);
+    pcm_uint num_acks = get_signal(ACK);
+    pcm_uint cur_cwnd = get_control(CWND);
     pcm_uint prev_cwnd = cur_cwnd;
 
-    bool can_decrease = (t_now - get_var_uint(VAR_T_LAST_DECREASE)) >= get_var(VAR_RTT_ESTIM);
+    bool can_decrease = (t_now - get_var_uint(T_LAST_DECREASE)) >= get_var(RTT_ESTIM);
 
     /*
      * Note: for some reason htsim computes RTT estimation after computing
@@ -96,37 +96,37 @@ int algorithm_main() {
      */
     swift_rtt_estimate(ALGO_CTX_PASS, rtt_sample);
 
-    if (get_signal(SIG_NACK) > 0) {
+    if (get_signal(NACK) > 0) {
         swift_nack_recovery(ALGO_CTX_PASS, can_decrease, &cur_cwnd);
-        update_signal(SIG_NACK, -1);
-    } else if (get_signal(SIG_RTO) > 0) {
+        update_signal(NACK, -1);
+    } else if (get_signal(RTO) > 0) {
         swift_timeout_recovery(ALGO_CTX_PASS, can_decrease, &cur_cwnd);
-        update_signal(SIG_RTO, -1);
-    } else if (get_signal(SIG_ACK) > 0) {
+        update_signal(RTO, -1);
+    } else if (get_signal(ACK) > 0) {
         swift_ack_reaction(ALGO_CTX_PASS, num_acks, rtt_sample, can_decrease, &cur_cwnd);
     } else {
         return PCM_ERROR;
     }
 
     // All acks are always consumed ACKs
-    update_signal(SIG_ACK, -num_acks);
+    update_signal(ACK, -num_acks);
 
     /*
      * Update last‐decrease timestamp if we actually shrank
      * and reset RTT measurement
      */
     if (cur_cwnd < prev_cwnd) {
-        set_var_uint(VAR_T_LAST_DECREASE, t_now);
-        //set_var_uint(VAR_ACKED, 0);
+        set_var_uint(T_LAST_DECREASE, t_now);
+        //set_var_uint(ACKED, 0);
     }
 
     // if (cur_cwnd >= 1.0) {
-    //    set_control(CTRL_PACER_DELAY, rtt_sample / cur_cwnd);
+    //    set_control(PACER_DELAY, rtt_sample / cur_cwnd);
     //} else {
-    //    set_control(CTRL_PACER_DELAY, 0);
+    //    set_control(PACER_DELAY, 0);
     //}
 
-    set_control(CTRL_CWND, cur_cwnd);
+    set_control(CWND, cur_cwnd);
 
     return PCM_SUCCESS;
 }

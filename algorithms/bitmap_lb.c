@@ -2,17 +2,17 @@
 #include "stdbool.h"
 
 // signals
-#define SIG_NUM_ECN 0 // trigger w threshold=1, sum
-#define SIG_NUM_SENDS 1 // trigger w threshold=1, sum
-#define SIG_ECN_ACK_EV 2 // last
+#define NUM_ECN 0 // trigger w threshold=1, sum
+#define NUM_SENDS 1 // trigger w threshold=1, sum
+#define ECN_ACK_EV 2 // last
 
 // controls 
-#define CTRL_PKT_EV 0
+#define PKT_EV 0
 
 // variables
-#define VAR_EVC_HEAD_IDX 0
-#define VAR_EVC_NUM_VALID_EVS 1
-#define VAR_EV_EXPLORE_COUNTER 2
+#define EVC_HEAD_IDX 0
+#define EVC_NUM_VALID_EVS 1
+#define EV_EXPLORE_COUNTER 2
 
 #define BITMAP_CONGESTED_PATHS 0
 
@@ -23,11 +23,11 @@
 int algorithm_main() {
     pcm_uint trigger_mask = get_signal_trigger_mask();
 
-    if (trigger_mask & SIG_NUM_ECN) {
-        set_bitmap_entry(BITMAP_CONGESTED_PATHS, get_signal(SIG_ECN_ACK_EV), 1);
+    if (trigger_mask & NUM_ECN) {
+        set_bitmap_entry(BITMAP_CONGESTED_PATHS, get_signal(ECN_ACK_EV), 1);
     }
 
-    if (trigger_mask & SIG_NUM_SENDS) {
+    if (trigger_mask & NUM_SENDS) {
         pcm_uint packet_ev = 0;
         bool found = false;
         while (!found) {
@@ -38,7 +38,7 @@ int algorithm_main() {
                 set_bitmap_entry(BITMAP_CONGESTED_PATHS, packet_ev, 0);
             }
         }
-        set_control(CTRL_PKT_EV, packet_ev);
+        set_control(PKT_EV, packet_ev);
     }
 
     return PCM_SUCCESS;

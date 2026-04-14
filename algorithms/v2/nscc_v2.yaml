@@ -15,7 +15,7 @@ constants:
   - name: BDP
     type: uint
     value: "FABRIC_BDP"
-  - name: BRTT
+  - name: F_BRTT
     type: uint
     value: "FABRIC_BRTT"
   - name: TRTT
@@ -35,7 +35,7 @@ constants:
     value: !eval "0.15 * MSS * SCALING_FACTOR_A"
   - name: TARGET_Q_DELAY
     type: uint
-    value: !eval "TRTT - BRTT"
+    value: !eval "TRTT - F_BRTT"
   - name: SCALING_FACTOR_A
     type: float
     value: !eval "BDP / REFERENCE_BDP"
@@ -135,7 +135,7 @@ variables:
     initial_value: 0
     type: uint
   - name: BRTT
-    initial_value: !eval "BRTT"
+    initial_value: !eval "F_BRTT"
     type: uint
   - name: FULFILL_ADJ_INCREMENT
     initial_value: 0

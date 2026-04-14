@@ -16,7 +16,7 @@ static PCM_FORCE_INLINE pcm_float swift_target_delay(pcm_uint cur_cwnd) {
 
 static PCM_FORCE_INLINE void swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks, pcm_uint rtt_sample, bool can_decrease,
                                                 pcm_uint *cur_cwnd) {
-    set_var_uint(VAR_RETX_CNT, 0);
+    set_var_uint(RETX_CNT, 0);
     pcm_float target_delay = swift_target_delay(*cur_cwnd);
 
     if (rtt_sample < target_delay) {
@@ -30,23 +30,23 @@ static PCM_FORCE_INLINE void swift_ack_reaction(ALGO_CTX_ARGS, pcm_uint num_acks
 }
 
 static PCM_FORCE_INLINE void swift_rtt_estimate(ALGO_CTX_ARGS, pcm_uint rtt_sample) {
-    if (get_var_uint(VAR_RTT_ESTIM) > 0) {
-        set_var_uint(VAR_RTT_ESTIM, 7 * get_var_uint(VAR_RTT_ESTIM) / 8 + rtt_sample / 8);
+    if (get_var_uint(RTT_ESTIM) > 0) {
+        set_var_uint(RTT_ESTIM, 7 * get_var_uint(RTT_ESTIM) / 8 + rtt_sample / 8);
     } else {
-        set_var_uint(VAR_RTT_ESTIM, rtt_sample);
+        set_var_uint(RTT_ESTIM, rtt_sample);
     }
 }
 
 static PCM_FORCE_INLINE void swift_nack_recovery(ALGO_CTX_ARGS, bool can_decrease, pcm_uint *cur_cwnd) {
-    set_var_uint(VAR_RETX_CNT, 0);
+    set_var_uint(RETX_CNT, 0);
     if (can_decrease) {
         *cur_cwnd = (pcm_float)(*cur_cwnd) * (1.0 - MAX_MDF);
     }
 }
 
 static PCM_FORCE_INLINE void swift_timeout_recovery(ALGO_CTX_ARGS, bool can_decrease, pcm_uint *cur_cwnd) {
-    set_var_uint(VAR_RETX_CNT, get_var_uint(VAR_RETX_CNT) + 1);
-    if (get_var_uint(VAR_RETX_CNT) >= RETX_RESET_THRESH) {
+    set_var_uint(RETX_CNT, get_var_uint(RETX_CNT) + 1);
+    if (get_var_uint(RETX_CNT) >= RETX_RESET_THRESH) {
         *cur_cwnd = MSS;
     } else if (can_decrease) {
         *cur_cwnd = (pcm_float)(*cur_cwnd) * (1.0 - MAX_MDF);
@@ -54,22 +54,22 @@ static PCM_FORCE_INLINE void swift_timeout_recovery(ALGO_CTX_ARGS, bool can_decr
 }
 
 int algorithm_main() {
-    pcm_uint t_now = get_signal(SIG_ELAPSED_TIME);
-    pcm_uint rtt_sample = get_signal(SIG_RTT);
-    pcm_uint cur_cwnd = get_control(CTRL_CWND);
+    pcm_uint t_now = get_signal(ELAPSED_TIME);
+    pcm_uint rtt_sample = get_signal(RTT);
+    pcm_uint cur_cwnd = get_control(CWND);
     pcm_uint prev_cwnd = cur_cwnd;
 
     // Calculate Deltas
-    pcm_uint num_nack = get_signal(SIG_NACK) - get_var_uint(VAR_PREV_NACK);
-    pcm_uint num_rto = get_signal(SIG_RTO) - get_var_uint(VAR_PREV_RTO);
-    pcm_uint num_ack = get_signal(SIG_ACK) - get_var_uint(VAR_PREV_ACK);
+    pcm_uint num_nack = get_signal(NACK) - get_var_uint(PREV_NACK);
+    pcm_uint num_rto = get_signal(RTO) - get_var_uint(PREV_RTO);
+    pcm_uint num_ack = get_signal(ACK) - get_var_uint(PREV_ACK);
 
     // Update Cache
-    set_var_uint(VAR_PREV_NACK, get_signal(SIG_NACK));
-    set_var_uint(VAR_PREV_RTO, get_signal(SIG_RTO));
-    set_var_uint(VAR_PREV_ACK, get_signal(SIG_ACK));
+    set_var_uint(PREV_NACK, get_signal(NACK));
+    set_var_uint(PREV_RTO, get_signal(RTO));
+    set_var_uint(PREV_ACK, get_signal(ACK));
 
-    bool can_decrease = (t_now - get_var_uint(VAR_T_LAST_DECREASE)) >= get_var(VAR_RTT_ESTIM);
+    bool can_decrease = (t_now - get_var_uint(T_LAST_DECREASE)) >= get_var(RTT_ESTIM);
 
     swift_rtt_estimate(ALGO_CTX_PASS, rtt_sample);
 
@@ -84,10 +84,10 @@ int algorithm_main() {
     }
 
     if (cur_cwnd < prev_cwnd) {
-        set_var_uint(VAR_T_LAST_DECREASE, t_now);
+        set_var_uint(T_LAST_DECREASE, t_now);
     }
 
-    set_control(CTRL_CWND, cur_cwnd);
+    set_control(CWND, cur_cwnd);
 
     return PCM_SUCCESS;
 }

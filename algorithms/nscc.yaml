@@ -19,7 +19,7 @@ constants:
     type: uint
     value: "FABRIC_BDP"
     description: "Network bandwidth-delay product"
-  - name: BRTT
+  - name: F_BRTT
     type: uint
     value: "FABRIC_BRTT"
     description: "Base round-trip time (propagation delay)"
@@ -47,7 +47,7 @@ constants:
 
   - name: TARGET_Q_DELAY
     type: uint
-    value: !eval "TRTT - BRTT"
+    value: !eval "TRTT - F_BRTT"
     description: "Target queuing delay threshold"
   - name: SCALING_FACTOR_A
     type: float
@@ -163,7 +163,7 @@ variables:
     type: uint
     description: "Timestamp of last multiplicative decrease"
   - name: BRTT
-    initial_value: !eval "BRTT"
+    initial_value: !eval "F_BRTT"
     type: uint
     description: "Base RTT estimate"
   - name: FULFILL_ADJ_INCREMENT
